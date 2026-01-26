@@ -163,6 +163,59 @@ window.addEventListener('popstate', (event) => {
     loadContent(path);
 });
 
+// --- REKURZIVNO ISKANJE PO VSEH MAPAH (Za iskanje) ---
+async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 10, maxResults = 100) {
+   if (depth > maxDepth) return [];
+   
+   const lowerSearchTerm = searchTerm.toLowerCase();
+   let results = [];
+   
+   try {
+       const { data, error } = await supabase.storage.from('Catalogs').list(path, { 
+           limit: 1000, 
+           sortBy: { column: 'name', order: 'asc' } 
+       });
+       
+       if (error || !data) return [];
+       
+       // Filtriraj datoteke in mape, ki se ujemajo z iskalnim nizom
+       const items = data.filter(item => item.name !== ".emptyFolderPlaceholder");
+       
+       for (const item of items) {
+           if (results.length >= maxResults) break;
+           
+           const itemName = item.name.toLowerCase();
+           const isFolder = !item.metadata;
+           const fullPath = path ? `${path}/${item.name}` : item.name;
+           
+           // Preveri, če se ime ujema z iskalnim nizom
+           if (itemName.includes(lowerSearchTerm)) {
+               results.push({
+                   ...item,
+                   fullPath: fullPath,
+                   displayPath: fullPath // Za prikaz poti
+               });
+           }
+           
+           // Če je mapa, rekurzivno išči v njej
+           if (isFolder && results.length < maxResults) {
+               const subResults = await searchAllFilesRecursive(
+                   fullPath, 
+                   searchTerm, 
+                   depth + 1, 
+                   maxDepth, 
+                   maxResults - results.length
+               );
+               results = [...results, ...subResults];
+           }
+       }
+   } catch (e) {
+       console.warn("Napaka pri iskanju v mapi:", path, e);
+   }
+   
+   return results;
+}
+
 // --- REKURZIVNO ISKANJE (Za Banner) ---
 async function getNewFilesRecursive(path, depth = 0) {
    if (depth > 2) return [];
@@ -701,41 +754,76 @@ searchInput.addEventListener("input", async (e) => {
             });
         }
 
-        const localMatches = currentItems.filter(item => item.name.toLowerCase().includes(lowerVal));
-            
-            if (localMatches.length > 0) {
-                matchesFound = true;
-                if (topArticles.length > 0) {
-                    const separator = document.createElement("div");
-                    separator.style.gridColumn = "1 / -1";
-                    separator.style.borderTop = "1px solid #e2e8f0";
-                    separator.style.margin = "20px 0";
-                    resultsContainer.appendChild(separator);
-                }
-                const title = document.createElement("h3");
-                title.style.gridColumn = "1 / -1";
-                title.style.margin = "0 0 10px 0";
-                title.textContent = "Najdene datoteke in mape:";
-                resultsContainer.appendChild(title);
-
-                for (const item of localMatches) {
-                    await createItemElement(item, resultsContainer);
-                }
+        // Rekurzivno iskanje po vseh mapah
+        statusEl.textContent = "Iščem po vseh mapah...";
+        const allMatches = await searchAllFilesRecursive("", val, 0, 10, 100);
+        
+        if (allMatches.length > 0) {
+            matchesFound = true;
+            if (topArticles.length > 0) {
+                const separator = document.createElement("div");
+                separator.style.gridColumn = "1 / -1";
+                separator.style.borderTop = "1px solid #e2e8f0";
+                separator.style.margin = "20px 0";
+                resultsContainer.appendChild(separator);
             }
+            const title = document.createElement("h3");
+            title.style.gridColumn = "1 / -1";
+            title.style.margin = "0 0 10px 0";
+            title.textContent = `Najdene datoteke in mape (${allMatches.length}):`;
+            resultsContainer.appendChild(title);
 
-            if (!matchesFound) {
-                statusEl.textContent = "Ni rezultatov.";
-                mainContent.innerHTML = `
-                    <div style="text-align:center; padding:40px; color:#64748b;">
-                        <div style="font-size:40px; margin-bottom:10px;">🔍</div>
-                        <h3>Ni zadetkov</h3>
-                        <p>Nismo našli artikla "${val}" v šifrantu,<br>niti datoteke s tem imenom v tej mapi.</p>
+            // Prikaži rezultate z potjo
+            for (const item of allMatches) {
+                const div = document.createElement("div");
+                div.className = "item";
+                const isFolder = !item.metadata;
+                const pathParts = item.fullPath.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                const folderPath = pathParts.slice(0, -1).join(' / ');
+                
+                div.onclick = () => {
+                    if (isFolder) {
+                        navigateTo(item.fullPath);
+                    } else {
+                        openPdfViewer(fileName, item.fullPath);
+                    }
+                };
+                
+                const baseName = getBaseName(fileName).toLowerCase();
+                let displayIcon = isFolder ? getIconForName(baseName) : "📄";
+                const ext = fileName.split('.').pop().toLowerCase();
+                if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
+                if (!isFolder && (ext === 'dwg' || ext === 'dxf')) {
+                    displayIcon = "📐";
+                }
+                
+                div.innerHTML = `
+                    <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}" style="width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:24px;">
+                        ${displayIcon}
+                    </div>
+                    <div class="item-info" style="flex-grow:1;">
+                        <strong style="color:#111; display:block; margin-bottom:2px;">${fileName}</strong>
+                        <small style="color:#6b7280; font-size:12px;">${folderPath || 'Koren'}</small>
                     </div>
                 `;
-            } else {
-                statusEl.textContent = `Najdeno: ${topArticles.length} artiklov, ${localMatches.length} datotek`;
-                mainContent.appendChild(resultsContainer);
+                resultsContainer.appendChild(div);
             }
+        }
+
+        if (!matchesFound) {
+            statusEl.textContent = "Ni rezultatov.";
+            mainContent.innerHTML = `
+                <div style="text-align:center; padding:40px; color:#64748b;">
+                    <div style="font-size:40px; margin-bottom:10px;">🔍</div>
+                    <h3>Ni zadetkov</h3>
+                    <p>Nismo našli artikla "${val}" v šifrantu,<br>niti datoteke s tem imenom v katalogih.</p>
+                </div>
+            `;
+        } else {
+            statusEl.textContent = `Najdeno: ${topArticles.length} artiklov, ${allMatches.length} datotek/map`;
+            mainContent.appendChild(resultsContainer);
+        }
         }, 300);
 });
 
