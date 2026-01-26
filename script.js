@@ -163,59 +163,6 @@ window.addEventListener('popstate', (event) => {
     loadContent(path);
 });
 
-// --- REKURZIVNO ISKANJE PO VSEH MAPAH (Za iskanje) ---
-async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 10, maxResults = 100) {
-   if (depth > maxDepth) return [];
-   
-   const lowerSearchTerm = searchTerm.toLowerCase();
-   let results = [];
-   
-   try {
-       const { data, error } = await supabase.storage.from('Catalogs').list(path, { 
-           limit: 1000, 
-           sortBy: { column: 'name', order: 'asc' } 
-       });
-       
-       if (error || !data) return [];
-       
-       // Filtriraj datoteke in mape, ki se ujemajo z iskalnim nizom
-       const items = data.filter(item => item.name !== ".emptyFolderPlaceholder");
-       
-       for (const item of items) {
-           if (results.length >= maxResults) break;
-           
-           const itemName = item.name.toLowerCase();
-           const isFolder = !item.metadata;
-           const fullPath = path ? `${path}/${item.name}` : item.name;
-           
-           // Preveri, če se ime ujema z iskalnim nizom
-           if (itemName.includes(lowerSearchTerm)) {
-               results.push({
-                   ...item,
-                   fullPath: fullPath,
-                   displayPath: fullPath // Za prikaz poti
-               });
-           }
-           
-           // Če je mapa, rekurzivno išči v njej
-           if (isFolder && results.length < maxResults) {
-               const subResults = await searchAllFilesRecursive(
-                   fullPath, 
-                   searchTerm, 
-                   depth + 1, 
-                   maxDepth, 
-                   maxResults - results.length
-               );
-               results = [...results, ...subResults];
-           }
-       }
-   } catch (e) {
-       console.warn("Napaka pri iskanju v mapi:", path, e);
-   }
-   
-   return results;
-}
-
 // --- REKURZIVNO ISKANJE (Za Banner) ---
 async function getNewFilesRecursive(path, depth = 0) {
    if (depth > 2) return [];
@@ -304,18 +251,7 @@ async function updateBannerAsync(path) {
     firstBatch.forEach(f => {
       const li = document.createElement("li");
       const nameToShow = f.displayName || f.name;
-      const span = document.createElement("span");
-      span.style.cursor = "pointer";
-      span.style.color = "#334155";
-      span.onclick = () => openFileFromBanner(f.fullPath);
-      const strong = document.createElement("strong");
-      strong.textContent = nameToShow;
-      span.appendChild(strong);
-      const small = document.createElement("small");
-      small.className = "text-gray-500";
-      small.textContent = ` (${formatDate(f.created_at)})`;
-      li.appendChild(span);
-      li.appendChild(small);
+      li.innerHTML = `<span style="cursor:pointer; color:#334155" onclick="openFileFromBanner('${f.fullPath}')"><strong>${nameToShow}</strong></span> <small class="text-gray-500">(${formatDate(f.created_at)})</small>`;
       updatesList.appendChild(li);
     });
 
@@ -326,18 +262,7 @@ async function updateBannerAsync(path) {
             rest.forEach(f => {
                 const li = document.createElement("li");
                 const nameToShow = f.displayName || f.name;
-                const span = document.createElement("span");
-                span.style.cursor = "pointer";
-                span.style.color = "#334155";
-                span.onclick = () => openFileFromBanner(f.fullPath);
-                const strong = document.createElement("strong");
-                strong.textContent = nameToShow;
-                span.appendChild(strong);
-                const small = document.createElement("small");
-                small.className = "text-gray-500";
-                small.textContent = ` (${formatDate(f.created_at)})`;
-                li.appendChild(span);
-                li.appendChild(small);
+                li.innerHTML = `<span style="cursor:pointer; color:#334155" onclick="openFileFromBanner('${f.fullPath}')"><strong>${nameToShow}</strong></span> <small class="text-gray-500">(${formatDate(f.created_at)})</small>`;
                 updatesList.appendChild(li);
             });
             showMoreUpdatesBtn.style.display = "none"; 
@@ -664,7 +589,6 @@ document.getElementById("sendLink").addEventListener("click", async () => {
 // --- ISKANJE (Datoteke + Šifrant artiklov) ---
 let articleDatabase = [];
 let isArticlesLoaded = false;
-let searchTimeout = null;
 
 async function loadArticles() {
     if (isArticlesLoaded) return;
@@ -673,6 +597,7 @@ async function loadArticles() {
         if (response.ok) {
             articleDatabase = await response.json();
             isArticlesLoaded = true;
+            console.log("Šifrant naložen:", articleDatabase.length, "artiklov.");
         }
     } catch (e) {
         console.warn("Šifranta ni mogoče naložiti.", e);
@@ -680,151 +605,92 @@ async function loadArticles() {
 }
 
 searchInput.addEventListener("input", async (e) => {
-    // Debounce - počakaj 300ms preden iščeš
-    if (searchTimeout) clearTimeout(searchTimeout);
-    
-    const val = e.target.value.trim();
+    const val = e.target.value.toLowerCase().trim();
     
     if (!val) {
         renderItems(currentItems, currentRenderId);
         return;
     }
+
+    if (!isArticlesLoaded) {
+        await loadArticles();
+    }
+
+    currentRenderId++;
+    mainContent.innerHTML = ""; 
+
+    const resultsContainer = document.createElement("div");
+    resultsContainer.className = "file-container list-view"; 
+
+    let matchesFound = false;
+
+    let topArticles = [];
+    if (isArticlesLoaded) {
+        const foundArticles = articleDatabase.filter(a => 
+            a.sifra.toLowerCase().includes(val) || 
+            a.opis.toLowerCase().includes(val)
+        );
+        topArticles = foundArticles.slice(0, 20);
+    }
+
+    if (topArticles.length > 0) {
+        matchesFound = true;
+        const title = document.createElement("h3");
+        title.style.gridColumn = "1 / -1";
+        title.style.margin = "0 0 10px 0";
+        title.style.color = "#2563eb";
+        title.textContent = `Najdeno v šifrantu artiklov (${topArticles.length}):`;
+        resultsContainer.appendChild(title);
+
+        topArticles.forEach(art => {
+            const div = document.createElement("div");
+            div.className = "item";
+            div.style.cursor = "default";
+            div.innerHTML = `
+                <div class="item-preview file-bg" style="background:#eff6ff"><div class="big-icon">🏷️</div></div>
+                <div class="item-info">
+                  <strong style="color:#1e40af">${art.sifra}</strong>
+                  <small style="font-size:1em; color:#334155">${art.opis}</small>
+                </div>`;
+            resultsContainer.appendChild(div);
+        });
+    }
+
+    const localMatches = currentItems.filter(item => item.name.toLowerCase().includes(val));
     
-    searchTimeout = setTimeout(async () => {
-        const lowerVal = val.toLowerCase();
-
-        if (!isArticlesLoaded) {
-            await loadArticles();
-        }
-
-        currentRenderId++;
-        mainContent.innerHTML = ""; 
-
-        const resultsContainer = document.createElement("div");
-        resultsContainer.className = "file-container list-view"; 
-
-        let matchesFound = false;
-
-        let topArticles = [];
-        if (isArticlesLoaded && articleDatabase.length > 0) {
-        const foundArticles = articleDatabase
-            .map(a => {
-                const lowerSifra = a.sifra.toLowerCase();
-                const lowerOpis = a.opis.toLowerCase();
-                
-                // Prioriteta: 1 = točen začetek šifre, 2 = vsebuje v šifri, 3 = vsebuje v opisu
-                let priority = 999;
-                if (lowerSifra.startsWith(lowerVal)) {
-                    priority = 1; // Najvišja prioriteta - točen začetek
-                } else if (lowerSifra.includes(lowerVal)) {
-                    priority = 2; // Srednja prioriteta - vsebuje v šifri
-                } else if (lowerOpis.includes(lowerVal)) {
-                    priority = 3; // Najnižja prioriteta - vsebuje v opisu
-                }
-                
-                return { article: a, priority };
-            })
-            .filter(item => item.priority < 999)
-            .sort((a, b) => a.priority - b.priority)
-            .map(item => item.article);
-        
-            topArticles = foundArticles.slice(0, 20);
-        }
-
+    if (localMatches.length > 0) {
+        matchesFound = true;
         if (topArticles.length > 0) {
-            matchesFound = true;
-            const title = document.createElement("h3");
-            title.style.gridColumn = "1 / -1";
-            title.style.margin = "0 0 10px 0";
-            title.style.color = "#2563eb";
-            title.textContent = `Najdeno v šifrantu artiklov (${topArticles.length}):`;
-            resultsContainer.appendChild(title);
-
-            topArticles.forEach(art => {
-                const div = document.createElement("div");
-                div.className = "item";
-                div.style.cursor = "default";
-                div.innerHTML = `
-                    <div class="item-preview file-bg" style="background:#eff6ff"><div class="big-icon">🏷️</div></div>
-                    <div class="item-info">
-                      <strong style="color:#1e40af">${art.sifra}</strong>
-                      <small style="font-size:1em; color:#334155">${art.opis}</small>
-                    </div>`;
-                resultsContainer.appendChild(div);
-            });
+            const separator = document.createElement("div");
+            separator.style.gridColumn = "1 / -1";
+            separator.style.borderTop = "1px solid #e2e8f0";
+            separator.style.margin = "20px 0";
+            resultsContainer.appendChild(separator);
         }
+        const title = document.createElement("h3");
+        title.style.gridColumn = "1 / -1";
+        title.style.margin = "0 0 10px 0";
+        title.textContent = "Najdene datoteke in mape:";
+        resultsContainer.appendChild(title);
 
-        // Rekurzivno iskanje po vseh mapah
-        statusEl.textContent = "Iščem po vseh mapah...";
-        const allMatches = await searchAllFilesRecursive("", val, 0, 10, 100);
-        
-        if (allMatches.length > 0) {
-            matchesFound = true;
-            if (topArticles.length > 0) {
-                const separator = document.createElement("div");
-                separator.style.gridColumn = "1 / -1";
-                separator.style.borderTop = "1px solid #e2e8f0";
-                separator.style.margin = "20px 0";
-                resultsContainer.appendChild(separator);
-            }
-            const title = document.createElement("h3");
-            title.style.gridColumn = "1 / -1";
-            title.style.margin = "0 0 10px 0";
-            title.textContent = `Najdene datoteke in mape (${allMatches.length}):`;
-            resultsContainer.appendChild(title);
-
-            // Prikaži rezultate z potjo
-            for (const item of allMatches) {
-                const div = document.createElement("div");
-                div.className = "item";
-                const isFolder = !item.metadata;
-                const pathParts = item.fullPath.split('/');
-                const fileName = pathParts[pathParts.length - 1];
-                const folderPath = pathParts.slice(0, -1).join(' / ');
-                
-                div.onclick = () => {
-                    if (isFolder) {
-                        navigateTo(item.fullPath);
-                    } else {
-                        openPdfViewer(fileName, item.fullPath);
-                    }
-                };
-                
-                const baseName = getBaseName(fileName).toLowerCase();
-                let displayIcon = isFolder ? getIconForName(baseName) : "📄";
-                const ext = fileName.split('.').pop().toLowerCase();
-                if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
-                if (!isFolder && (ext === 'dwg' || ext === 'dxf')) {
-                    displayIcon = "📐";
-                }
-                
-                div.innerHTML = `
-                    <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}" style="width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:24px;">
-                        ${displayIcon}
-                    </div>
-                    <div class="item-info" style="flex-grow:1;">
-                        <strong style="color:#111; display:block; margin-bottom:2px;">${fileName}</strong>
-                        <small style="color:#6b7280; font-size:12px;">${folderPath || 'Koren'}</small>
-                    </div>
-                `;
-                resultsContainer.appendChild(div);
-            }
+        for (const item of localMatches) {
+            await createItemElement(item, resultsContainer);
         }
+    }
 
-        if (!matchesFound) {
-            statusEl.textContent = "Ni rezultatov.";
-            mainContent.innerHTML = `
-                <div style="text-align:center; padding:40px; color:#64748b;">
-                    <div style="font-size:40px; margin-bottom:10px;">🔍</div>
-                    <h3>Ni zadetkov</h3>
-                    <p>Nismo našli artikla "${val}" v šifrantu,<br>niti datoteke s tem imenom v katalogih.</p>
-                </div>
-            `;
-        } else {
-            statusEl.textContent = `Najdeno: ${topArticles.length} artiklov, ${allMatches.length} datotek/map`;
-            mainContent.appendChild(resultsContainer);
-        }
-        }, 300);
+    if (!matchesFound) {
+        statusEl.textContent = "Ni rezultatov.";
+        mainContent.innerHTML = `
+            <div style="text-align:center; padding:40px; color:#64748b;">
+                <div style="font-size:40px; margin-bottom:10px;">🔍</div>
+                <h3>Ni zadetkov</h3>
+                <p>Nismo našli artikla "${e.target.value}" v šifrantu,<br>niti datoteke s tem imenom v tej mapi.</p>
+            </div>
+        `;
+    } else {
+        statusEl.textContent = `Najdeno: ${topArticles.length} artiklov, ${localMatches.length} datotek`;
+        mainContent.appendChild(resultsContainer);
+    }
 });
 
 (async () => {
