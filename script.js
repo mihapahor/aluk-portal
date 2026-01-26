@@ -562,13 +562,6 @@ window.toggleFavorite = function(e, itemName) {
   renderItems(currentItems, currentRenderId); 
 }
 
-searchInput.addEventListener("input", (e) => {
-  const val = e.target.value.toLowerCase();
-  const filtered = currentItems.filter(item => item.name.toLowerCase().includes(val));
-  currentRenderId++;
-  renderItems(filtered, currentRenderId);
-});
-
 document.getElementById("sendLink").addEventListener("click", async () => {
   const email = document.getElementById("email").value.trim();
   const name = document.getElementById("userName").value.trim();
@@ -580,6 +573,126 @@ document.getElementById("sendLink").addEventListener("click", async () => {
   const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
   if (error) { msgEl.textContent = "Napaka: " + error.message; btn.disabled = false; }
   else { msgEl.textContent = "Povezava poslana!"; msgEl.className = "success-msg"; }
+});
+
+// --- ISKANJE (Datoteke + Šifrant artiklov) ---
+let articleDatabase = [];
+let isArticlesLoaded = false;
+
+// Funkcija za nalaganje šifranta (hitro in enkratno)
+async function loadArticles() {
+    if (isArticlesLoaded) return;
+    try {
+        // TUKAJ JE SPREMEMBA: Dodali smo / in ?v=2, da preprečimo uporabo starega spomina
+        const response = await fetch('/sifrant.json?v=2');
+        if (response.ok) {
+            articleDatabase = await response.json();
+            isArticlesLoaded = true;
+            console.log("Šifrant naložen:", articleDatabase.length, "artiklov.");
+        }
+    } catch (e) {
+        console.warn("Šifranta ni mogoče naložiti (sifrant.json manjka ali napaka omrežja).", e);
+    }
+}
+
+// Ob vnosu v iskalno polje
+searchInput.addEventListener("input", async (e) => {
+    const val = e.target.value.toLowerCase().trim();
+    
+    // 1. Če je iskanje prazno, resetiraj na prikaz mape
+    if (!val) {
+        renderItems(currentItems, currentRenderId);
+        return;
+    }
+
+    // 2. Naloži šifrant, če ga uporabnik rabi (samo prvič)
+    if (!isArticlesLoaded) {
+        await loadArticles();
+    }
+
+    currentRenderId++;
+    mainContent.innerHTML = ""; // Počisti ekran
+
+    const resultsContainer = document.createElement("div");
+    resultsContainer.className = "file-container list-view"; // Vedno lista za rezultate
+
+    let matchesFound = false;
+
+    // --- A) ISKANJE PO ŠIFRANTU (Artikli) ---
+    // Iščemo točno ujemanje šifre ali delno ujemanje opisa
+    let topArticles = [];
+    if (isArticlesLoaded) {
+        const foundArticles = articleDatabase.filter(a => 
+            a.sifra.toLowerCase().includes(val) || 
+            a.opis.toLowerCase().includes(val)
+        );
+        // Omejimo na prvih 20 zadetkov
+        topArticles = foundArticles.slice(0, 20);
+    }
+
+    if (topArticles.length > 0) {
+        matchesFound = true;
+        
+        const title = document.createElement("h3");
+        title.style.gridColumn = "1 / -1";
+        title.style.margin = "0 0 10px 0";
+        title.style.color = "#2563eb";
+        title.textContent = `Najdeno v šifrantu artiklov (${topArticles.length}):`;
+        resultsContainer.appendChild(title);
+
+        topArticles.forEach(art => {
+            const div = document.createElement("div");
+            div.className = "item";
+            div.style.cursor = "default";
+            div.innerHTML = `
+                <div class="item-preview file-bg" style="background:#eff6ff"><div class="big-icon">🏷️</div></div>
+                <div class="item-info">
+                  <strong style="color:#1e40af">${art.sifra}</strong>
+                  <small style="font-size:1em; color:#334155">${art.opis}</small>
+                </div>`;
+            resultsContainer.appendChild(div);
+        });
+    }
+
+    // --- B) ISKANJE PO DATOTEKAH (V trenutni mapi) ---
+    const localMatches = currentItems.filter(item => item.name.toLowerCase().includes(val));
+    
+    if (localMatches.length > 0) {
+        matchesFound = true;
+        
+        if (topArticles.length > 0) {
+            const separator = document.createElement("div");
+            separator.style.gridColumn = "1 / -1";
+            separator.style.borderTop = "1px solid #e2e8f0";
+            separator.style.margin = "20px 0";
+            resultsContainer.appendChild(separator);
+        }
+
+        const title = document.createElement("h3");
+        title.style.gridColumn = "1 / -1";
+        title.style.margin = "0 0 10px 0";
+        title.textContent = "Najdene datoteke in mape:";
+        resultsContainer.appendChild(title);
+
+        for (const item of localMatches) {
+            await createItemElement(item, resultsContainer);
+        }
+    }
+
+    // --- C) NI ZADETKOV ---
+    if (!matchesFound) {
+        statusEl.textContent = "Ni rezultatov.";
+        mainContent.innerHTML = `
+            <div style="text-align:center; padding:40px; color:#64748b;">
+                <div style="font-size:40px; margin-bottom:10px;">🔍</div>
+                <h3>Ni zadetkov</h3>
+                <p>Nismo našli artikla "${e.target.value}" v šifrantu,<br>niti datoteke s tem imenom v tej mapi.</p>
+            </div>
+        `;
+    } else {
+        statusEl.textContent = `Najdeno: ${topArticles.length} artiklov, ${localMatches.length} datotek`;
+        mainContent.appendChild(resultsContainer);
+    }
 });
 
 (async () => {
