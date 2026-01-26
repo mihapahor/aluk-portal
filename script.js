@@ -5,7 +5,6 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const ADMIN_EMAIL = "miha@aluk.si"; 
 
 // --- KONFIGURACIJA ---
-// Vrstni red map na domači strani
 const customSortOrder = [
   "Okenski sistemi",
   "Vratni sistemi",
@@ -15,10 +14,8 @@ const customSortOrder = [
   "Dekorativne obloge Skin"
 ];
 
-// Končnice datotek, ki štejejo kot "Dokumenti" (za oznako NOVO in Banner)
 const relevantExtensions = ['pdf', 'xls', 'xlsx', 'csv', 'doc', 'docx', 'dwg', 'dxf', 'zip', 'rar', '7z'];
 
-// Ikone za mape (glede na ime)
 const folderIcons = {
   "tehničn": "🛠️", "katalog": "🛠️",
   "galerij": "📷", "foto": "📷", "referenc": "📷",
@@ -27,7 +24,6 @@ const folderIcons = {
   "navodil": "ℹ️", "obdelav": "ℹ️"
 };
 
-// Ikone za datoteke (glede na končnico)
 const fileIcons = {
   "pdf": "📕",
   "xls": "📊", "xlsx": "📊", "csv": "📊",
@@ -69,19 +65,27 @@ let currentPath = "";
 let currentItems = [];
 let imageMap = {}; 
 
-// --- ČISTILEC PRILJUBLJENIH (Popravi podvajanje) ---
+// --- POMOŽNA FUNKCIJA ZA ČIŠČENJE POTI (PREPREČUJE DUPLIKATE) ---
+function normalizePath(path) {
+    if (!path) return "";
+    try {
+        return decodeURIComponent(path).trim();
+    } catch (e) {
+        return path.trim();
+    }
+}
+
+// --- ČISTILEC PRILJUBLJENIH ---
 function loadFavorites() {
     try {
         let rawFavs = JSON.parse(localStorage.getItem('aluk_favorites') || '[]');
-        // Vse poti dekodiramo (spremenimo %20 v presledek) in obrežemo presledke
-        let cleanFavs = rawFavs.map(f => decodeURIComponent(f).trim());
+        // Vse poti normaliziramo
+        let cleanFavs = rawFavs.map(f => normalizePath(f));
         // Odstranimo duplikate s Set
         let uniqueFavs = [...new Set(cleanFavs)];
         // Filtriramo prazne
         uniqueFavs = uniqueFavs.filter(f => f && f.length > 0);
         
-        // Shranimo nazaj popravljeno
-        localStorage.setItem('aluk_favorites', JSON.stringify(uniqueFavs));
         return uniqueFavs;
     } catch(e) { 
         console.error("Napaka pri nalaganju priljubljenih", e); 
@@ -89,12 +93,15 @@ function loadFavorites() {
     }
 }
 
+function saveFavorites(favs) {
+    localStorage.setItem('aluk_favorites', JSON.stringify(favs));
+}
+
 let favorites = loadFavorites();
 let viewMode = localStorage.getItem('aluk_view_mode') || 'grid';
 let folderCache = {}; 
 let currentRenderId = 0; 
 
-// --- POMOŽNE FUNKCIJE ---
 function getCustomSortIndex(name) {
     const index = customSortOrder.indexOf(name);
     if (index !== -1) return index;
@@ -110,7 +117,6 @@ function getIconForName(name) {
   return "📂";
 }
 
-// Ali je datoteka pomembna za "NOVO" in Banner? (Slike ignoriramo)
 function isRelevantFile(fileName) {
     if (fileName.startsWith('.')) return false; 
     const ext = fileName.split('.').pop().toLowerCase();
@@ -157,9 +163,8 @@ window.addEventListener('popstate', (event) => {
     loadContent(path);
 });
 
-// --- REKURZIVNO ISKANJE (Za Banner in Oznake) ---
+// --- REKURZIVNO ISKANJE (Za Banner) ---
 async function getNewFilesRecursive(path, depth = 0) {
-   // Omejimo globino na 2 nivoja, da ne upočasnimo
    if (depth > 2) return [];
 
    const thirtyDaysAgo = new Date();
@@ -170,10 +175,8 @@ async function getNewFilesRecursive(path, depth = 0) {
    
    let allNewFiles = [];
 
-   // 1. Preglej datoteke v tej mapi
    const files = data.filter(item => item.metadata);
    const newFilesHere = files.filter(f => {
-       // STROG FILTER: Samo relevantne končnice in mlajše od 30 dni
        return isRelevantFile(f.name) && new Date(f.created_at) > thirtyDaysAgo;
    });
    
@@ -183,13 +186,11 @@ async function getNewFilesRecursive(path, depth = 0) {
    });
    allNewFiles = [...allNewFiles, ...newFilesHere];
 
-   // 2. Preglej podmape
    const folders = data.filter(item => !item.metadata && item.name !== ".emptyFolderPlaceholder");
    
    const subfolderPromises = folders.map(async (folder) => {
        const subPath = path ? `${path}/${folder.name}` : folder.name;
        const subFiles = await getNewFilesRecursive(subPath, depth + 1);
-       // Dodaj ime mape za lepši izpis v bannerju
        subFiles.forEach(f => {
            if(depth === 0) f.displayName = `${folder.name} / ${f.name}`;
        });
@@ -211,14 +212,13 @@ async function loadContent(path) {
   currentRenderId++;
   const thisRenderId = currentRenderId;
   
-  // BANNER: Pokaži samo, če nismo na domači strani
   if (path === "") {
       updatesBanner.style.display = "none";
   } else {
       updateBannerAsync(path);
   }
 
-  // Najprej pokaži predpomnilnik (če obstaja), nato naloži sveže
+  // Uporabi cache
   if (folderCache[path]) { await processDataAndRender(folderCache[path], thisRenderId); } 
   else { mainContent.innerHTML = ""; skeletonLoader.style.display = "grid"; }
   
@@ -227,39 +227,34 @@ async function loadContent(path) {
   
   if (error) { statusEl.textContent = "Napaka pri branju podatkov."; return; }
   
+  // Posodobi cache in izriši, ČE SMO ŠE VEDNO NA ISTI STRANI
   if (thisRenderId === currentRenderId) { 
       folderCache[path] = data; 
       await processDataAndRender(data, thisRenderId); 
   }
 }
 
-// --- POSODOBITEV BANNERJA (ASINHRONO) ---
 async function updateBannerAsync(path) {
     updatesList.innerHTML = "";
     showMoreUpdatesBtn.style.display = "none";
     updatesBanner.style.display = "none";
 
     const newFiles = await getNewFilesRecursive(path, 0);
-    
     if (newFiles.length === 0) return;
 
-    // Razvrsti najnovejše na vrh
     newFiles.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     updatesBanner.style.display = "block";
     lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(newFiles[0].created_at)}`;
     
-    // Pokaži prvih 5
     const firstBatch = newFiles.slice(0, 5);
     firstBatch.forEach(f => {
       const li = document.createElement("li");
       const nameToShow = f.displayName || f.name;
-      // Klik na ime odpre datoteko
       li.innerHTML = `<span style="cursor:pointer; color:#334155" onclick="openFileFromBanner('${f.fullPath}')"><strong>${nameToShow}</strong></span> <small class="text-gray-500">(${formatDate(f.created_at)})</small>`;
       updatesList.appendChild(li);
     });
 
-    // Gumb "Pokaži več"
     if (newFiles.length > 5) {
         showMoreUpdatesBtn.style.display = "block";
         showMoreUpdatesBtn.onclick = () => {
@@ -283,15 +278,14 @@ window.openFileFromBanner = function(fullPath) {
 async function processDataAndRender(data, renderId) {
   const rawItems = data.filter(item => item.name !== ".emptyFolderPlaceholder");
   
-  // Zberemo slike za thumbnail (vendar jih ne prikažemo kot datoteke)
   const images = rawItems.filter(f => f.metadata && /\.(jpg|jpeg|png|webp)$/i.test(f.name));
   imageMap = {};
   for (const img of images) { imageMap[getBaseName(img.name).toLowerCase()] = img; }
   
-  // Prikazujemo samo mape in ne-slikovne datoteke
   const displayItems = rawItems.filter(f => { if (!f.metadata) return true; return !/\.(jpg|jpeg|png|webp)$/i.test(f.name); });
   
   currentItems = displayItems;
+  // Kliči render samo, če je ID še vedno veljaven
   if (renderId === currentRenderId) await renderItems(displayItems, renderId);
 }
 
@@ -306,37 +300,42 @@ function updateBreadcrumbs(path) {
   breadcrumbsEl.innerHTML = html;
 }
 
-// --- GLAVNI RENDER SEZNAMA ---
+// --- GLAVNI RENDER SEZNAMA (POPRAVLJEN ZA DUPLIKATE) ---
 async function renderItems(items, renderId) {
+  // 1. Takoj preveri, če je ta izris še aktualen
   if (renderId !== currentRenderId) return;
-  mainContent.innerHTML = ""; // Počisti vsebino, da ne bo podvajanja
   
-  if (items.length === 0) { statusEl.textContent = "Ta mapa je prazna."; return; }
+  if (items.length === 0) { 
+      mainContent.innerHTML = "";
+      statusEl.textContent = "Ta mapa je prazna."; 
+      return; 
+  }
   statusEl.textContent = `${items.length} elementov`;
 
+  // 2. Pripravi nov kontejner v pomnilniku (še ne na ekranu)
   const normContainer = document.createElement("div");
   normContainer.className = `file-container ${viewMode}-view`;
   
   const favItems = [];
   const normalItems = [];
 
-  // Razdeli na priljubljene in ostale (znotraj te mape)
+  // Posodobi seznam priljubljenih (za vsak slučaj)
+  favorites = loadFavorites();
+
   items.forEach(item => {
     const fullPath = currentPath ? `${currentPath}/${item.name}` : item.name;
-    const cleanPath = decodeURIComponent(fullPath);
+    const cleanPath = normalizePath(fullPath);
     const isFolder = !item.metadata;
     
     if (isFolder && favorites.includes(cleanPath)) favItems.push(item);
     else normalItems.push(item);
   });
 
-  // Sortiranje
   const allSorted = [...favItems, ...normalItems].sort((a, b) => {
      const isFolderA = !a.metadata; const isFolderB = !b.metadata;
      if (isFolderA && !isFolderB) return -1;
      if (!isFolderA && isFolderB) return 1;
      
-     // Upoštevaj custom sort order, če sta obe mapi
      if (isFolderA && isFolderB) {
          const idxA = getCustomSortIndex(a.name);
          const idxB = getCustomSortIndex(b.name);
@@ -345,8 +344,18 @@ async function renderItems(items, renderId) {
      return a.name.localeCompare(b.name);
   });
 
-  for (const item of allSorted) { await createItemElement(item, normContainer); }
-  mainContent.appendChild(normContainer);
+  // 3. Ustvarjaj elemente (async loop)
+  for (const item of allSorted) { 
+      // Vmes preverjaj, če je uporabnik že zamenjal stran
+      if (renderId !== currentRenderId) return; 
+      await createItemElement(item, normContainer); 
+  }
+  
+  // 4. KLJUČNI TRENUTEK: Ponovno preveri in zamenjaj vsebino
+  if (renderId === currentRenderId) {
+      mainContent.innerHTML = ""; // Počisti staro
+      mainContent.appendChild(normContainer); // Dodaj novo
+  }
 }
 
 // --- IZRIS POSAMEZNE KARTICE ---
@@ -355,7 +364,7 @@ async function createItemElement(item, container) {
     const div = document.createElement("div");
     div.className = "item";
     const fullPath = currentPath ? `${currentPath}/${item.name}` : item.name;
-    const cleanPath = decodeURIComponent(fullPath);
+    const cleanPath = normalizePath(fullPath);
     
     let favHtml = '';
     if (isFolder) {
@@ -367,7 +376,6 @@ async function createItemElement(item, container) {
     let isNew = false;
     const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    // Ali je datoteka NOVA? (Strog filter)
     if (!isFolder && item.created_at) {
         if (isRelevantFile(item.name)) {
             isNew = new Date(item.created_at) > thirtyDaysAgo;
@@ -375,23 +383,19 @@ async function createItemElement(item, container) {
         dateHtml = `<span class="item-date">Datum posodobitve: ${formatDate(item.created_at)}</span>`;
     }
     
-    // ASYNC CHECK ZA MAPE (Ali je kaj novega noter?)
     if (isFolder) {
         getNewFilesRecursive(fullPath, 0).then(newFiles => {
             if (newFiles.length > 0) {
                 const badge = div.querySelector('.new-badge');
                 if(badge) badge.style.display = 'inline-block';
-                // Premakni sistemsko oznako dol, če se pojavi NOVO
                 const sysBadge = div.querySelector('.system-badge');
                 if(sysBadge) sysBadge.style.top = '36px';
             }
         });
     }
     
-    // Oznaka NOVO (skrita, dokler async check ne potrdi)
     let badgesHtml = `<span class="new-badge" style="${isFolder ? 'display:none' : (isNew ? 'display:inline-block' : 'display:none')}">NOVO</span>`;
     
-    // --- SISTEMSKA OZNAKA (C67K...) ---
     if (isFolder && currentPath.toLowerCase().includes("sistem")) {
          const lowerName = item.name.toLowerCase();
          if (lowerName.includes("tehnicn") || lowerName.includes("tehničn") || lowerName.includes("vgradn") || lowerName.includes("prerez")) {
@@ -452,7 +456,7 @@ async function createItemElement(item, container) {
     container.appendChild(div);
 }
 
-// --- RENDER GLOBALIH PRILJUBLJENIH (Na vrhu) ---
+// --- RENDER GLOBALIH PRILJUBLJENIH ---
 async function renderGlobalFavorites() {
   favorites = loadFavorites(); 
   
@@ -465,7 +469,6 @@ async function renderGlobalFavorites() {
     const name = favPath.split('/').pop();
     const displayIcon = getIconForName(name);
     
-    // Sistemska oznaka
     const parts = favPath.split('/');
     let systemBadge = "";
     if (parts.length > 1) {
@@ -478,7 +481,6 @@ async function renderGlobalFavorites() {
     const lowerName = name.toLowerCase();
     const showSystemBadge = lowerName.includes("tehnicn") || lowerName.includes("tehničn") || lowerName.includes("vgradn") || lowerName.includes("prerez");
     
-    // ASYNC PREVERJANJE NOVOSTI
     const newFiles = await getNewFilesRecursive(favPath, 0);
     const hasNewContent = newFiles.length > 0;
     
@@ -512,7 +514,7 @@ async function renderGlobalFavorites() {
        e.stopPropagation();
        let currentFavs = loadFavorites();
        favorites = currentFavs.filter(f => f !== favPath);
-       localStorage.setItem('aluk_favorites', JSON.stringify(favorites));
+       saveFavorites(favorites);
        renderGlobalFavorites(); 
        renderItems(currentItems, currentRenderId);
     };
@@ -549,15 +551,24 @@ window.closePdfViewer = function() {
     loadContent(currentPath); 
 }
 
+// --- UPRAVLJANJE PRILJUBLJENIH (POPRAVLJENO) ---
 window.toggleFavorite = function(e, itemName) {
   e.stopPropagation(); 
   const fullPath = currentPath ? `${currentPath}/${itemName}` : itemName;
-  const cleanPath = decodeURIComponent(fullPath);
+  const cleanPath = normalizePath(fullPath);
   
-  if (favorites.includes(cleanPath)) favorites = favorites.filter(f => f !== cleanPath);
-  else favorites.push(cleanPath);
+  // Ponovno naloži, da imamo sveže stanje
+  favorites = loadFavorites();
+
+  if (favorites.includes(cleanPath)) {
+      // Odstrani
+      favorites = favorites.filter(f => f !== cleanPath);
+  } else {
+      // Dodaj
+      favorites.push(cleanPath);
+  }
   
-  localStorage.setItem('aluk_favorites', JSON.stringify(favorites));
+  saveFavorites(favorites);
   renderGlobalFavorites();
   renderItems(currentItems, currentRenderId); 
 }
@@ -579,11 +590,9 @@ document.getElementById("sendLink").addEventListener("click", async () => {
 let articleDatabase = [];
 let isArticlesLoaded = false;
 
-// Funkcija za nalaganje šifranta (hitro in enkratno)
 async function loadArticles() {
     if (isArticlesLoaded) return;
     try {
-        // TUKAJ JE SPREMEMBA: Dodali smo / in ?v=2, da preprečimo uporabo starega spomina
         const response = await fetch('/sifrant.json?v=2');
         if (response.ok) {
             articleDatabase = await response.json();
@@ -591,48 +600,41 @@ async function loadArticles() {
             console.log("Šifrant naložen:", articleDatabase.length, "artiklov.");
         }
     } catch (e) {
-        console.warn("Šifranta ni mogoče naložiti (sifrant.json manjka ali napaka omrežja).", e);
+        console.warn("Šifranta ni mogoče naložiti.", e);
     }
 }
 
-// Ob vnosu v iskalno polje
 searchInput.addEventListener("input", async (e) => {
     const val = e.target.value.toLowerCase().trim();
     
-    // 1. Če je iskanje prazno, resetiraj na prikaz mape
     if (!val) {
         renderItems(currentItems, currentRenderId);
         return;
     }
 
-    // 2. Naloži šifrant, če ga uporabnik rabi (samo prvič)
     if (!isArticlesLoaded) {
         await loadArticles();
     }
 
     currentRenderId++;
-    mainContent.innerHTML = ""; // Počisti ekran
+    mainContent.innerHTML = ""; 
 
     const resultsContainer = document.createElement("div");
-    resultsContainer.className = "file-container list-view"; // Vedno lista za rezultate
+    resultsContainer.className = "file-container list-view"; 
 
     let matchesFound = false;
 
-    // --- A) ISKANJE PO ŠIFRANTU (Artikli) ---
-    // Iščemo točno ujemanje šifre ali delno ujemanje opisa
     let topArticles = [];
     if (isArticlesLoaded) {
         const foundArticles = articleDatabase.filter(a => 
             a.sifra.toLowerCase().includes(val) || 
             a.opis.toLowerCase().includes(val)
         );
-        // Omejimo na prvih 20 zadetkov
         topArticles = foundArticles.slice(0, 20);
     }
 
     if (topArticles.length > 0) {
         matchesFound = true;
-        
         const title = document.createElement("h3");
         title.style.gridColumn = "1 / -1";
         title.style.margin = "0 0 10px 0";
@@ -654,12 +656,10 @@ searchInput.addEventListener("input", async (e) => {
         });
     }
 
-    // --- B) ISKANJE PO DATOTEKAH (V trenutni mapi) ---
     const localMatches = currentItems.filter(item => item.name.toLowerCase().includes(val));
     
     if (localMatches.length > 0) {
         matchesFound = true;
-        
         if (topArticles.length > 0) {
             const separator = document.createElement("div");
             separator.style.gridColumn = "1 / -1";
@@ -667,7 +667,6 @@ searchInput.addEventListener("input", async (e) => {
             separator.style.margin = "20px 0";
             resultsContainer.appendChild(separator);
         }
-
         const title = document.createElement("h3");
         title.style.gridColumn = "1 / -1";
         title.style.margin = "0 0 10px 0";
@@ -679,7 +678,6 @@ searchInput.addEventListener("input", async (e) => {
         }
     }
 
-    // --- C) NI ZADETKOV ---
     if (!matchesFound) {
         statusEl.textContent = "Ni rezultatov.";
         mainContent.innerHTML = `
