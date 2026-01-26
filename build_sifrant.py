@@ -40,24 +40,32 @@ def pretvori_sifrant():
                 # Resetiramo seznam za nov poskus
                 temp_artikli = []
                 count = 0
+                is_first_row = True
                 
-                # Preskočimo glavo, če obstaja (če prva vrstica ne vsebuje številk)
-                # Tu raje beremo vse, frontend bo filtriral
+                # Filtriranje glave in neveljavnih vrstic
                 for row in reader:
                     if len(row) >= 2:
                         sifra = row[0].strip()
                         opis = row[1].strip()
                         
                         # Čiščenje čudnih znakov na začetku datoteke (BOM)
-                        if count == 0:
+                        if is_first_row:
                             sifra = sifra.replace('\ufeff', '')
+                            is_first_row = False
+                        
+                        # Preskočimo glavo (vrstice z "_t.", "Opis", ali podobnimi)
+                        if sifra.lower() in ['_t.', 'opis', 'sifra', 'šifra'] or opis.lower() in ['opis', 'description']:
+                            continue
+                        
+                        # Preskočimo prazne ali neveljavne vrstice
+                        if not sifra or not opis or sifra == '-' or len(sifra) < 1:
+                            continue
 
-                        if sifra and opis:
-                            temp_artikli.append({
-                                "sifra": sifra,
-                                "opis": opis
-                            })
-                            count += 1
+                        temp_artikli.append({
+                            "sifra": sifra,
+                            "opis": opis
+                        })
+                        count += 1
                 
                 artikli = temp_artikli
                 print(f"✅ Uspešno prebrano {count} artiklov (uporabljen {encoding}).")

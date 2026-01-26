@@ -251,7 +251,18 @@ async function updateBannerAsync(path) {
     firstBatch.forEach(f => {
       const li = document.createElement("li");
       const nameToShow = f.displayName || f.name;
-      li.innerHTML = `<span style="cursor:pointer; color:#334155" onclick="openFileFromBanner('${f.fullPath}')"><strong>${nameToShow}</strong></span> <small class="text-gray-500">(${formatDate(f.created_at)})</small>`;
+      const span = document.createElement("span");
+      span.style.cursor = "pointer";
+      span.style.color = "#334155";
+      span.onclick = () => openFileFromBanner(f.fullPath);
+      const strong = document.createElement("strong");
+      strong.textContent = nameToShow;
+      span.appendChild(strong);
+      const small = document.createElement("small");
+      small.className = "text-gray-500";
+      small.textContent = ` (${formatDate(f.created_at)})`;
+      li.appendChild(span);
+      li.appendChild(small);
       updatesList.appendChild(li);
     });
 
@@ -262,7 +273,18 @@ async function updateBannerAsync(path) {
             rest.forEach(f => {
                 const li = document.createElement("li");
                 const nameToShow = f.displayName || f.name;
-                li.innerHTML = `<span style="cursor:pointer; color:#334155" onclick="openFileFromBanner('${f.fullPath}')"><strong>${nameToShow}</strong></span> <small class="text-gray-500">(${formatDate(f.created_at)})</small>`;
+                const span = document.createElement("span");
+                span.style.cursor = "pointer";
+                span.style.color = "#334155";
+                span.onclick = () => openFileFromBanner(f.fullPath);
+                const strong = document.createElement("strong");
+                strong.textContent = nameToShow;
+                span.appendChild(strong);
+                const small = document.createElement("small");
+                small.className = "text-gray-500";
+                small.textContent = ` (${formatDate(f.created_at)})`;
+                li.appendChild(span);
+                li.appendChild(small);
                 updatesList.appendChild(li);
             });
             showMoreUpdatesBtn.style.display = "none"; 
@@ -589,6 +611,7 @@ document.getElementById("sendLink").addEventListener("click", async () => {
 // --- ISKANJE (Datoteke + Šifrant artiklov) ---
 let articleDatabase = [];
 let isArticlesLoaded = false;
+let searchTimeout = null;
 
 async function loadArticles() {
     if (isArticlesLoaded) return;
@@ -597,7 +620,6 @@ async function loadArticles() {
         if (response.ok) {
             articleDatabase = await response.json();
             isArticlesLoaded = true;
-            console.log("Šifrant naložen:", articleDatabase.length, "artiklov.");
         }
     } catch (e) {
         console.warn("Šifranta ni mogoče naložiti.", e);
@@ -605,92 +627,116 @@ async function loadArticles() {
 }
 
 searchInput.addEventListener("input", async (e) => {
-    const val = e.target.value.toLowerCase().trim();
+    // Debounce - počakaj 300ms preden iščeš
+    if (searchTimeout) clearTimeout(searchTimeout);
+    
+    const val = e.target.value.trim();
     
     if (!val) {
         renderItems(currentItems, currentRenderId);
         return;
     }
-
-    if (!isArticlesLoaded) {
-        await loadArticles();
-    }
-
-    currentRenderId++;
-    mainContent.innerHTML = ""; 
-
-    const resultsContainer = document.createElement("div");
-    resultsContainer.className = "file-container list-view"; 
-
-    let matchesFound = false;
-
-    let topArticles = [];
-    if (isArticlesLoaded) {
-        const foundArticles = articleDatabase.filter(a => 
-            a.sifra.toLowerCase().includes(val) || 
-            a.opis.toLowerCase().includes(val)
-        );
-        topArticles = foundArticles.slice(0, 20);
-    }
-
-    if (topArticles.length > 0) {
-        matchesFound = true;
-        const title = document.createElement("h3");
-        title.style.gridColumn = "1 / -1";
-        title.style.margin = "0 0 10px 0";
-        title.style.color = "#2563eb";
-        title.textContent = `Najdeno v šifrantu artiklov (${topArticles.length}):`;
-        resultsContainer.appendChild(title);
-
-        topArticles.forEach(art => {
-            const div = document.createElement("div");
-            div.className = "item";
-            div.style.cursor = "default";
-            div.innerHTML = `
-                <div class="item-preview file-bg" style="background:#eff6ff"><div class="big-icon">🏷️</div></div>
-                <div class="item-info">
-                  <strong style="color:#1e40af">${art.sifra}</strong>
-                  <small style="font-size:1em; color:#334155">${art.opis}</small>
-                </div>`;
-            resultsContainer.appendChild(div);
-        });
-    }
-
-    const localMatches = currentItems.filter(item => item.name.toLowerCase().includes(val));
     
-    if (localMatches.length > 0) {
-        matchesFound = true;
+    searchTimeout = setTimeout(async () => {
+        const lowerVal = val.toLowerCase();
+
+        if (!isArticlesLoaded) {
+            await loadArticles();
+        }
+
+        currentRenderId++;
+        mainContent.innerHTML = ""; 
+
+        const resultsContainer = document.createElement("div");
+        resultsContainer.className = "file-container list-view"; 
+
+        let matchesFound = false;
+
+        let topArticles = [];
+        if (isArticlesLoaded && articleDatabase.length > 0) {
+        const foundArticles = articleDatabase
+            .map(a => {
+                const lowerSifra = a.sifra.toLowerCase();
+                const lowerOpis = a.opis.toLowerCase();
+                
+                // Prioriteta: 1 = točen začetek šifre, 2 = vsebuje v šifri, 3 = vsebuje v opisu
+                let priority = 999;
+                if (lowerSifra.startsWith(lowerVal)) {
+                    priority = 1; // Najvišja prioriteta - točen začetek
+                } else if (lowerSifra.includes(lowerVal)) {
+                    priority = 2; // Srednja prioriteta - vsebuje v šifri
+                } else if (lowerOpis.includes(lowerVal)) {
+                    priority = 3; // Najnižja prioriteta - vsebuje v opisu
+                }
+                
+                return { article: a, priority };
+            })
+            .filter(item => item.priority < 999)
+            .sort((a, b) => a.priority - b.priority)
+            .map(item => item.article);
+        
+            topArticles = foundArticles.slice(0, 20);
+        }
+
         if (topArticles.length > 0) {
-            const separator = document.createElement("div");
-            separator.style.gridColumn = "1 / -1";
-            separator.style.borderTop = "1px solid #e2e8f0";
-            separator.style.margin = "20px 0";
-            resultsContainer.appendChild(separator);
-        }
-        const title = document.createElement("h3");
-        title.style.gridColumn = "1 / -1";
-        title.style.margin = "0 0 10px 0";
-        title.textContent = "Najdene datoteke in mape:";
-        resultsContainer.appendChild(title);
+            matchesFound = true;
+            const title = document.createElement("h3");
+            title.style.gridColumn = "1 / -1";
+            title.style.margin = "0 0 10px 0";
+            title.style.color = "#2563eb";
+            title.textContent = `Najdeno v šifrantu artiklov (${topArticles.length}):`;
+            resultsContainer.appendChild(title);
 
-        for (const item of localMatches) {
-            await createItemElement(item, resultsContainer);
+            topArticles.forEach(art => {
+                const div = document.createElement("div");
+                div.className = "item";
+                div.style.cursor = "default";
+                div.innerHTML = `
+                    <div class="item-preview file-bg" style="background:#eff6ff"><div class="big-icon">🏷️</div></div>
+                    <div class="item-info">
+                      <strong style="color:#1e40af">${art.sifra}</strong>
+                      <small style="font-size:1em; color:#334155">${art.opis}</small>
+                    </div>`;
+                resultsContainer.appendChild(div);
+            });
         }
-    }
 
-    if (!matchesFound) {
-        statusEl.textContent = "Ni rezultatov.";
-        mainContent.innerHTML = `
-            <div style="text-align:center; padding:40px; color:#64748b;">
-                <div style="font-size:40px; margin-bottom:10px;">🔍</div>
-                <h3>Ni zadetkov</h3>
-                <p>Nismo našli artikla "${e.target.value}" v šifrantu,<br>niti datoteke s tem imenom v tej mapi.</p>
-            </div>
-        `;
-    } else {
-        statusEl.textContent = `Najdeno: ${topArticles.length} artiklov, ${localMatches.length} datotek`;
-        mainContent.appendChild(resultsContainer);
-    }
+        const localMatches = currentItems.filter(item => item.name.toLowerCase().includes(lowerVal));
+            
+            if (localMatches.length > 0) {
+                matchesFound = true;
+                if (topArticles.length > 0) {
+                    const separator = document.createElement("div");
+                    separator.style.gridColumn = "1 / -1";
+                    separator.style.borderTop = "1px solid #e2e8f0";
+                    separator.style.margin = "20px 0";
+                    resultsContainer.appendChild(separator);
+                }
+                const title = document.createElement("h3");
+                title.style.gridColumn = "1 / -1";
+                title.style.margin = "0 0 10px 0";
+                title.textContent = "Najdene datoteke in mape:";
+                resultsContainer.appendChild(title);
+
+                for (const item of localMatches) {
+                    await createItemElement(item, resultsContainer);
+                }
+            }
+
+            if (!matchesFound) {
+                statusEl.textContent = "Ni rezultatov.";
+                mainContent.innerHTML = `
+                    <div style="text-align:center; padding:40px; color:#64748b;">
+                        <div style="font-size:40px; margin-bottom:10px;">🔍</div>
+                        <h3>Ni zadetkov</h3>
+                        <p>Nismo našli artikla "${val}" v šifrantu,<br>niti datoteke s tem imenom v tej mapi.</p>
+                    </div>
+                `;
+            } else {
+                statusEl.textContent = `Najdeno: ${topArticles.length} artiklov, ${localMatches.length} datotek`;
+                mainContent.appendChild(resultsContainer);
+            }
+        }, 300);
 });
 
 (async () => {
