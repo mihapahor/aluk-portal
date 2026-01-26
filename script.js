@@ -699,4 +699,4 @@ searchInput.addEventListener("input", async (e) => {
   }
   checkUser();
   supabase.auth.onAuthStateChange((event, session) => { if (event === 'SIGNED_IN' && session) showApp(session.user.email); if (event === 'SIGNED_OUT') showLogin(); });
-})();
+})(); 
