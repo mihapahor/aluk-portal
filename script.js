@@ -54,8 +54,10 @@ const pdfFrame = getElement("pdfFrame");
 const viewerFileName = getElement("viewerFileName");
 const btnGrid = getElement("btnGrid");
 const btnList = getElement("btnList");
-const globalFavorites = getElement("globalFavorites");
 const globalFavContainer = getElement("globalFavContainer");
+const favoritesPage = getElement("favoritesPage");
+const mainPage = getElement("mainPage");
+const menuFavorites = getElement("menuFavorites");
 
 let currentPath = ""; 
 let currentItems = [];
@@ -120,25 +122,30 @@ function showApp(email) {
   
   
   setViewMode(viewMode);
-  renderGlobalFavorites();
   
-  // Preveri, ali obstaja shranjena iskalna fraza
-  const savedQuery = sessionStorage.getItem('aluk_search_query');
-  if (savedQuery && searchInput && mainContent) {
-    // Obnovi rezultate iskanja
-    setTimeout(() => {
-      searchInput.value = savedQuery;
-      if (clearSearchBtn) clearSearchBtn.style.display = "flex";
-      // Ponovno izvedi iskanje
-      if (searchInput.value.trim()) {
-        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    }, 300);
+  // Preveri, ali je aktivna favorites stran
+  const path = getPathFromUrl();
+  if (path === "favorites") {
+    showFavoritesPage();
   } else {
-    // Naloži normalno vsebino
-    const path = getPathFromUrl();
-    currentPath = path;
-    loadContent(path);
+    showMainPage();
+    // Preveri, ali obstaja shranjena iskalna fraza
+    const savedQuery = sessionStorage.getItem('aluk_search_query');
+    if (savedQuery && searchInput && mainContent) {
+      // Obnovi rezultate iskanja
+      setTimeout(() => {
+        searchInput.value = savedQuery;
+        if (clearSearchBtn) clearSearchBtn.style.display = "flex";
+        // Ponovno izvedi iskanje
+        if (searchInput.value.trim()) {
+          searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }, 300);
+    } else {
+      // Naloži normalno vsebino
+      currentPath = path;
+      loadContent(path);
+    }
   }
 }
 
@@ -155,11 +162,30 @@ window.navigateTo = function(path) {
   sessionStorage.removeItem('aluk_search_query');
   sessionStorage.removeItem('aluk_search_results');
   if (clearSearchBtn) clearSearchBtn.style.display = "none";
+  showMainPage();
   window.history.pushState({ path }, "", "#" + path); 
   loadContent(path); 
 }
-function getPathFromUrl() { const h = window.location.hash; if (!h || h.length <= 1 || h.startsWith("#view=")) return ""; return decodeURIComponent(h.slice(1)); }
-window.addEventListener('popstate', () => { pdfModal.style.display = 'none'; pdfFrame.src = ""; const p = getPathFromUrl(); currentPath = p; loadContent(p); });
+function getPathFromUrl() { 
+  const h = window.location.hash; 
+  if (!h || h.length <= 1) return "";
+  if (h === "#favorites") return "favorites";
+  if (h.startsWith("#view=")) return "";
+  return decodeURIComponent(h.slice(1)); 
+}
+
+window.addEventListener('popstate', () => { 
+  pdfModal.style.display = 'none'; 
+  pdfFrame.src = ""; 
+  const p = getPathFromUrl();
+  if (p === "favorites") {
+    showFavoritesPage();
+  } else {
+    currentPath = p;
+    showMainPage();
+    loadContent(p);
+  }
+});
 
 // --- REKURZIVNO ISKANJE (Banner) ---
 async function getNewFilesRecursive(path, depth = 0) {
@@ -333,14 +359,17 @@ async function createItemElement(item, cont) {
 // --- GLOBALNI PRILJUBLJENI ---
 async function renderGlobalFavorites() {
   favorites = loadFavorites(); 
-  if (favorites.length === 0) { 
-    if (globalFavorites) globalFavorites.style.display = "none"; 
-    return; 
-  }
-  if (globalFavorites) globalFavorites.style.display = "block"; 
+  
   if (globalFavContainer) {
     globalFavContainer.innerHTML = ""; 
     globalFavContainer.className = `file-container grid-view`;
+  }
+  
+  if (favorites.length === 0) { 
+    if (globalFavContainer) {
+      globalFavContainer.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-secondary);"><p>Ni priljubljenih map.</p><p style="font-size:13px; margin-top:10px;">Kliknite na zvezdo ★ na kateri koli mapi, da jo dodate med priljubljene.</p></div>';
+    }
+    return; 
   }
   
   for (const p of favorites) {
@@ -365,11 +394,44 @@ async function renderGlobalFavorites() {
                        <div class="item-info" style="padding:10px;"><strong style="font-size:13px;">${name}</strong></div>
                        <button class="fav-btn active" style="top:5px; left:5px;">★</button>`;
       div.onclick = () => navigateTo(p);
-      div.querySelector('.fav-btn').onclick = (e) => { e.stopPropagation(); favorites = favorites.filter(f => f !== p); saveFavorites(favorites); renderGlobalFavorites(); renderItems(currentItems, currentRenderId); };
+      div.querySelector('.fav-btn').onclick = (e) => { e.stopPropagation(); favorites = favorites.filter(f => f !== p); saveFavorites(favorites); renderGlobalFavorites(); if (currentItems.length > 0) renderItems(currentItems, currentRenderId); };
       globalFavContainer.appendChild(div);
   }
 }
-window.toggleFavorite = function(e, name) { e.stopPropagation(); const p = normalizePath(currentPath ? `${currentPath}/${name}` : name); favorites = loadFavorites(); if (favorites.includes(p)) favorites = favorites.filter(f => f !== p); else favorites.push(p); saveFavorites(favorites); renderGlobalFavorites(); renderItems(currentItems, currentRenderId); }
+
+// Funkcija za prikaz priljubljenih strani
+function showFavoritesPage() {
+  if (favoritesPage) favoritesPage.style.display = "block";
+  if (mainPage) mainPage.style.display = "none";
+  if (menuFavorites) menuFavorites.classList.add("active");
+  renderGlobalFavorites();
+}
+
+// Funkcija za prikaz glavne strani
+function showMainPage() {
+  if (favoritesPage) favoritesPage.style.display = "none";
+  if (mainPage) mainPage.style.display = "block";
+  if (menuFavorites) menuFavorites.classList.remove("active");
+}
+window.toggleFavorite = function(e, name) { 
+  e.stopPropagation(); 
+  const p = normalizePath(currentPath ? `${currentPath}/${name}` : name); 
+  favorites = loadFavorites(); 
+  if (favorites.includes(p)) {
+    favorites = favorites.filter(f => f !== p);
+  } else {
+    favorites.push(p);
+  }
+  saveFavorites(favorites); 
+  
+  // Posodobi priljubljene, če je aktivna favorites stran
+  if (favoritesPage && favoritesPage.style.display !== "none") {
+    renderGlobalFavorites();
+  }
+  
+  // Posodobi trenutne elemente
+  if (currentItems.length > 0) renderItems(currentItems, currentRenderId); 
+}
 
 // --- ISKANJE (VSE: Šifrant + PDF Index) ---
 async function loadSearchData() {
@@ -411,6 +473,15 @@ window.copyToClipboard = function(text, button) {
         button.textContent = "✗ Napaka";
     });
 };
+
+// Event listener za menu iteme
+if (menuFavorites) {
+  menuFavorites.addEventListener("click", (e) => {
+    e.preventDefault();
+    showFavoritesPage();
+    window.history.pushState({ page: "favorites" }, "", "#favorites");
+  });
+}
 
 if (searchInput) {
   // Križec za brisanje iskanja
