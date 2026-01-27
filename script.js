@@ -225,14 +225,9 @@ async function loadContent(path) {
   if (contentTitleEl) contentTitleEl.style.display = "";
   if (contentTitleDesc && contentTitleDesc.tagName === "P") contentTitleDesc.style.display = "";
   
-  // Prikaži posodobitve (vedno, razen na root in če ni aktivno iskanje)
-  if (path === "") {
-    if (updatesBanner) updatesBanner.style.display = "none";
-  } else {
-    // Prikaži posodobitve, če ni aktivno iskanje
-    if (!isSearchActive) {
-      updateBannerAsync(path);
-    }
+  // Prikaži posodobitve (vedno, razen če je aktivno iskanje)
+  if (!isSearchActive) {
+    updateBannerAsync(path);
   }
   if (folderCache[path]) await processDataAndRender(folderCache[path], thisId); else { mainContent.innerHTML = ""; skeletonLoader.style.display = "grid"; }
   const { data, error } = await supabase.storage.from('Catalogs').list(path, { sortBy: { column: 'name', order: 'asc' }, limit: 1000 });
