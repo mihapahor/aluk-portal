@@ -98,18 +98,32 @@ function showLogin() {
 }
 
 function showApp(email) {
-  authForm.style.display = "none"; 
-  appCard.style.display = "flex"; 
-  appCard.style.flexDirection = "column";
-  document.getElementById("logout").style.display = "block";
-  try { 
-    const s = localStorage.getItem('aluk_user_info'); 
-    if (s) { 
-      const d = JSON.parse(s); 
-      if (d.name) document.getElementById("userLine").textContent = `👤 ${d.name}, ${d.company}`; 
-    } 
-  } catch (e) {}
-  if (!document.getElementById("userLine").textContent) document.getElementById("userLine").textContent = `👤 ${email}`;
+  if (authForm) authForm.style.display = "none"; 
+  if (appCard) {
+    appCard.style.display = "flex"; 
+    appCard.style.flexDirection = "column";
+  }
+  const logoutBtn = getElement("logout");
+  if (logoutBtn) logoutBtn.style.display = "block";
+  
+  const userLine = getElement("userLine");
+  if (userLine) {
+    try { 
+      const s = localStorage.getItem('aluk_user_info'); 
+      if (s) { 
+        const d = JSON.parse(s); 
+        if (d.name) userLine.textContent = `👤 ${d.name}, ${d.company}`; 
+      } 
+    } catch (e) {}
+    if (!userLine.textContent) userLine.textContent = `👤 ${email}`;
+  }
+  
+  // Posodobi čas v notranjosti portala
+  const buildDateInner = getElement("buildDateInner");
+  if (buildDateInner) {
+    buildDateInner.textContent = "27.1.2026 11:55";
+  }
+  
   setViewMode(viewMode);
   renderGlobalFavorites();
   const path = getPathFromUrl();
@@ -306,7 +320,9 @@ if (searchInput) {
         }
 
         // 2. REKURZIVNO ISKANJE PO VSEH MAPAH
-        const allMatches = await searchAllFilesRecursive("", val, 0, 10, 100);
+        console.log("🔍 Začenjam rekurzivno iskanje za:", val);
+        const allMatches = await searchAllFilesRecursive("", val, 0, 10, 200);
+        console.log("✅ Iskanje končano, najdeno:", allMatches.length, "rezultatov");
         
         if (allMatches.length > 0) {
             found = true;
@@ -496,7 +512,7 @@ if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid'));
 if (btnList) btnList.addEventListener('click', () => setViewMode('list'));
 
 // --- REKURZIVNO ISKANJE PO VSEH MAPAH (Za iskanje) ---
-async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 10, maxResults = 100) {
+async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 10, maxResults = 200) {
    if (depth > maxDepth) return [];
    
    const lowerSearchTerm = searchTerm.toLowerCase();
@@ -508,7 +524,12 @@ async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 1
            sortBy: { column: 'name', order: 'asc' } 
        });
        
-       if (error || !data) return [];
+       if (error) {
+           console.warn("Napaka pri branju mape:", path, error);
+           return [];
+       }
+       
+       if (!data || data.length === 0) return [];
        
        // Filtriraj datoteke in mape, ki se ujemajo z iskalnim nizom
        const items = data.filter(item => item.name !== ".emptyFolderPlaceholder");
@@ -520,7 +541,8 @@ async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 1
            const isFolder = !item.metadata;
            const fullPath = path ? `${path}/${item.name}` : item.name;
            
-           // Preveri, če se ime ujema z iskalnim nizom
+           // Preveri, če se ime ujema z iskalnim nizom (začetek ali vmesni del)
+           // Podpira tudi delno ujemanje - npr. "okn" najde "Okenski sistemi"
            if (itemName.includes(lowerSearchTerm)) {
                results.push({
                    ...item,
@@ -529,8 +551,9 @@ async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 1
                });
            }
            
-           // Če je mapa, rekurzivno išči v njej
-           if (isFolder && results.length < maxResults) {
+           // Če je mapa, VEDNO rekurzivno išči v njej (ne glede na to, ali se ujema)
+           // To omogoča iskanje tudi po vmesnih delih poti
+           if (isFolder) {
                const subResults = await searchAllFilesRecursive(
                    fullPath, 
                    searchTerm, 
