@@ -25,26 +25,26 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'aluk-portal-auth' }
 });
 
-// DOM ELEMENTI
-const authForm = document.getElementById("authForm");
-const appCard = document.getElementById("appCard");
-const mainContent = document.getElementById("mainContent");
-const skeletonLoader = document.getElementById("skeletonLoader");
-const statusEl = document.getElementById("status");
-const searchInput = document.getElementById("search");
-const breadcrumbsEl = document.getElementById("breadcrumbs");
-const msgEl = document.getElementById("authMsg");
-const updatesBanner = document.getElementById("updatesBanner");
-const updatesList = document.getElementById("updatesList");
-const lastUpdateDateEl = document.getElementById("lastUpdateDate");
-const showMoreUpdatesBtn = document.getElementById("showMoreUpdates");
-const pdfModal = document.getElementById("pdfModal");
-const pdfFrame = document.getElementById("pdfFrame");
-const viewerFileName = document.getElementById("viewerFileName");
-const btnGrid = document.getElementById("btnGrid");
-const btnList = document.getElementById("btnList");
-const globalFavorites = document.getElementById("globalFavorites");
-const globalFavContainer = document.getElementById("globalFavContainer");
+// DOM ELEMENTI (z varnostnimi preverjanji)
+const authForm = getElement("authForm");
+const appCard = getElement("appCard");
+const mainContent = getElement("mainContent");
+const skeletonLoader = getElement("skeletonLoader");
+const statusEl = getElement("status");
+const searchInput = getElement("search");
+const breadcrumbsEl = getElement("breadcrumbs");
+const msgEl = getElement("authMsg");
+const updatesBanner = getElement("updatesBanner");
+const updatesList = getElement("updatesList");
+const lastUpdateDateEl = getElement("lastUpdateDate");
+const showMoreUpdatesBtn = getElement("showMoreUpdates");
+const pdfModal = getElement("pdfModal");
+const pdfFrame = getElement("pdfFrame");
+const viewerFileName = getElement("viewerFileName");
+const btnGrid = getElement("btnGrid");
+const btnList = getElement("btnList");
+const globalFavorites = getElement("globalFavorites");
+const globalFavContainer = getElement("globalFavContainer");
 
 let currentPath = ""; 
 let currentItems = [];
@@ -252,37 +252,108 @@ async function loadSearchData() {
     }
 }
 
-searchInput.addEventListener("input", async (e) => {
-    const val = e.target.value.toLowerCase().trim();
-    if (!val) { renderItems(currentItems, currentRenderId); return; }
-    if (!isDataLoaded) await loadSearchData();
+// Debounce za iskanje (optimizacija)
+let searchTimeout = null;
 
-    currentRenderId++; mainContent.innerHTML = "";
-    const resCont = document.createElement("div"); resCont.className = "file-container list-view";
-    let found = false;
-
-    // 1. Iskanje po ŠIFRANTU
-    const arts = articleDatabase.filter(a => a.sifra.toLowerCase().includes(val) || a.opis.toLowerCase().includes(val)).slice(0, 20);
-    if (arts.length > 0) {
-        found = true;
-        resCont.innerHTML += `<h3 style="grid-column:1/-1; margin-bottom:10px; color:#2563eb">Najdeno v šifrantu artiklov (${arts.length}):</h3>`;
-        arts.forEach(a => {
-            resCont.innerHTML += `<div class="item" style="cursor:default"><div class="item-preview file-bg" style="background:#eff6ff"><div class="big-icon">🏷️</div></div><div class="item-info"><strong style="color:#1e40af">${a.sifra}</strong><small style="color:#334155">${a.opis}</small></div></div>`;
-        });
+if (searchInput) {
+  searchInput.addEventListener("input", async (e) => {
+    // Debounce - počakaj 300ms preden iščeš
+    if (searchTimeout) clearTimeout(searchTimeout);
+    
+    const val = e.target.value.trim();
+    
+    if (!val) { 
+      if (currentItems.length > 0) renderItems(currentItems, currentRenderId); 
+      return; 
     }
+    
+    searchTimeout = setTimeout(async () => {
+        const lowerVal = val.toLowerCase();
+        
+        if (!isDataLoaded) await loadSearchData();
 
-    // 2. Iskanje po TRENUTNI MAPI
-    const local = currentItems.filter(i => i.name.toLowerCase().includes(val));
-    if (local.length > 0) {
-        found = true;
-        if (arts.length > 0) resCont.innerHTML += `<div style="grid-column:1/-1; border-top:1px solid #e2e8f0; margin:20px 0;"></div>`;
-        resCont.innerHTML += `<h3 style="grid-column:1/-1; margin-bottom:10px;">Najdene datoteke in mape v tej mapi:</h3>`;
-        for (const i of local) await createItemElement(i, resCont);
-    }
+        currentRenderId++; 
+        if (mainContent) mainContent.innerHTML = "";
+        if (statusEl) statusEl.textContent = "Iščem po vseh mapah...";
+        
+        const resCont = document.createElement("div"); 
+        resCont.className = "file-container list-view";
+        let found = false;
 
-    if (!found) { statusEl.textContent = "Ni zadetkov."; mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:#64748b;"><h3>Ni zadetkov za "${val}"</h3></div>`; } 
-    else { statusEl.textContent = "Iskanje končano"; mainContent.appendChild(resCont); }
-});
+        // 1. Iskanje po ŠIFRANTU
+        const arts = articleDatabase.filter(a => 
+            a.sifra.toLowerCase().includes(lowerVal) || 
+            a.opis.toLowerCase().includes(lowerVal)
+        ).slice(0, 20);
+        
+        if (arts.length > 0) {
+            found = true;
+            resCont.innerHTML += `<h3 style="grid-column:1/-1; margin-bottom:10px; color:#2563eb">Najdeno v šifrantu artiklov (${arts.length}):</h3>`;
+            arts.forEach(a => {
+                resCont.innerHTML += `<div class="item" style="cursor:default"><div class="item-preview file-bg" style="background:#eff6ff"><div class="big-icon">🏷️</div></div><div class="item-info"><strong style="color:#1e40af">${a.sifra}</strong><small style="color:#334155">${a.opis}</small></div></div>`;
+            });
+        }
+
+        // 2. REKURZIVNO ISKANJE PO VSEH MAPAH
+        const allMatches = await searchAllFilesRecursive("", val, 0, 10, 100);
+        
+        if (allMatches.length > 0) {
+            found = true;
+            if (arts.length > 0) {
+                resCont.innerHTML += `<div style="grid-column:1/-1; border-top:1px solid #e2e8f0; margin:20px 0;"></div>`;
+            }
+            resCont.innerHTML += `<h3 style="grid-column:1/-1; margin-bottom:10px;">Najdene datoteke in mape (${allMatches.length}):</h3>`;
+
+            // Prikaži rezultate z potjo
+            for (const item of allMatches) {
+                const div = document.createElement("div");
+                div.className = "item";
+                const isFolder = !item.metadata;
+                const pathParts = item.fullPath.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                const folderPath = pathParts.slice(0, -1).join(' / ');
+                
+                div.onclick = () => {
+                    if (isFolder) {
+                        navigateTo(item.fullPath);
+                    } else {
+                        openPdfViewer(fileName, item.fullPath);
+                    }
+                };
+                
+                const baseName = getBaseName(fileName).toLowerCase();
+                let displayIcon = isFolder ? getIconForName(baseName) : "📄";
+                const ext = fileName.split('.').pop().toLowerCase();
+                if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
+                if (!isFolder && (ext === 'dwg' || ext === 'dxf')) {
+                    displayIcon = "📐";
+                }
+                
+                div.innerHTML = `
+                    <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}" style="width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:24px;">
+                        ${displayIcon}
+                    </div>
+                    <div class="item-info" style="flex-grow:1;">
+                        <strong style="color:#111; display:block; margin-bottom:2px;">${fileName}</strong>
+                        <small style="color:#6b7280; font-size:12px;">${folderPath || 'Koren'}</small>
+                    </div>
+                `;
+                resCont.appendChild(div);
+            }
+        }
+
+        if (!found) { 
+            if (statusEl) statusEl.textContent = "Ni zadetkov."; 
+            if (mainContent) {
+                mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:#64748b;"><h3>Ni zadetkov za "${val}"</h3></div>`;
+            }
+        } else { 
+            if (statusEl) statusEl.textContent = `Najdeno: ${arts.length} artiklov, ${allMatches.length} datotek/map`; 
+            if (mainContent) mainContent.appendChild(resCont); 
+        }
+    }, 300);
+  });
+}
 
 // --- OSTALO ---
 window.openPdfViewer = async function(fn, path) { const url = "#view=" + fn; window.history.pushState({ type: 'viewer', file: fn }, "", url); pdfModal.style.display = 'flex'; viewerFileName.textContent = fn; const p = path || (currentPath ? `${currentPath}/${fn}` : fn); const { data } = await supabase.storage.from('Catalogs').createSignedUrl(p, 3600); if(data) pdfFrame.src = data.signedUrl; }
@@ -298,24 +369,33 @@ function setViewMode(mode) {
   viewMode = mode;
   localStorage.setItem('aluk_view_mode', mode);
   if (mode === 'grid') { 
-    btnGrid.classList.add('active'); 
-    btnList.classList.remove('active'); 
+    if (btnGrid) btnGrid.classList.add('active'); 
+    if (btnList) btnList.classList.remove('active'); 
   } else { 
-    btnGrid.classList.remove('active'); 
-    btnList.classList.add('active'); 
+    if (btnGrid) btnGrid.classList.remove('active'); 
+    if (btnList) btnList.classList.add('active'); 
   }
   if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
 }
 
-document.getElementById("authForm").addEventListener("submit", async (event) => {
+if (authForm) {
+  authForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const e = document.getElementById("email").value.trim();
-  const n = document.getElementById("userName").value.trim();
-  const c = document.getElementById("companyName").value.trim();
+  const emailInput = getElement("email");
+  const nameInput = getElement("userName");
+  const companyInput = getElement("companyName");
+  
+  if (!emailInput || !nameInput || !companyInput) return;
+  
+  const e = emailInput.value.trim();
+  const n = nameInput.value.trim();
+  const c = companyInput.value.trim();
   
   if (!e || !n || !c) { 
-    msgEl.textContent = "Vsa polja so obvezna."; 
-    msgEl.className = "error-msg";
+    if (msgEl) {
+      msgEl.textContent = "Vsa polja so obvezna."; 
+      msgEl.className = "error-msg";
+    }
     return; 
   }
   
@@ -323,7 +403,8 @@ document.getElementById("authForm").addEventListener("submit", async (event) => 
     localStorage.setItem('aluk_user_info', JSON.stringify({ name: n, company: c })); 
   } catch(e) {}
   
-  const btn = document.getElementById("sendLink");
+  const btn = getElement("sendLink");
+  if (!btn) return;
   btn.disabled = true;
   btn.textContent = "Pošiljam...";
   msgEl.textContent = "";
@@ -343,28 +424,113 @@ document.getElementById("authForm").addEventListener("submit", async (event) => 
     msgEl.textContent = "✅ Povezava poslana! Preverite svoj e-poštni predal.";
     msgEl.className = "success-msg";
   }
-});
+  });
+}
 
-btnGrid.addEventListener('click', () => setViewMode('grid')); 
-btnList.addEventListener('click', () => setViewMode('list'));
+if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid')); 
+if (btnList) btnList.addEventListener('click', () => setViewMode('list'));
+
+// --- REKURZIVNO ISKANJE PO VSEH MAPAH (Za iskanje) ---
+async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 10, maxResults = 100) {
+   if (depth > maxDepth) return [];
+   
+   const lowerSearchTerm = searchTerm.toLowerCase();
+   let results = [];
+   
+   try {
+       const { data, error } = await supabase.storage.from('Catalogs').list(path, { 
+           limit: 1000, 
+           sortBy: { column: 'name', order: 'asc' } 
+       });
+       
+       if (error || !data) return [];
+       
+       // Filtriraj datoteke in mape, ki se ujemajo z iskalnim nizom
+       const items = data.filter(item => item.name !== ".emptyFolderPlaceholder");
+       
+       for (const item of items) {
+           if (results.length >= maxResults) break;
+           
+           const itemName = item.name.toLowerCase();
+           const isFolder = !item.metadata;
+           const fullPath = path ? `${path}/${item.name}` : item.name;
+           
+           // Preveri, če se ime ujema z iskalnim nizom
+           if (itemName.includes(lowerSearchTerm)) {
+               results.push({
+                   ...item,
+                   fullPath: fullPath,
+                   displayPath: fullPath
+               });
+           }
+           
+           // Če je mapa, rekurzivno išči v njej
+           if (isFolder && results.length < maxResults) {
+               const subResults = await searchAllFilesRecursive(
+                   fullPath, 
+                   searchTerm, 
+                   depth + 1, 
+                   maxDepth, 
+                   maxResults - results.length
+               );
+               results = [...results, ...subResults];
+           }
+       }
+   } catch (e) {
+       console.warn("Napaka pri iskanju v mapi:", path, e);
+   }
+   
+   return results;
+}
 
 // --- INICIALIZACIJA ---
 (async () => { 
-  // Preveri, če je uporabnik prišel iz email povezave
-  if (window.location.search.includes("code=") || window.location.hash.includes("access_token=")) {
-    await supabase.auth.getSession();
-    // Očisti URL parametre brez osvežitve strani
+  // Preveri, če je uporabnik prišel iz email povezave (magic link)
+  const hasMagicLink = window.location.search.includes("code=") || window.location.hash.includes("access_token=");
+  
+  if (hasMagicLink) {
+    // Počakaj, da Supabase obdela magic link in shrani session
+    // Supabase avtomatsko obdela URL parametre, vendar moramo počakati
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Poskusi dobiti session - Supabase bi ga moral že shraniti
+    let session = null;
+    for (let i = 0; i < 5; i++) {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (currentSession) {
+        session = currentSession;
+        break;
+      }
+      // Počakaj malo in poskusi znova
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    // Očisti URL parametre
     window.history.replaceState({}, document.title, window.location.pathname);
+    
+    if (session) {
+      // Session je uspešno shranjen, prikaži aplikacijo
+      showApp(session.user.email);
+    } else {
+      // Če session ni shranjen, preveri normalno
+      checkUser();
+    }
+  } else {
+    // Normalna inicializacija
+    checkUser();
   }
   
-  checkUser();
-  
-  // Poslušaj spremembe avtentikacije
+  // Poslušaj spremembe avtentikacije (za prihodnje spremembe)
   supabase.auth.onAuthStateChange((e, s) => { 
     if (e === 'SIGNED_IN' && s) {
+      // Uporabnik se je prijavil - prikaži aplikacijo
       showApp(s.user.email);
     } else if (e === 'SIGNED_OUT') {
+      // Uporabnik se je odjavil - prikaži login
       showLogin();
+    } else if (e === 'TOKEN_REFRESHED' && s) {
+      // Token je bil osvežen - ohrani uporabnika prijavljenega
+      if (s.user) showApp(s.user.email);
     }
   });
 })();
