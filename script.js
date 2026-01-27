@@ -121,7 +121,7 @@ function showApp(email) {
   // Posodobi čas v notranjosti portala
   const buildDateInner = getElement("buildDateInner");
   if (buildDateInner) {
-    buildDateInner.textContent = "27.1.2026 11:55";
+    buildDateInner.textContent = "27.1.2026 12:05";
   }
   
   setViewMode(viewMode);
@@ -280,8 +280,19 @@ async function loadSearchData() {
 // Debounce za iskanje (optimizacija)
 let searchTimeout = null;
 
+console.log("🔎 searchInput element:", searchInput);
+
 if (searchInput) {
+  console.log("✓ searchInput najden, registriram event listener za iskanje");
+} else {
+  console.error("✗ searchInput NI NAJDEN! Iskanje ne bo delovalo.");
+}
+
+if (searchInput) {
+  
   searchInput.addEventListener("input", async (e) => {
+    console.log("⌨️ Input event triggered, vrednost:", e.target.value);
+    
     // Debounce - počakaj 300ms preden iščeš
     if (searchTimeout) clearTimeout(searchTimeout);
     
@@ -293,6 +304,7 @@ if (searchInput) {
     }
     
     searchTimeout = setTimeout(async () => {
+        console.log("🔍 Začenjam iskanje za:", val);
         const lowerVal = val.toLowerCase();
         
         if (!isDataLoaded) await loadSearchData();
