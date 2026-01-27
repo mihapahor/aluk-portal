@@ -19,6 +19,13 @@ const fileIcons = {
   "zip": "📦", "rar": "📦", "7z": "📦", "jpg": "🖼️", "jpeg": "🖼️", "png": "🖼️", "webp": "🖼️"
 };
 
+// --- VARNOSTNA FUNKCIJA ZA DOM DOSTOP (definirana na vrhu!) ---
+function getElement(id) {
+  const el = document.getElementById(id);
+  if (!el) console.warn(`Element z ID "${id}" ni najden.`);
+  return el;
+}
+
 // Nastavi mailto link za request access (varno)
 const requestAccessBtn = getElement("requestAccessBtn");
 if (requestAccessBtn) {
