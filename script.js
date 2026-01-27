@@ -234,14 +234,73 @@ async function loadContent(path) {
 }
 
 async function updateBannerAsync(path) {
-    updatesList.innerHTML = ""; showMoreUpdatesBtn.style.display = "none"; updatesBanner.style.display = "none";
+    updatesList.innerHTML = ""; 
+    showMoreUpdatesBtn.style.display = "none"; 
+    updatesBanner.style.display = "none";
+    
     const newFiles = await getNewFilesRecursive(path, 0);
     if (newFiles.length === 0) return;
+    
     newFiles.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    updatesBanner.style.display = "block"; lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(newFiles[0].created_at)}`;
-    const show = (list) => list.forEach(f => { const li = document.createElement("li"); li.innerHTML = `<span style="cursor:pointer; color:var(--text-primary)" onclick="openFileFromBanner('${f.fullPath}')"><strong>${f.displayName||f.name}</strong></span> <small>(${formatDate(f.created_at)})</small>`; updatesList.appendChild(li); });
-    show(newFiles.slice(0, 5));
-    if (newFiles.length > 5) { showMoreUpdatesBtn.style.display = "block"; showMoreUpdatesBtn.onclick = () => { show(newFiles.slice(5)); showMoreUpdatesBtn.style.display = "none"; }; }
+    updatesBanner.style.display = "block"; 
+    lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(newFiles[0].created_at)}`;
+    
+    // Funkcija za prikaz posodobitev z flexbox poravnavo
+    const show = (list, isHidden = false) => {
+      list.forEach(f => { 
+        const li = document.createElement("li");
+        if (isHidden) {
+          li.className = "update-item-hidden";
+        }
+        
+        const nameSpan = document.createElement("span");
+        nameSpan.innerHTML = `<strong>${f.displayName||f.name}</strong>`;
+        nameSpan.onclick = () => openFileFromBanner(f.fullPath);
+        
+        const dateSpan = document.createElement("span");
+        dateSpan.textContent = formatDate(f.created_at);
+        
+        li.appendChild(nameSpan);
+        li.appendChild(dateSpan);
+        updatesList.appendChild(li);
+      });
+    };
+    
+    // Prikaži prvih 3 elemente
+    const initialItems = newFiles.slice(0, 3);
+    const remainingItems = newFiles.slice(3);
+    
+    show(initialItems, false);
+    
+    // Če so dodatni elementi, prikaži gumb za toggle
+    if (remainingItems.length > 0) {
+      show(remainingItems, true); // Dodaj jih, vendar skrite
+      showMoreUpdatesBtn.style.display = "block";
+      showMoreUpdatesBtn.textContent = "▼ Pokaži več posodobitev";
+      
+      let isExpanded = false;
+      showMoreUpdatesBtn.onclick = () => {
+        const hiddenItems = updatesList.querySelectorAll(".update-item-hidden");
+        
+        if (isExpanded) {
+          // Skrij dodatne elemente
+          hiddenItems.forEach(item => {
+            item.classList.add("update-item-hidden");
+          });
+          showMoreUpdatesBtn.textContent = "▼ Pokaži več posodobitev";
+          isExpanded = false;
+          // Pomakni se na vrh bannerja
+          updatesBanner.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          // Prikaži dodatne elemente
+          hiddenItems.forEach(item => {
+            item.classList.remove("update-item-hidden");
+          });
+          showMoreUpdatesBtn.textContent = "▲ Pokaži manj posodobitev";
+          isExpanded = true;
+        }
+      };
+    }
 }
 window.openFileFromBanner = function(path) { openPdfViewer(path.split('/').pop(), path); }
 

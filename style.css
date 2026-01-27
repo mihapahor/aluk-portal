@@ -428,7 +428,27 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 }
 
 .updates-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
   padding: 4px 0;
+}
+
+.updates-list li > span:first-child {
+  flex-grow: 1;
+  cursor: pointer;
+}
+
+.updates-list li > span:last-child {
+  white-space: nowrap;
+  text-align: right;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.update-item-hidden {
+  display: none !important;
 }
 .show-more-btn { background: transparent; color: #0284c7; border: none; cursor: pointer; font-size: 13px; font-weight: 600; padding: 0; text-align: left; }
 .show-more-btn:hover { text-decoration: underline; }
