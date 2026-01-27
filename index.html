@@ -12,7 +12,7 @@
   
   <link rel="icon" type="image/png" href="favicon.png">
 
-  <link rel="stylesheet" href="style.css?v=1345">
+  <link rel="stylesheet" href="style.css?v=1450">
 </head>
 <body>
 
@@ -26,7 +26,7 @@
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:15px;">
-        <div id="buildDate" style="color:var(--text-secondary); font-size:12px; font-weight:400; font-family:monospace;">27.1.2026 13:45</div>
+        <div id="buildDate" style="color:var(--text-secondary); font-size:12px; font-weight:400; font-family:monospace;">27.1.2026 14:50</div>
         <button id="logout" class="ghost" style="display:none;">Odjava</button>
       </div>
     </div>
@@ -71,20 +71,35 @@
     </div>
   </form>
 
-  <div id="appCard" style="display:none;">
-    <div class="card">
-      
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-        <div id="userLine" style="font-weight:500; color:var(--text-primary); font-size: 18px;"></div>
+  <div id="appCard" class="app-layout" style="display:none;">
+    
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div id="userLine" style="font-weight:600; color:var(--text-primary); font-size:14px; margin-bottom:5px;"></div>
       </div>
       
-      <div id="globalFavorites" style="display:none;">
-        <div class="section-title fav">★ Priljubljene mape</div>
-        <p style="font-size:13px; color:var(--text-secondary); margin-top:-10px; margin-bottom:15px;">Hitri dostop do pogosto uporabljanih map. Kliknite na zvezdo ★ na kateri koli mapi, da jo dodate med priljubljene.</p>
-        <div id="globalFavContainer" class="file-container grid-view"></div>
+      <nav class="sidebar-nav">
+        <div class="sidebar-section-title">Meni</div>
+        <a href="#" class="sidebar-link active" onclick="navigateTo(''); return false;">
+          <span class="sidebar-icon">🏠</span>
+          <span>Domov</span>
+        </a>
+      </nav>
+      
+      <div class="sidebar-favorites">
+        <div class="sidebar-section-title">★ Priljubljene</div>
+        <div id="sidebarFavList" class="sidebar-fav-list">
+          <div class="sidebar-empty">Ni priljubljenih map.</div>
+        </div>
       </div>
-
-      <div id="updatesBanner" class="updates-banner">
+    </aside>
+    
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <div class="card">
+        
+        <div id="updatesBanner" class="updates-banner">
         <div class="updates-title">
           <span>📢 Nedavne posodobitve v tej mapi</span>
           <span id="lastUpdateDate" style="font-weight:400; font-size:13px; color:var(--text-secondary)"></span>
@@ -127,13 +142,14 @@
         <p style="font-size:13px; color:var(--text-secondary); margin-top:-10px; margin-bottom:15px;">Prebrskajte mape in datoteke. Kliknite na mapo za vstop ali na datoteko za predogled. Datoteke z oznako <span style="background:var(--new-badge); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">NOVO</span> so bile dodane v zadnjih 30 dneh.</p>
       <div id="mainContent"></div>
 
-    </div>
-    
-    <div class="footer">
-      &copy; 2026 Alumit. Tehnična pomoč: <a href="mailto:miha@aluk.si">miha@aluk.si</a>
-    </div>
+      </div>
+      
+      <div class="footer">
+        &copy; 2026 Alumit. Tehnična pomoč: <a href="mailto:miha@aluk.si">miha@aluk.si</a>
+      </div>
+    </main>
   </div>
 
-  <script type="module" src="script.js?v=1345"></script>
+  <script type="module" src="script.js?v=1450"></script>
 </body>
 </html>

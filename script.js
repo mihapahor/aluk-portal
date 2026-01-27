@@ -56,6 +56,7 @@ const btnGrid = getElement("btnGrid");
 const btnList = getElement("btnList");
 const globalFavorites = getElement("globalFavorites");
 const globalFavContainer = getElement("globalFavContainer");
+const sidebarFavList = getElement("sidebarFavList");
 
 let currentPath = ""; 
 let currentItems = [];
@@ -121,6 +122,7 @@ function showApp(email) {
   
   setViewMode(viewMode);
   renderGlobalFavorites();
+  updateSidebarFavorites(); // Posodobi sidebar priljubljene
   const path = getPathFromUrl();
   currentPath = path;
   loadContent(path);
@@ -326,11 +328,76 @@ async function renderGlobalFavorites() {
                        <div class="item-info" style="padding:10px;"><strong style="font-size:13px;">${name}</strong></div>
                        <button class="fav-btn active" style="top:5px; left:5px;">★</button>`;
       div.onclick = () => navigateTo(p);
-      div.querySelector('.fav-btn').onclick = (e) => { e.stopPropagation(); favorites = favorites.filter(f => f !== p); saveFavorites(favorites); renderGlobalFavorites(); renderItems(currentItems, currentRenderId); };
+      div.querySelector('.fav-btn').onclick = (e) => { 
+        e.stopPropagation(); 
+        favorites = favorites.filter(f => f !== p); 
+        saveFavorites(favorites); 
+        renderGlobalFavorites(); 
+        updateSidebarFavorites(); // Posodobi sidebar
+        renderItems(currentItems, currentRenderId); 
+      };
       globalFavContainer.appendChild(div);
   }
 }
-window.toggleFavorite = function(e, name) { e.stopPropagation(); const p = normalizePath(currentPath ? `${currentPath}/${name}` : name); favorites = loadFavorites(); if (favorites.includes(p)) favorites = favorites.filter(f => f !== p); else favorites.push(p); saveFavorites(favorites); renderGlobalFavorites(); renderItems(currentItems, currentRenderId); }
+window.toggleFavorite = function(e, name) { 
+  e.stopPropagation(); 
+  const p = normalizePath(currentPath ? `${currentPath}/${name}` : name); 
+  favorites = loadFavorites(); 
+  if (favorites.includes(p)) {
+    favorites = favorites.filter(f => f !== p);
+  } else {
+    favorites.push(p);
+  }
+  saveFavorites(favorites); 
+  renderGlobalFavorites(); 
+  updateSidebarFavorites(); // Posodobi sidebar
+  renderItems(currentItems, currentRenderId); 
+}
+
+// --- SIDEBAR PRILJUBLJENE ---
+function updateSidebarFavorites() {
+  if (!sidebarFavList) return;
+  
+  favorites = loadFavorites();
+  
+  if (favorites.length === 0) {
+    sidebarFavList.innerHTML = '<div class="sidebar-empty">Ni priljubljenih map. Kliknite ★ na mapi.</div>';
+    return;
+  }
+  
+  sidebarFavList.innerHTML = '';
+  
+  favorites.forEach(path => {
+    const name = path.split('/').pop();
+    const icon = getIconForName(name);
+    
+    const item = document.createElement('div');
+    item.className = 'sidebar-fav-item';
+    item.innerHTML = `
+      <span class="fav-icon">★</span>
+      <span class="fav-name" title="${path}">${icon} ${name}</span>
+      <span class="fav-remove" title="Odstrani iz priljubljenih">✕</span>
+    `;
+    
+    // Klik na element -> navigacija (KRITIČNO: uporabi window.navigateTo)
+    item.onclick = (e) => {
+      if (e.target.classList.contains('fav-remove')) return;
+      window.navigateTo(path);
+    };
+    
+    // Klik na X -> odstrani iz priljubljenih
+    item.querySelector('.fav-remove').onclick = (e) => {
+      e.stopPropagation();
+      favorites = favorites.filter(f => f !== path);
+      saveFavorites(favorites);
+      updateSidebarFavorites();
+      renderGlobalFavorites();
+      if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
+    };
+    
+    sidebarFavList.appendChild(item);
+  });
+}
 
 // --- ISKANJE (VSE: Šifrant + PDF Index) ---
 async function loadSearchData() {
