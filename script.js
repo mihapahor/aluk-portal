@@ -313,11 +313,8 @@ async function createItemElement(item, cont) {
     const clean = normalizePath(full);
     let badges = "";
     
+    // Pridobi oznako sistema iz poti (zadnja beseda drugega nivoja)
     if (isFolder) {
-        const isFav = favorites.includes(clean);
-        div.innerHTML += `<button class="fav-btn ${isFav?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>`;
-        
-        // Pridobi oznako sistema iz poti (zadnja beseda drugega nivoja)
         const systemBadge = getSystemBadgeFromPath(full);
         if (systemBadge) {
             badges += `<span class="system-badge" style="top:10px;">${systemBadge}</span>`;
@@ -347,12 +344,14 @@ async function createItemElement(item, cont) {
     if (item.name.toLowerCase().endsWith('dwg') || item.name.toLowerCase().endsWith('dxf')) icon = `<img src="dwg-file.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📐</div>'">`;
     if (imageMap[base]) { const { data } = await supabase.storage.from('Catalogs').createSignedUrl(currentPath ? `${currentPath}/${imageMap[base].name}` : imageMap[base].name, 3600); if (data) icon = `<img src="${data.signedUrl}" loading="lazy" />`; }
 
-    div.innerHTML = (isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>` : '') + 
+    // Sestavi HTML brez inline onclick atributov
+    const isFav = isFolder && favorites.includes(clean);
+    div.innerHTML = (isFolder ? `<button class="fav-btn ${isFav?'active':''}">★</button>` : '') + 
                     badges + 
                     `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}">${icon}</div>` +
                     `<div class="item-info"><strong>${item.name}</strong><small>${isFolder?'Mapa':(item.metadata.size/1024/1024).toFixed(2)+' MB'}</small>${!isFolder&&item.created_at?`<br><span style="font-size:10px;color:var(--text-tertiary)">${formatDate(item.created_at)}</span>`:''}</div>`;
     
-    // Nastavi onclick handler - uporabi addEventListener za boljšo kompatibilnost
+    // Nastavi onclick handler za div
     div.style.cursor = "pointer";
     div.addEventListener('click', (e) => {
       // Preveri, če je klik na fav-btn ali child element
@@ -363,6 +362,30 @@ async function createItemElement(item, cont) {
         openPdfViewer(item.name, full);
       }
     });
+    
+    // Nastavi onclick handler za fav-btn (če obstaja)
+    if (isFolder) {
+      const favBtn = div.querySelector('.fav-btn');
+      if (favBtn) {
+        favBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const p = normalizePath(currentPath ? `${currentPath}/${item.name}` : item.name);
+          favorites = loadFavorites();
+          if (favorites.includes(p)) {
+            favorites = favorites.filter(f => f !== p);
+          } else {
+            favorites.push(p);
+          }
+          saveFavorites(favorites);
+          // Posodobi priljubljene, če je aktivna favorites stran
+          if (favoritesPage && favoritesPage.style.display !== "none") {
+            renderGlobalFavorites();
+          }
+          // Posodobi trenutne elemente
+          if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
+        });
+      }
+    }
     
     cont.appendChild(div);
 }
@@ -467,25 +490,6 @@ function showMainPage() {
   if (favoritesPage) favoritesPage.style.display = "none";
   if (mainPage) mainPage.style.display = "block";
   if (menuFavorites) menuFavorites.classList.remove("active");
-}
-window.toggleFavorite = function(e, name) { 
-  e.stopPropagation(); 
-  const p = normalizePath(currentPath ? `${currentPath}/${name}` : name); 
-  favorites = loadFavorites(); 
-  if (favorites.includes(p)) {
-    favorites = favorites.filter(f => f !== p);
-  } else {
-    favorites.push(p);
-  }
-  saveFavorites(favorites); 
-  
-  // Posodobi priljubljene, če je aktivna favorites stran
-  if (favoritesPage && favoritesPage.style.display !== "none") {
-    renderGlobalFavorites();
-  }
-  
-  // Posodobi trenutne elemente
-  if (currentItems.length > 0) renderItems(currentItems, currentRenderId); 
 }
 
 // --- ISKANJE (VSE: Šifrant + PDF Index) ---
