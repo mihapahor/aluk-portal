@@ -64,7 +64,9 @@ let imageMap = {};
 let favorites = loadFavorites();
 let viewMode = localStorage.getItem('aluk_view_mode') || 'grid';
 let folderCache = {}; 
-let currentRenderId = 0; 
+let currentRenderId = 0;
+let imageUrlCache = {}; // Cache za signed URLs slik
+let isSearchActive = false; // Flag za preverjanje, če je aktivno iskanje 
 
 // --- ISKANJE (Cache) ---
 let articleDatabase = [];
@@ -74,6 +76,52 @@ let isDataLoaded = false;
 function normalizePath(path) { if (!path) return ""; try { return decodeURIComponent(path).trim(); } catch (e) { return path.trim(); } }
 function loadFavorites() { try { let raw = JSON.parse(localStorage.getItem('aluk_favorites') || '[]'); return [...new Set(raw.map(f => normalizePath(f)))].filter(f => f); } catch(e) { return []; } }
 function saveFavorites(favs) { localStorage.setItem('aluk_favorites', JSON.stringify(favs)); }
+
+// Preveri, če pot obstaja v Supabase Storage
+async function pathExists(path) {
+  try {
+    const parts = path.split('/').filter(p => p);
+    if (parts.length === 0) return true; // Root vedno obstaja
+    
+    const parentPath = parts.slice(0, -1).join('/');
+    const folderName = parts[parts.length - 1];
+    
+    const { data, error } = await supabase.storage.from('Catalogs').list(parentPath || '', {
+      limit: 1000
+    });
+    
+    if (error) {
+      console.warn(`Napaka pri preverjanju poti "${path}":`, error);
+      return false;
+    }
+    
+    return data && data.some(item => !item.metadata && item.name === folderName);
+  } catch (e) {
+    console.warn(`Napaka pri preverjanju poti "${path}":`, e);
+    return false;
+  }
+}
+
+// Očisti neobstoječe priljubljene
+async function cleanInvalidFavorites() {
+  favorites = loadFavorites();
+  if (favorites.length === 0) return;
+  
+  const validFavorites = [];
+  for (const path of favorites) {
+    const exists = await pathExists(path);
+    if (exists) {
+      validFavorites.push(path);
+    } else {
+      console.log(`Odstranjujem neobstoječo priljubljeno: ${path}`);
+    }
+  }
+  
+  if (validFavorites.length !== favorites.length) {
+    saveFavorites(validFavorites);
+    favorites = validFavorites;
+  }
+}
 function getCustomSortIndex(name) { 
   const i = customSortOrder.indexOf(name); 
   if (i !== -1) return i;
@@ -98,7 +146,7 @@ function showLogin() {
   document.getElementById("logout").style.display = "none"; 
 }
 
-function showApp(email) {
+async function showApp(email) {
   if (authForm) authForm.style.display = "none"; 
   if (appCard) {
     appCard.style.display = "flex"; 
@@ -119,10 +167,13 @@ function showApp(email) {
     if (!userLine.textContent) userLine.textContent = `👤 ${email}`;
   }
   
+  // Očisti neobstoječe priljubljene ob zagonu (asinhrono, da ne blokira)
+  cleanInvalidFavorites().then(() => {
+    setViewMode(viewMode);
+    renderGlobalFavorites();
+    updateSidebarFavorites(); // Posodobi sidebar priljubljene
+  });
   
-  setViewMode(viewMode);
-  renderGlobalFavorites();
-  updateSidebarFavorites(); // Posodobi sidebar priljubljene
   const path = getPathFromUrl();
   currentPath = path;
   loadContent(path);
@@ -134,7 +185,15 @@ document.getElementById("logout").addEventListener("click", async () => {
 });
 
 // --- NAVIGACIJA ---
-window.navigateTo = function(path) { currentPath = path; searchInput.value = ""; window.history.pushState({ path }, "", "#" + path); loadContent(path); }
+window.navigateTo = function(path) { 
+  currentPath = path; 
+  searchInput.value = ""; 
+  isSearchActive = false; // Deaktiviraj iskanje ob navigaciji
+  sessionStorage.removeItem('aluk_search_query');
+  sessionStorage.removeItem('aluk_search_results');
+  window.history.pushState({ path }, "", "#" + path); 
+  loadContent(path); 
+}
 function getPathFromUrl() { const h = window.location.hash; if (!h || h.length <= 1 || h.startsWith("#view=")) return ""; return decodeURIComponent(h.slice(1)); }
 window.addEventListener('popstate', () => { pdfModal.style.display = 'none'; pdfFrame.src = ""; const p = getPathFromUrl(); currentPath = p; loadContent(p); });
 
@@ -204,7 +263,19 @@ function updateBreadcrumbs(path) {
 // --- RENDER SEZNAMA ---
 async function renderItems(items, rId) {
   if (rId !== currentRenderId) return;
-  if (items.length === 0) { mainContent.innerHTML = ""; statusEl.textContent = "Mapa je prazna."; return; }
+  
+  // Preveri, če so prikazani rezultati iskanja - ne pobriši jih
+  const hasSearchResults = mainContent.querySelector('.search-results-grid');
+  if (hasSearchResults && isSearchActive) {
+    // Ne osvežuj, če so prikazani rezultati iskanja
+    return;
+  }
+  
+  if (items.length === 0) { 
+    mainContent.innerHTML = ""; 
+    statusEl.textContent = "Mapa je prazna."; 
+    return; 
+  }
   statusEl.textContent = `${items.length} elementov`;
   const cont = document.createElement("div"); cont.className = `file-container ${viewMode}-view`;
   favorites = loadFavorites();
@@ -282,7 +353,24 @@ async function createItemElement(item, cont) {
     const base = getBaseName(item.name).toLowerCase();
     let icon = isFolder ? `<div class="big-icon">${getIconForName(base)}</div>` : `<div class="big-icon">${fileIcons[item.name.split('.').pop().toLowerCase()]||"📄"}</div>`;
     if (item.name.toLowerCase().endsWith('dwg') || item.name.toLowerCase().endsWith('dxf')) icon = `<img src="dwg-file.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📐</div>'">`;
-    if (imageMap[base]) { const { data } = await supabase.storage.from('Catalogs').createSignedUrl(currentPath ? `${currentPath}/${imageMap[base].name}` : imageMap[base].name, 3600); if (data) icon = `<img src="${data.signedUrl}" loading="lazy" />`; }
+    
+    // Cache za slike - preveri, če že imamo URL
+    if (imageMap[base]) {
+      const imagePath = currentPath ? `${currentPath}/${imageMap[base].name}` : imageMap[base].name;
+      const cacheKey = imagePath;
+      
+      if (imageUrlCache[cacheKey]) {
+        // Uporabi cache URL (če ni pretekel - 3600s = 1h)
+        icon = `<img src="${imageUrlCache[cacheKey]}" loading="lazy" />`;
+      } else {
+        // Naloži nov URL in shrani v cache
+        const { data } = await supabase.storage.from('Catalogs').createSignedUrl(imagePath, 3600);
+        if (data) {
+          imageUrlCache[cacheKey] = data.signedUrl;
+          icon = `<img src="${data.signedUrl}" loading="lazy" />`;
+        }
+      }
+    }
 
     div.innerHTML = (isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>` : '') + 
                     badges + 
@@ -351,12 +439,19 @@ window.toggleFavorite = function(e, name) {
   saveFavorites(favorites); 
   renderGlobalFavorites(); 
   updateSidebarFavorites(); // Posodobi sidebar
-  renderItems(currentItems, currentRenderId); 
+  // Ne osvežuj glavne vsebine, če je aktivno iskanje
+  if (!isSearchActive && currentItems.length > 0) {
+    renderItems(currentItems, currentRenderId);
+  } 
 }
 
 // --- SIDEBAR PRILJUBLJENE ---
 function updateSidebarFavorites() {
   if (!sidebarFavList) return;
+  
+  // Shrani fokus iskalnega polja, če je aktiven
+  const searchHasFocus = document.activeElement === searchInput;
+  const searchValue = searchInput ? searchInput.value : '';
   
   favorites = loadFavorites();
   
@@ -379,9 +474,32 @@ function updateSidebarFavorites() {
       <span class="fav-remove" title="Odstrani iz priljubljenih">✕</span>
     `;
     
-    // Klik na element -> navigacija (KRITIČNO: uporabi window.navigateTo)
-    item.onclick = (e) => {
+    // Klik na element -> navigacija z preverjanjem obstoja
+    item.onclick = async (e) => {
       if (e.target.classList.contains('fav-remove')) return;
+      
+      // Preveri, če pot obstaja
+      const exists = await pathExists(path);
+      if (!exists) {
+        // Odstrani iz priljubljenih in prikaži sporočilo
+        favorites = favorites.filter(f => f !== path);
+        saveFavorites(favorites);
+        updateSidebarFavorites();
+        renderGlobalFavorites();
+        
+        // Prikaži sporočilo uporabniku
+        if (statusEl) {
+          const originalText = statusEl.textContent;
+          statusEl.textContent = `⚠️ Mapa "${name}" je bila preimenovana ali premaknjena. Odstranjena iz priljubljenih.`;
+          statusEl.style.color = 'var(--error)';
+          setTimeout(() => {
+            statusEl.textContent = originalText;
+            statusEl.style.color = '';
+          }, 5000);
+        }
+        return;
+      }
+      
       window.navigateTo(path);
     };
     
@@ -392,11 +510,21 @@ function updateSidebarFavorites() {
       saveFavorites(favorites);
       updateSidebarFavorites();
       renderGlobalFavorites();
-      if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
+      if (currentItems.length > 0 && !isSearchActive) renderItems(currentItems, currentRenderId);
     };
     
     sidebarFavList.appendChild(item);
   });
+  
+  // Obnovi fokus iskalnega polja, če je bil aktiven
+  if (searchHasFocus && searchInput) {
+    setTimeout(() => {
+      searchInput.focus();
+      if (searchValue) {
+        searchInput.setSelectionRange(searchValue.length, searchValue.length);
+      }
+    }, 0);
+  }
 }
 
 // --- ISKANJE (VSE: Šifrant + PDF Index) ---
@@ -451,6 +579,9 @@ if (searchInput) {
     clearSearchBtn.addEventListener("click", () => {
       searchInput.value = "";
       clearSearchBtn.style.display = "none";
+      isSearchActive = false; // Deaktiviraj iskanje
+      sessionStorage.removeItem('aluk_search_query');
+      sessionStorage.removeItem('aluk_search_results');
       if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
     });
   }
@@ -488,6 +619,7 @@ if (searchInput) {
       // Počisti sessionStorage
       sessionStorage.removeItem('aluk_search_query');
       sessionStorage.removeItem('aluk_search_results');
+      isSearchActive = false; // Deaktiviraj iskanje
       
       // Prikaži nazaj sekcijo "TEHNIČNA DOKUMENTACIJA"
       const contentTitleEl = getElement("contentTitle");
@@ -498,6 +630,8 @@ if (searchInput) {
       if (currentItems.length > 0) renderItems(currentItems, currentRenderId); 
       return; 
     }
+    
+    isSearchActive = true; // Aktiviraj iskanje
     
     searchTimeout = setTimeout(async () => {
         console.log("🔍 Začenjam iskanje za:", val);
@@ -889,6 +1023,7 @@ window.addEventListener('pageshow', (e) => {
     const savedQuery = sessionStorage.getItem('aluk_search_query');
     if (savedQuery && searchInput) {
       searchInput.value = savedQuery;
+      isSearchActive = true; // Aktiviraj iskanje
       // Ponovno izvedi iskanje
       if (searchInput.value.trim()) {
         searchInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -903,6 +1038,7 @@ document.addEventListener('visibilitychange', () => {
     const savedQuery = sessionStorage.getItem('aluk_search_query');
     if (savedQuery && searchInput && mainContent && mainContent.innerHTML.trim() === "") {
       searchInput.value = savedQuery;
+      isSearchActive = true; // Aktiviraj iskanje
       if (clearSearchBtn) clearSearchBtn.style.display = "flex";
       // Ponovno izvedi iskanje
       searchInput.dispatchEvent(new Event('input', { bubbles: true }));
