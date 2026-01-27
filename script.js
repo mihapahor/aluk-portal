@@ -211,22 +211,64 @@ async function renderItems(items, rId) {
   if (rId === currentRenderId) { mainContent.innerHTML = ""; mainContent.appendChild(cont); }
 }
 
+// Funkcija za pridobitev oznake sistema iz poti (zadnja beseda drugega nivoja)
+// Primer: "Okenski sistemi/C67K/Tehnični katalogi" → "C67K"
+function getSystemBadgeFromPath(path) {
+    if (!path) return null;
+    const parts = path.split('/').filter(p => p.trim());
+    // Če je pot "Okenski sistemi/C67K/..." → vrni "C67K" (drugi nivo)
+    if (parts.length >= 2) {
+        const secondLevel = parts[1];
+        // Vzemi zadnjo besedo (npr. "Okenski sistemi C67K" → "C67K")
+        // Ali pa celoten drugi nivo, če je kratek (npr. "C67K")
+        const words = secondLevel.split(' ');
+        // Če je zadnja beseda kratka (npr. "C67K", "C68K"), jo uporabi
+        const lastWord = words[words.length - 1];
+        if (lastWord.length <= 10 && /^[A-Z0-9]+$/i.test(lastWord)) {
+            return lastWord;
+        }
+        // Sicer uporabi celoten drugi nivo
+        return secondLevel;
+    }
+    return null;
+}
+
 async function createItemElement(item, cont) {
-    const isFolder = !item.metadata; const div = document.createElement("div"); div.className = "item";
-    const full = currentPath ? `${currentPath}/${item.name}` : item.name; const clean = normalizePath(full);
+    const isFolder = !item.metadata; 
+    const div = document.createElement("div"); 
+    div.className = "item";
+    const full = currentPath ? `${currentPath}/${item.name}` : item.name; 
+    const clean = normalizePath(full);
     let badges = "";
+    
     if (isFolder) {
         const isFav = favorites.includes(clean);
         div.innerHTML += `<button class="fav-btn ${isFav?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>`;
-        if (currentPath.toLowerCase().includes("sistem")) {
-            const sys = currentPath.split('/').pop().split(' ').pop();
-            if (!item.name.includes(sys) && /tehni|vgrad|prerez/i.test(item.name)) badges += `<span class="system-badge" style="top:10px;">${sys}</span>`;
+        
+        // Pridobi oznako sistema iz poti (zadnja beseda drugega nivoja)
+        const systemBadge = getSystemBadgeFromPath(full);
+        if (systemBadge) {
+            badges += `<span class="system-badge" style="top:10px;">${systemBadge}</span>`;
         }
-        getNewFilesRecursive(full, 0).then(n => { if(n.length>0) { const b=div.querySelector('.new-badge'); if(b) b.style.display='inline-block'; const s=div.querySelector('.system-badge'); if(s) s.style.top='36px'; } });
+        
+        // Preveri za NOVO badge asinhrono
+        getNewFilesRecursive(full, 0).then(n => { 
+            if(n.length > 0) { 
+                const b = div.querySelector('.new-badge'); 
+                if(b) {
+                    b.style.display = 'inline-block';
+                    // Če ima tudi system badge, ga premakni navzdol
+                    const s = div.querySelector('.system-badge');
+                    if(s) s.style.top = '36px';
+                }
+            } 
+        });
     } else if (isRelevantFile(item.name) && item.created_at && new Date(item.created_at) > new Date(Date.now() - 30*24*3600*1000)) {
         badges += `<span class="new-badge" style="display:inline-block">NOVO</span>`;
     }
-    badges = `<span class="new-badge" style="display:none">NOVO</span>` + badges; // Placeholder za async folder check
+    
+    // Placeholder za NOVO badge (za mape)
+    badges = `<span class="new-badge" style="display:none">NOVO</span>` + badges;
     
     const base = getBaseName(item.name).toLowerCase();
     let icon = isFolder ? `<div class="big-icon">${getIconForName(base)}</div>` : `<div class="big-icon">${fileIcons[item.name.split('.').pop().toLowerCase()]||"📄"}</div>`;
@@ -244,14 +286,37 @@ async function createItemElement(item, cont) {
 
 // --- GLOBALNI PRILJUBLJENI ---
 async function renderGlobalFavorites() {
-  favorites = loadFavorites(); if (favorites.length === 0) { globalFavorites.style.display = "none"; return; }
-  globalFavorites.style.display = "block"; globalFavContainer.innerHTML = ""; globalFavContainer.className = `file-container grid-view`;
+  favorites = loadFavorites(); 
+  if (favorites.length === 0) { 
+    if (globalFavorites) globalFavorites.style.display = "none"; 
+    return; 
+  }
+  if (globalFavorites) globalFavorites.style.display = "block"; 
+  if (globalFavContainer) {
+    globalFavContainer.innerHTML = ""; 
+    globalFavContainer.className = `file-container grid-view`;
+  }
+  
   for (const p of favorites) {
-      const name = p.split('/').pop(); const div = document.createElement("div"); div.className = "item";
+      const name = p.split('/').pop(); 
+      const div = document.createElement("div"); 
+      div.className = "item";
       const news = await getNewFilesRecursive(p, 0);
-      div.innerHTML = `<div class="item-preview folder-bg" style="height:100px;"><div class="big-icon" style="font-size:40px;">${getIconForName(name)}</div></div>
+      
+      // Pridobi oznako sistema iz poti
+      const systemBadge = getSystemBadgeFromPath(p);
+      let badges = "";
+      if (news.length > 0) {
+          badges += '<span class="new-badge" style="display:inline-block">NOVO</span>';
+          if (systemBadge) {
+              badges += `<span class="system-badge" style="top:36px;">${systemBadge}</span>`;
+          }
+      } else if (systemBadge) {
+          badges += `<span class="system-badge" style="top:10px;">${systemBadge}</span>`;
+      }
+      
+      div.innerHTML = `<div class="item-preview folder-bg" style="height:100px; position:relative;"><div class="big-icon" style="font-size:40px;">${getIconForName(name)}</div>${badges}</div>
                        <div class="item-info" style="padding:10px;"><strong style="font-size:13px;">${name}</strong></div>
-                       ${news.length>0 ? '<span class="new-badge" style="display:inline-block">NOVO</span>' : ''}
                        <button class="fav-btn active" style="top:5px; left:5px;">★</button>`;
       div.onclick = () => navigateTo(p);
       div.querySelector('.fav-btn').onclick = (e) => { e.stopPropagation(); favorites = favorites.filter(f => f !== p); saveFavorites(favorites); renderGlobalFavorites(); renderItems(currentItems, currentRenderId); };
@@ -283,10 +348,46 @@ if (searchInput) {
   console.error("✗ searchInput NI NAJDEN! Iskanje ne bo delovalo.");
 }
 
+// Funkcija za kopiranje v odložišče
+window.copyToClipboard = function(text, button) {
+    navigator.clipboard.writeText(text).then(() => {
+        const originalText = button.textContent;
+        button.textContent = "✓ Kopirano";
+        button.style.background = "#10b981";
+        button.style.color = "white";
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = "#f3f4f6";
+            button.style.color = "#374151";
+        }, 2000);
+    }).catch(err => {
+        console.error("Napaka pri kopiranju:", err);
+        button.textContent = "✗ Napaka";
+    });
+};
+
 if (searchInput) {
+  // Križec za brisanje iskanja
+  const clearSearchBtn = getElement("clearSearch");
+  if (clearSearchBtn) {
+    searchInput.addEventListener("input", (e) => {
+      clearSearchBtn.style.display = e.target.value.trim() ? "flex" : "none";
+    });
+    
+    clearSearchBtn.addEventListener("click", () => {
+      searchInput.value = "";
+      clearSearchBtn.style.display = "none";
+      if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
+    });
+  }
   
   searchInput.addEventListener("input", async (e) => {
     console.log("⌨️ Input event triggered, vrednost:", e.target.value);
+    
+    // Prikaži/skrij križec
+    if (clearSearchBtn) {
+      clearSearchBtn.style.display = e.target.value.trim() ? "flex" : "none";
+    }
     
     // Debounce - počakaj 300ms preden iščeš
     if (searchTimeout) clearTimeout(searchTimeout);
@@ -320,13 +421,45 @@ if (searchInput) {
         const arts = articleDatabase.filter(a => 
             a.sifra.toLowerCase().includes(lowerVal) || 
             a.opis.toLowerCase().includes(lowerVal)
-        ).slice(0, 20);
+        ).slice(0, 50);
+        
+        // Ustvari container za rezultate v dveh stolpcih
+        const resultsWrapper = document.createElement("div");
+        resultsWrapper.className = "search-results-grid";
+        resultsWrapper.style.display = "grid";
+        resultsWrapper.style.gridTemplateColumns = "1fr 1fr";
+        resultsWrapper.style.gap = "20px";
+        resultsWrapper.style.marginTop = "15px";
+        
+        const sifrantCol = document.createElement("div");
+        const mapsCol = document.createElement("div");
         
         if (arts.length > 0) {
             found = true;
-            resCont.innerHTML += `<h3 style="grid-column:1/-1; margin-bottom:10px; color:#2563eb">Najdeno v šifrantu artiklov (${arts.length}):</h3>`;
+            sifrantCol.innerHTML += `<h3 style="margin-bottom:12px; color:#2563eb; font-size:15px; font-weight:600;">📋 Šifrant artiklov (${arts.length})</h3>`;
+            sifrantCol.innerHTML += `<p style="font-size:12px; color:#6b7280; margin-bottom:10px;">Iskanje šifre artikla vrne opis artikla iz šifranta.</p>`;
+            
             arts.forEach(a => {
-                resCont.innerHTML += `<div class="item" style="cursor:default"><div class="item-preview file-bg" style="background:#eff6ff"><div class="big-icon">🏷️</div></div><div class="item-info"><strong style="color:#1e40af">${a.sifra}</strong><small style="color:#334155">${a.opis}</small></div></div>`;
+                const artDiv = document.createElement("div");
+                artDiv.className = "item";
+                artDiv.style.cursor = "default";
+                artDiv.style.marginBottom = "8px";
+                artDiv.style.position = "relative";
+                
+                const copyText = `${a.sifra} - ${a.opis}`;
+                artDiv.innerHTML = `
+                    <div class="item-preview file-bg" style="background:#eff6ff; width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:24px;">
+                        🏷️
+                    </div>
+                    <div class="item-info" style="flex-grow:1;">
+                        <strong style="color:#1e40af; display:block; margin-bottom:2px;">${a.sifra}</strong>
+                        <small style="color:#334155; display:block;">${a.opis}</small>
+                    </div>
+                    <button class="copy-btn" onclick="copyToClipboard('${copyText.replace(/'/g, "\\'")}', this)" style="background:#f3f4f6; border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:12px; color:#374151; margin-left:10px; white-space:nowrap;" title="Kopiraj šifro in opis">📋 Kopiraj</button>
+                `;
+                artDiv.style.display = "flex";
+                artDiv.style.alignItems = "center";
+                sifrantCol.appendChild(artDiv);
             });
         }
 
@@ -336,10 +469,8 @@ if (searchInput) {
         
         if (allMatches.length > 0) {
             found = true;
-            if (arts.length > 0) {
-                resCont.innerHTML += `<div style="grid-column:1/-1; border-top:1px solid #e2e8f0; margin:20px 0;"></div>`;
-            }
-            resCont.innerHTML += `<h3 style="grid-column:1/-1; margin-bottom:10px;">Najdene datoteke in mape (${allMatches.length}):</h3>`;
+            mapsCol.innerHTML += `<h3 style="margin-bottom:12px; color:#059669; font-size:15px; font-weight:600;">📁 Katalogi in datoteke (${allMatches.length})</h3>`;
+            mapsCol.innerHTML += `<p style="font-size:12px; color:#6b7280; margin-bottom:10px;">Iskanje katalogov prikaže vse kataloge, ki se ujemajo in so na voljo na tem portalu.</p>`;
 
             // Prikaži rezultate z potjo
             for (const item of allMatches) {
@@ -375,7 +506,7 @@ if (searchInput) {
                         <small style="color:#6b7280; font-size:12px;">${folderPath || 'Koren'}</small>
                     </div>
                 `;
-                resCont.appendChild(div);
+                mapsCol.appendChild(div);
             }
         }
 
@@ -383,6 +514,20 @@ if (searchInput) {
         if (thisRenderId !== currentRenderId) {
             console.log("⚠️ Iskanje zastarelo, preskoči prikaz");
             return;
+        }
+        
+        // Dodaj stolpce v wrapper
+        if (arts.length > 0) resultsWrapper.appendChild(sifrantCol);
+        if (allMatches.length > 0) resultsWrapper.appendChild(mapsCol);
+        
+        // Če imamo samo en stolpec, spremeni grid na 1 stolpec
+        if (arts.length === 0 || allMatches.length === 0) {
+            resultsWrapper.style.gridTemplateColumns = "1fr";
+        }
+        
+        // Dodaj wrapper v resCont
+        if (arts.length > 0 || allMatches.length > 0) {
+            resCont.appendChild(resultsWrapper);
         }
         
         if (!found) { 
