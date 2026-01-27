@@ -22,7 +22,10 @@
           <div class="subtitle">Tehnična dokumentacija in katalogi</div>
         </div>
       </div>
-      <button id="logout" class="ghost" style="display:none;">Odjava</button>
+      <div style="display:flex; align-items:center; gap:15px;">
+        <div id="buildDate" style="color:#9ca3af; font-size:12px; font-weight:400;">27.1.2026 9:50</div>
+        <button id="logout" class="ghost" style="display:none;">Odjava</button>
+      </div>
     </div>
   </div>
 
@@ -38,26 +41,29 @@
 
   <form id="authForm" class="card">
     <div class="info-box">
-      <strong>Zavarovan dostop:</strong> Portal je namenjen izključno registriranim partnerjem.
+      <strong>🔒 Zavarovan dostop:</strong> Portal je namenjen izključno registriranim partnerjem. Za dostop potrebujete veljaven e-poštni naslov.
     </div>
     <div class="input-group">
       <label for="userName">Ime in Priimek</label>
-      <input id="userName" type="text" placeholder="Janez Novak" />
+      <input id="userName" type="text" placeholder="Janez Novak" autocomplete="name" />
+      <small style="color:#6b7280; font-size:12px; margin-top:4px; display:block;">Vaše polno ime za identifikacijo</small>
     </div>
     <div class="input-group">
       <label for="companyName">Naziv podjetja</label>
-      <input id="companyName" type="text" placeholder="Moje Podjetje d.o.o." />
+      <input id="companyName" type="text" placeholder="Moje Podjetje d.o.o." autocomplete="organization" />
+      <small style="color:#6b7280; font-size:12px; margin-top:4px; display:block;">Naziv vašega podjetja</small>
     </div>
     <div class="input-group">
       <label for="email">E-poštni naslov</label>
-      <input id="email" type="email" placeholder="vas@podjetje.si" />
+      <input id="email" type="email" placeholder="vas@podjetje.si" autocomplete="email" />
+      <small style="color:#6b7280; font-size:12px; margin-top:4px; display:block;">Na ta naslov boste prejeli povezavo za prijavo (pritisnite Enter za pošiljanje)</small>
     </div>
     <button id="sendLink" class="primary" type="submit">Pošlji povezavo za prijavo</button>
     <div id="authMsg"></div>
     <div class="contact-section">
       <div class="contact-text">Niste registrirani ali imate težave s prijavo?</div>
       <a id="requestAccessBtn" href="#" style="text-decoration:none;">
-        <button class="secondary">📧 Kontaktiraj skrbnika</button>
+        <button class="secondary" type="button">📧 Kontaktiraj skrbnika</button>
       </a>
     </div>
   </form>
@@ -70,7 +76,8 @@
       </div>
       
       <div id="globalFavorites" style="display:none;">
-        <div class="section-title fav">★ Priljubljene</div>
+        <div class="section-title fav">★ Priljubljene mape</div>
+        <p style="font-size:13px; color:#6b7280; margin-top:-10px; margin-bottom:15px;">Hitri dostop do pogosto uporabljanih map. Kliknite na zvezdo ★ na kateri koli mapi, da jo dodate med priljubljene.</p>
         <div id="globalFavContainer" class="file-container grid-view"></div>
       </div>
 
@@ -79,6 +86,7 @@
           <span>📢 Nedavne posodobitve v tej mapi</span>
           <span id="lastUpdateDate" style="font-weight:400; font-size:13px; color:#0369a1"></span>
         </div>
+        <p style="font-size:12px; color:#64748b; margin-bottom:8px;">Datoteke, ki so bile dodane ali posodobljene v zadnjih 30 dneh. Kliknite na datoteko, da jo odprete.</p>
         <ul id="updatesList" class="updates-list"></ul>
         <button id="showMoreUpdates" class="show-more-btn" style="display:none;">▼ Pokaži več posodobitev</button>
       </div>
@@ -87,12 +95,12 @@
 
       <div class="toolbar">
         <div class="search-box">
-          <input id="search" type="text" placeholder="🔍 Išči po vseh mapah..." style="margin-bottom:0;" />
-          <p style="font-size:13px; color:#6b7280; margin-top:10px; text-align:right;">Na tem portalu dobite vse najnovejse kataloge</p>
+          <input id="search" type="text" placeholder="🔍 Išči po vseh mapah in šifrantu artiklov..." style="margin-bottom:0;" />
+          <p style="font-size:13px; color:#6b7280; margin-top:10px; text-align:right;">💡 Na tem portalu dobite vse najnovejše kataloge. Iskanje deluje po vseh mapah in podmapah ter po šifrantu artiklov.</p>
         </div>
         <div class="view-toggles">
-          <button class="view-btn active" id="btnGrid" title="Mreža">⊞</button>
-          <button class="view-btn" id="btnList" title="Seznam">☰</button>
+          <button class="view-btn active" id="btnGrid" title="Mrežni prikaz">⊞</button>
+          <button class="view-btn" id="btnList" title="Seznamski prikaz">☰</button>
         </div>
       </div>
 
@@ -103,6 +111,7 @@
       </div>
 
       <div class="section-title" id="contentTitle">📂 Tehnična dokumentacija</div>
+      <p style="font-size:13px; color:#6b7280; margin-top:-10px; margin-bottom:15px;">Prebrskajte mape in datoteke. Kliknite na mapo za vstop ali na datoteko za predogled. Datoteke z oznako <span style="background:#0284c7; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">NOVO</span> so bile dodane v zadnjih 30 dneh.</p>
       <div id="mainContent"></div>
 
     </div>

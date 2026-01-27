@@ -23,6 +23,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helve
 
 .fixed-header { position: fixed; top: 0; left: 0; width: 100%; height: 90px; background-color: var(--header-bg); box-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 1000; display: flex; align-items: center; justify-content: center; }
 .header-content { width: 100%; max-width: 1000px; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; }
+#buildDate { font-family: monospace; letter-spacing: 0.5px; }
 .logo { height: 45px; width: auto; display: block; cursor: pointer; transition: opacity 0.2s; } .logo:hover { opacity: 0.8; }
 .header-text h1 { color: #fff; margin: 0; font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
 .header-text .subtitle { color: #9ca3af; font-size: 13px; margin: 0; font-weight: 400; }
