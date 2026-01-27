@@ -142,3 +142,40 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .info-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 24px; color: #166534; font-size: 14px; }
 .contact-section { margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center; }
 .contact-text { font-size: 14px; color: var(--gray); margin-bottom: 12px; }
+/* --- RDEČA PASICA --- */
+.fixed-header {
+  background-color: #d32f2f; /* Profesionalna rdeča (lahko daš tudi samo "red") */
+  color: white;              /* Belo besedilo */
+  padding: 15px 30px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  justify-content: center;
+}
+
+/* Zagotovimo, da so naslovi beli */
+.header-text h1 {
+  color: white !important;
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.subtitle {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Prilagodimo gumb za odjavo, da bo bel */
+button.ghost {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  color: white;
+}
+
+button.ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: white;
+}
