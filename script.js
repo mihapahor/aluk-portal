@@ -118,11 +118,6 @@ function showApp(email) {
     if (!userLine.textContent) userLine.textContent = `👤 ${email}`;
   }
   
-  // Posodobi čas v notranjosti portala
-  const buildDateInner = getElement("buildDateInner");
-  if (buildDateInner) {
-    buildDateInner.textContent = "27.1.2026 12:35";
-  }
   
   setViewMode(viewMode);
   renderGlobalFavorites();
@@ -335,10 +330,9 @@ if (searchInput) {
             });
         }
 
-        // 2. REKURZIVNO ISKANJE PO VSEH MAPAH
-        console.log("🔍 Začenjam rekurzivno iskanje za:", val);
-        const allMatches = await searchAllFilesRecursive("", val, 0, 10, 200);
-        console.log("✅ Iskanje končano, najdeno:", allMatches.length, "rezultatov");
+        // 2. REKURZIVNO ISKANJE PO VSEH MAPAH (optimizirano)
+        if (statusEl) statusEl.textContent = "Iščem po vseh mapah...";
+        const allMatches = await searchAllFilesRecursive("", val, 0, 8, 100);
         
         if (allMatches.length > 0) {
             found = true;
@@ -538,39 +532,25 @@ setupFormHandler();
 if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid')); 
 if (btnList) btnList.addEventListener('click', () => setViewMode('list'));
 
-// --- REKURZIVNO ISKANJE PO VSEH MAPAH (Za iskanje) ---
-async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 10, maxResults = 200) {
-   if (depth > maxDepth) {
-       console.log(`⚠️ Dosežena maksimalna globina ${maxDepth} pri poti: ${path}`);
-       return [];
-   }
+// --- REKURZIVNO ISKANJE PO VSEH MAPAH (Za iskanje) - OPTIMIZIRANO ---
+async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 8, maxResults = 100) {
+   if (depth > maxDepth) return [];
    
    const lowerSearchTerm = searchTerm.toLowerCase();
    let results = [];
    
    try {
-       console.log(`📁 Iščem v mapi: "${path || 'ROOT'}" (globina ${depth})`);
-       
        const { data, error } = await supabase.storage.from('Catalogs').list(path, { 
-           limit: 1000, 
+           limit: 500, // Zmanjšano za hitrejše iskanje
            sortBy: { column: 'name', order: 'asc' } 
        });
        
-       if (error) {
-           console.warn("❌ Napaka pri branju mape:", path, error);
-           return [];
-       }
+       if (error || !data || data.length === 0) return [];
        
-       if (!data || data.length === 0) {
-           console.log(`📭 Mapa prazna: ${path || 'ROOT'}`);
-           return [];
-       }
-       
-       console.log(`📊 Najdeno ${data.length} elementov v mapi: ${path || 'ROOT'}`);
-       
-       // Filtriraj datoteke in mape, ki se ujemajo z iskalnim nizom
+       // Filtriraj datoteke in mape
        const items = data.filter(item => item.name !== ".emptyFolderPlaceholder");
        
+       // Najprej preveri direktna ujemanja (hitreje)
        for (const item of items) {
            if (results.length >= maxResults) break;
            
@@ -578,33 +558,39 @@ async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 1
            const isFolder = !item.metadata;
            const fullPath = path ? `${path}/${item.name}` : item.name;
            
-           // Preveri, če se ime ujema z iskalnim nizom (začetek ali vmesni del)
+           // Preveri, če se ime ujema z iskalnim nizom
            if (itemName.includes(lowerSearchTerm)) {
-               console.log(`✅ Najdeno ujemanje: "${item.name}" v poti: ${path || 'ROOT'}`);
                results.push({
                    ...item,
                    fullPath: fullPath,
                    displayPath: fullPath
                });
            }
-           
-           // Če je mapa, VEDNO rekurzivno išči v njej
-           if (isFolder) {
-               const subResults = await searchAllFilesRecursive(
-                   fullPath, 
-                   searchTerm, 
-                   depth + 1, 
-                   maxDepth, 
-                   maxResults - results.length
-               );
-               results = [...results, ...subResults];
+       }
+       
+       // Nato rekurzivno išči v mapah (samo če še ni dosežen maxResults)
+       if (results.length < maxResults) {
+           for (const item of items) {
+               if (results.length >= maxResults) break;
+               
+               const isFolder = !item.metadata;
+               if (isFolder) {
+                   const fullPath = path ? `${path}/${item.name}` : item.name;
+                   const subResults = await searchAllFilesRecursive(
+                       fullPath, 
+                       searchTerm, 
+                       depth + 1, 
+                       maxDepth, 
+                       maxResults - results.length
+                   );
+                   results = [...results, ...subResults];
+               }
            }
        }
    } catch (e) {
-       console.error("💥 Napaka pri iskanju v mapi:", path, e);
+       console.warn("Napaka pri iskanju v mapi:", path, e);
    }
    
-   console.log(`📝 Skupaj najdeno v "${path || 'ROOT'}": ${results.length} rezultatov`);
    return results;
 }
 
