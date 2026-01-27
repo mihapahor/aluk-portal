@@ -157,6 +157,13 @@ async function getNewFilesRecursive(path, depth = 0) {
 // --- NALAGANJE VSEBINE ---
 async function loadContent(path) {
   statusEl.textContent = ""; updateBreadcrumbs(path); currentRenderId++; const thisId = currentRenderId;
+  
+  // Prikaži sekcijo "TEHNIČNA DOKUMENTACIJA" ko naložiš normalno vsebino
+  const contentTitleEl = getElement("contentTitle");
+  const contentTitleDesc = contentTitleEl ? contentTitleEl.nextElementSibling : null;
+  if (contentTitleEl) contentTitleEl.style.display = "";
+  if (contentTitleDesc && contentTitleDesc.tagName === "P") contentTitleDesc.style.display = "";
+  
   if (path === "") updatesBanner.style.display = "none"; else updateBannerAsync(path);
   if (folderCache[path]) await processDataAndRender(folderCache[path], thisId); else { mainContent.innerHTML = ""; skeletonLoader.style.display = "grid"; }
   const { data, error } = await supabase.storage.from('Catalogs').list(path, { sortBy: { column: 'name', order: 'asc' }, limit: 1000 });
@@ -414,6 +421,13 @@ if (searchInput) {
       // Počisti sessionStorage
       sessionStorage.removeItem('aluk_search_query');
       sessionStorage.removeItem('aluk_search_results');
+      
+      // Prikaži nazaj sekcijo "TEHNIČNA DOKUMENTACIJA"
+      const contentTitleEl = getElement("contentTitle");
+      const contentTitleDesc = contentTitleEl ? contentTitleEl.nextElementSibling : null;
+      if (contentTitleEl) contentTitleEl.style.display = "";
+      if (contentTitleDesc && contentTitleDesc.tagName === "P") contentTitleDesc.style.display = "";
+      
       if (currentItems.length > 0) renderItems(currentItems, currentRenderId); 
       return; 
     }
@@ -430,6 +444,13 @@ if (searchInput) {
         
         // POČISTI prejšnje rezultate
         if (mainContent) mainContent.innerHTML = "";
+        
+        // Skrij sekcijo "TEHNIČNA DOKUMENTACIJA" ko iščeš
+        const contentTitleEl = getElement("contentTitle");
+        const contentTitleDesc = contentTitleEl ? contentTitleEl.nextElementSibling : null;
+        if (contentTitleEl) contentTitleEl.style.display = "none";
+        if (contentTitleDesc && contentTitleDesc.tagName === "P") contentTitleDesc.style.display = "none";
+        
         // Prikaži loading indikator
         if (statusEl) {
             statusEl.innerHTML = '<span class="loading-indicator">Iščem po vseh mapah<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></span>';
@@ -458,14 +479,14 @@ if (searchInput) {
         const sifrantCol = document.createElement("div");
         const mapsCol = document.createElement("div");
         
-        // Poravnaj začetek rezultatov - dodaj padding-top za poravnavo
+        // Poravnaj začetek rezultatov - uporabi min-height za naslove in opise
         sifrantCol.style.paddingTop = "0";
         mapsCol.style.paddingTop = "0";
         
         if (arts.length > 0) {
             found = true;
-            sifrantCol.innerHTML += `<h3 style="margin-bottom:12px; color:var(--result-article-heading); font-size:15px; font-weight:600; margin-top:0;">📋 Šifrant artiklov (${arts.length})</h3>`;
-            sifrantCol.innerHTML += `<p style="font-size:12px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">Iskanje šifre artikla vrne opis artikla iz šifranta.</p>`;
+            // Uporabi min-height za naslov in opis, da se poravnata z drugim stolpcem
+            sifrantCol.innerHTML += `<div style="min-height:60px;"><h3 style="margin-bottom:12px; color:var(--result-article-heading); font-size:15px; font-weight:600; margin-top:0;">📋 Šifrant artiklov (${arts.length})</h3><p style="font-size:12px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">Iskanje šifre artikla vrne opis artikla iz šifranta.</p></div>`;
             
             arts.forEach(a => {
                 const artDiv = document.createElement("div");
@@ -497,8 +518,8 @@ if (searchInput) {
         
         if (allMatches.length > 0) {
             found = true;
-            mapsCol.innerHTML += `<h3 style="margin-bottom:12px; color:var(--result-doc-heading); font-size:15px; font-weight:600; margin-top:0;">📁 Mape s sistemi in tehnična dokumentacija (${allMatches.length})</h3>`;
-            mapsCol.innerHTML += `<p style="font-size:12px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">Iskanje katalogov prikaže vse kataloge, ki se ujemajo in so na voljo na tem portalu.</p>`;
+            // Uporabi min-height za naslov in opis, da se poravnata z drugim stolpcem
+            mapsCol.innerHTML += `<div style="min-height:60px;"><h3 style="margin-bottom:12px; color:var(--result-doc-heading); font-size:15px; font-weight:600; margin-top:0;">📁 Tehnična dokumentacija (${allMatches.length})</h3><p style="font-size:12px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">Iskanje katalogov prikaže vse kataloge, ki se ujemajo in so na voljo na tem portalu.</p></div>`;
 
             // Prikaži rezultate z potjo
             for (const item of allMatches) {
