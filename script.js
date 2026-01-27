@@ -225,7 +225,15 @@ async function loadContent(path) {
   if (contentTitleEl) contentTitleEl.style.display = "";
   if (contentTitleDesc && contentTitleDesc.tagName === "P") contentTitleDesc.style.display = "";
   
-  if (path === "") updatesBanner.style.display = "none"; else updateBannerAsync(path);
+  // Prikaži posodobitve (vedno, razen na root in če ni aktivno iskanje)
+  if (path === "") {
+    if (updatesBanner) updatesBanner.style.display = "none";
+  } else {
+    // Prikaži posodobitve, če ni aktivno iskanje
+    if (!isSearchActive) {
+      updateBannerAsync(path);
+    }
+  }
   if (folderCache[path]) await processDataAndRender(folderCache[path], thisId); else { mainContent.innerHTML = ""; skeletonLoader.style.display = "grid"; }
   const { data, error } = await supabase.storage.from('Catalogs').list(path, { sortBy: { column: 'name', order: 'asc' }, limit: 1000 });
   skeletonLoader.style.display = "none";
@@ -278,14 +286,18 @@ async function updateBannerAsync(path) {
       showMoreUpdatesBtn.style.display = "block";
       showMoreUpdatesBtn.textContent = "▼ Pokaži več posodobitev";
       
+      // Uporabi closure za shranjevanje stanja
       let isExpanded = false;
+      
       showMoreUpdatesBtn.onclick = () => {
-        const hiddenItems = updatesList.querySelectorAll(".update-item-hidden");
+        const allItems = updatesList.querySelectorAll("li");
         
         if (isExpanded) {
-          // Skrij dodatne elemente
-          hiddenItems.forEach(item => {
-            item.classList.add("update-item-hidden");
+          // Skrij dodatne elemente (vse razen prvih 3)
+          allItems.forEach((item, index) => {
+            if (index >= 3) {
+              item.classList.add("update-item-hidden");
+            }
           });
           showMoreUpdatesBtn.textContent = "▼ Pokaži več posodobitev";
           isExpanded = false;
@@ -293,8 +305,10 @@ async function updateBannerAsync(path) {
           updatesBanner.scrollIntoView({ behavior: "smooth", block: "start" });
         } else {
           // Prikaži dodatne elemente
-          hiddenItems.forEach(item => {
-            item.classList.remove("update-item-hidden");
+          allItems.forEach((item, index) => {
+            if (index >= 3) {
+              item.classList.remove("update-item-hidden");
+            }
           });
           showMoreUpdatesBtn.textContent = "▲ Pokaži manj posodobitev";
           isExpanded = true;
@@ -641,6 +655,12 @@ if (searchInput) {
       isSearchActive = false; // Deaktiviraj iskanje
       sessionStorage.removeItem('aluk_search_query');
       sessionStorage.removeItem('aluk_search_results');
+      
+      // Prikaži posodobitve nazaj
+      if (updatesBanner) {
+        updatesBanner.style.display = "";
+      }
+      
       if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
     });
   }
@@ -686,11 +706,21 @@ if (searchInput) {
       if (contentTitleEl) contentTitleEl.style.display = "";
       if (contentTitleDesc && contentTitleDesc.tagName === "P") contentTitleDesc.style.display = "";
       
+      // Prikaži posodobitve, če so bile skrite
+      if (updatesBanner) {
+        updatesBanner.style.display = "";
+      }
+      
       if (currentItems.length > 0) renderItems(currentItems, currentRenderId); 
       return; 
     }
     
     isSearchActive = true; // Aktiviraj iskanje
+    
+    // Skrij posodobitve ob iskanju
+    if (updatesBanner) {
+      updatesBanner.style.display = "none";
+    }
     
     searchTimeout = setTimeout(async () => {
         console.log("🔍 Začenjam iskanje za:", val);

@@ -417,7 +417,17 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .sk-card { height: 200px; border: 1px solid #eee; border-radius: 12px; }
 
-.updates-banner { background: #f0f9ff; border: 1px solid #bae6fd; border-left: 4px solid #0284c7; padding: 15px; border-radius: 8px; margin-bottom: 25px; font-size: 14px; display: none; }
+.updates-banner { 
+  background: #f0f9ff; 
+  border: 1px solid #bae6fd; 
+  border-left: 4px solid #0284c7; 
+  padding: 15px; 
+  border-radius: 8px; 
+  margin-top: 20px;
+  margin-bottom: 30px; 
+  font-size: 14px; 
+  display: none; 
+}
 .updates-title { font-weight: 700; color: #075985; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
 .updates-list { 
   margin: 0; 
@@ -445,6 +455,8 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   text-align: right;
   font-size: 13px;
   color: var(--text-secondary);
+  flex-shrink: 0;
+  min-width: fit-content;
 }
 
 .update-item-hidden {
@@ -725,13 +737,14 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   position: sticky;
   top: 0;
   background: var(--card-bg);
-  z-index: 10;
+  z-index: 100;
   padding: 15px 0;
   margin: 0 -40px;
   padding-left: 40px;
   padding-right: 40px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 /* Body reset za layout */

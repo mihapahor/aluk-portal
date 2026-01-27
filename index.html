@@ -12,7 +12,7 @@
   
   <link rel="icon" type="image/png" href="favicon.png">
 
-  <link rel="stylesheet" href="style.css?v=1465">
+  <link rel="stylesheet" href="style.css?v=1470">
 </head>
 <body>
 
@@ -26,7 +26,7 @@
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:15px;">
-        <div id="buildDate" style="color:var(--text-secondary); font-size:12px; font-weight:400; font-family:monospace;">27.1.2026 15:05</div>
+        <div id="buildDate" style="color:var(--text-secondary); font-size:12px; font-weight:400; font-family:monospace;">27.1.2026 21:30</div>
         <button id="logout" class="ghost" style="display:none;">Odjava</button>
       </div>
     </div>
@@ -99,27 +99,17 @@
     <main class="main-content">
       <div class="card">
         
-        <div id="updatesBanner" class="updates-banner">
-        <div class="updates-title">
-          <span>📢 Nedavne posodobitve v tej mapi</span>
-          <span id="lastUpdateDate" style="font-weight:400; font-size:13px; color:var(--text-secondary)"></span>
+        <div class="breadcrumbs" id="breadcrumbs"></div>
+
+        <div class="search-section">
+          <h3 style="font-size:16px; font-weight:600; color:var(--heading-color); margin-bottom:12px; margin-top:0;">🔍 Iskanje</h3>
+          <p style="font-size:13px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">
+            <strong style="color:var(--text-primary);">Iskanje šifre artikla:</strong> Vpišite šifro artikla in dobili boste opis artikla iz šifranta.<br>
+            <strong style="color:var(--text-primary);">Iskanje katalogov:</strong> Vpišite ime kataloga ali datoteke in dobili boste vse kataloge, ki se ujemajo in so na voljo na tem portalu.
+          </p>
         </div>
-        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">Datoteke, ki so bile dodane ali posodobljene v zadnjih 30 dneh. Kliknite na datoteko, da jo odprete.</p>
-        <ul id="updatesList" class="updates-list"></ul>
-        <button id="showMoreUpdates" class="show-more-btn" style="display:none;">▼ Pokaži več posodobitev</button>
-      </div>
 
-      <div class="breadcrumbs" id="breadcrumbs"></div>
-
-      <div class="search-section">
-        <h3 style="font-size:16px; font-weight:600; color:var(--heading-color); margin-bottom:12px; margin-top:0;">🔍 Iskanje</h3>
-        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">
-          <strong style="color:var(--text-primary);">Iskanje šifre artikla:</strong> Vpišite šifro artikla in dobili boste opis artikla iz šifranta.<br>
-          <strong style="color:var(--text-primary);">Iskanje katalogov:</strong> Vpišite ime kataloga ali datoteke in dobili boste vse kataloge, ki se ujemajo in so na voljo na tem portalu.
-        </p>
-      </div>
-
-      <div class="toolbar">
+        <div class="toolbar">
         <div class="search-box">
           <div style="position:relative;">
             <input id="search" type="text" placeholder="🔍 Išči po vseh mapah in šifrantu artiklov..." style="margin-bottom:0; padding-right:40px;" />
@@ -131,6 +121,16 @@
           <button class="view-btn" id="btnList" title="Seznamski prikaz">☰</button>
         </div>
       </div>
+
+        <div id="updatesBanner" class="updates-banner">
+          <div class="updates-title">
+            <span>📢 Nedavne posodobitve v tej mapi</span>
+            <span id="lastUpdateDate" style="font-weight:400; font-size:13px; color:var(--text-secondary)"></span>
+          </div>
+          <p style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">Datoteke, ki so bile dodane ali posodobljene v zadnjih 30 dneh. Kliknite na datoteko, da jo odprete.</p>
+          <ul id="updatesList" class="updates-list"></ul>
+          <button id="showMoreUpdates" class="show-more-btn" style="display:none;">▼ Pokaži več posodobitev</button>
+        </div>
 
       <div id="status" style="font-size:13px; color:var(--text-secondary); margin-bottom:10px;"></div>
       
@@ -150,6 +150,6 @@
     </main>
   </div>
 
-  <script type="module" src="script.js?v=1465"></script>
+  <script type="module" src="script.js?v=1470"></script>
 </body>
 </html>
