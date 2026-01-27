@@ -20,14 +20,10 @@
         <div class="header-text">
           <h1>Portal za partnerje</h1>
           <div class="subtitle">Tehnična dokumentacija in katalogi</div>
-        </form>
-  </div>
-      </form>
-  </div>
+        </div>
+      </div>
       <button id="logout" class="ghost" style="display:none;">Odjava</button>
-    </form>
-  </div>
-  </form>
+    </div>
   </div>
 
   <div id="pdfModal">
@@ -35,70 +31,57 @@
       <div id="viewerFileName" class="viewer-title">Ime dokumenta</div>
       <div style="display:flex; align-items:center;">
         <button onclick="closePdfViewer()" class="btn-viewer primary">✕ Zapri</button>
-      </form>
-  </div>
-    </form>
-  </div>
+      </div>
+    </div>
     <iframe id="pdfFrame" class="viewer-iframe" src=""></iframe>
-  </form>
   </div>
 
   <form id="authForm" class="card">
     <div class="info-box">
       <strong>Zavarovan dostop:</strong> Portal je namenjen izključno registriranim partnerjem.
-    </form>
-  </div>
+    </div>
     <div class="input-group">
       <label for="userName">Ime in Priimek</label>
       <input id="userName" type="text" placeholder="Janez Novak" />
-    </form>
-  </div>
+    </div>
     <div class="input-group">
       <label for="companyName">Naziv podjetja</label>
       <input id="companyName" type="text" placeholder="Moje Podjetje d.o.o." />
-    </form>
-  </div>
+    </div>
     <div class="input-group">
       <label for="email">E-poštni naslov</label>
       <input id="email" type="email" placeholder="vas@podjetje.si" />
-    </form>
-  </div>
-    <button id="sendLink" class="primary">Pošlji povezavo za prijavo</button>
+    </div>
+    <button id="sendLink" class="primary" type="submit">Pošlji povezavo za prijavo</button>
     <div id="authMsg"></div>
     <div class="contact-section">
       <div class="contact-text">Niste registrirani ali imate težave s prijavo?</div>
       <a id="requestAccessBtn" href="#" style="text-decoration:none;">
         <button class="secondary">📧 Kontaktiraj skrbnika</button>
       </a>
-    </form>
-  </div>
+    </div>
   </form>
-  </div>
 
   <div id="appCard" style="display:none;">
     <div class="card">
       
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
         <div id="userLine" style="font-weight:500; color:#111; font-size: 18px;"></div>
-      </form>
-  </div>
+      </div>
       
       <div id="globalFavorites" style="display:none;">
         <div class="section-title fav">★ Priljubljene</div>
         <div id="globalFavContainer" class="file-container grid-view"></div>
-      </form>
-  </div>
+      </div>
 
       <div id="updatesBanner" class="updates-banner">
         <div class="updates-title">
           <span>📢 Nedavne posodobitve v tej mapi</span>
           <span id="lastUpdateDate" style="font-weight:400; font-size:13px; color:#0369a1"></span>
-        </form>
-  </div>
+        </div>
         <ul id="updatesList" class="updates-list"></ul>
         <button id="showMoreUpdates" class="show-more-btn" style="display:none;">▼ Pokaži več posodobitev</button>
-      </form>
-  </div>
+      </div>
 
       <div class="breadcrumbs" id="breadcrumbs"></div>
 
@@ -106,34 +89,27 @@
         <div class="search-box">
           <input id="search" type="text" placeholder="🔍 Išči po vseh mapah..." style="margin-bottom:0;" />
           <p style="font-size:13px; color:#6b7280; margin-top:10px; text-align:right;">Na tem portalu dobite vse najnovejse kataloge</p>
-        </form>
-  </div>
+        </div>
         <div class="view-toggles">
           <button class="view-btn active" id="btnGrid" title="Mreža">⊞</button>
           <button class="view-btn" id="btnList" title="Seznam">☰</button>
-        </form>
-  </div>
-      </form>
-  </div>
+        </div>
+      </div>
 
       <div id="status" style="font-size:13px; color:#6b7280; margin-bottom:10px;"></div>
       
       <div id="skeletonLoader" class="skeleton-container" style="display:none;">
          <div class="skeleton sk-card"></div><div class="skeleton sk-card"></div><div class="skeleton sk-card"></div>
-      </form>
-  </div>
+      </div>
 
       <div class="section-title" id="contentTitle">📂 Tehnična dokumentacija</div>
       <div id="mainContent"></div>
 
-    </form>
-  </div>
+    </div>
     
     <div class="footer">
       &copy; 2026 Alumit. Tehnična pomoč: <a href="mailto:miha@aluk.si">miha@aluk.si</a>
-    </form>
-  </div>
-  </form>
+    </div>
   </div>
 
   <script type="module" src="script.js?v=FINAL"></script>
