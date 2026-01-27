@@ -531,6 +531,26 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .contact-section { margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center; }
 .contact-text { font-size: 14px; color: var(--gray); margin-bottom: 12px; }
 
+/* --- LOGIN CARD (centrirana kartica) --- */
+.login-card-center {
+  max-width: 400px !important;
+  width: 100%;
+  margin: 120px auto !important;
+  padding: 40px !important;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 480px) {
+  .login-card-center {
+    margin: 100px 15px !important;
+    padding: 25px !important;
+    max-width: calc(100% - 30px) !important;
+  }
+}
+
 /* --- SIDEBAR & LAYOUT --- */
 .app-layout {
   display: flex;
