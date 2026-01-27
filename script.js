@@ -352,7 +352,18 @@ async function createItemElement(item, cont) {
                     `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}">${icon}</div>` +
                     `<div class="item-info"><strong>${item.name}</strong><small>${isFolder?'Mapa':(item.metadata.size/1024/1024).toFixed(2)+' MB'}</small>${!isFolder&&item.created_at?`<br><span style="font-size:10px;color:var(--text-tertiary)">${formatDate(item.created_at)}</span>`:''}</div>`;
     
-    div.onclick = () => isFolder ? navigateTo(full) : openPdfViewer(item.name, full);
+    // Nastavi onclick handler - uporabi addEventListener za boljšo kompatibilnost
+    div.style.cursor = "pointer";
+    div.addEventListener('click', (e) => {
+      // Preveri, če je klik na fav-btn ali child element
+      if (e.target.closest('.fav-btn')) return;
+      if (isFolder) {
+        navigateTo(full);
+      } else {
+        openPdfViewer(item.name, full);
+      }
+    });
+    
     cont.appendChild(div);
 }
 
@@ -393,8 +404,27 @@ async function renderGlobalFavorites() {
       div.innerHTML = `<div class="item-preview folder-bg" style="height:100px; position:relative;"><div class="big-icon" style="font-size:40px;">${getIconForName(name)}</div>${badges}</div>
                        <div class="item-info" style="padding:10px;"><strong style="font-size:13px;">${name}</strong></div>
                        <button class="fav-btn active" style="top:5px; left:5px;">★</button>`;
-      div.onclick = () => navigateTo(p);
-      div.querySelector('.fav-btn').onclick = (e) => { e.stopPropagation(); favorites = favorites.filter(f => f !== p); saveFavorites(favorites); renderGlobalFavorites(); if (currentItems.length > 0) renderItems(currentItems, currentRenderId); };
+      
+      // Nastavi onclick handler za navigacijo
+      div.style.cursor = "pointer";
+      div.addEventListener('click', (e) => {
+        // Preveri, če je klik na fav-btn
+        if (e.target.closest('.fav-btn')) return;
+        navigateTo(p);
+      });
+      
+      // Nastavi onclick handler za fav-btn
+      const favBtn = div.querySelector('.fav-btn');
+      if (favBtn) {
+        favBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          favorites = favorites.filter(f => f !== p);
+          saveFavorites(favorites);
+          renderGlobalFavorites();
+          if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
+        });
+      }
+      
       globalFavContainer.appendChild(div);
   }
 }
@@ -404,6 +434,31 @@ function showFavoritesPage() {
   if (favoritesPage) favoritesPage.style.display = "block";
   if (mainPage) mainPage.style.display = "none";
   if (menuFavorites) menuFavorites.classList.add("active");
+  
+  // Dodaj gumb "Nazaj" na vrh priljubljenih (samo enkrat)
+  let backBtn = favoritesPage ? favoritesPage.querySelector('.back-button') : null;
+  if (!backBtn && favoritesPage) {
+    backBtn = document.createElement("button");
+    backBtn.className = "back-button";
+    backBtn.innerHTML = "← Nazaj";
+    backBtn.style.cssText = "background:var(--bg-secondary); border:1px solid var(--border); border-radius:8px; padding:10px 20px; cursor:pointer; font-size:14px; font-weight:500; color:var(--text-primary); margin-bottom:20px; transition:all 0.2s; width:100%; max-width:200px;";
+    backBtn.onmouseover = function() { this.style.background = "var(--border)"; this.style.borderColor = "var(--primary)"; };
+    backBtn.onmouseout = function() { this.style.background = "var(--bg-secondary)"; this.style.borderColor = "var(--border)"; };
+    backBtn.addEventListener('click', () => {
+      showMainPage();
+      window.history.pushState({ page: "main" }, "", "#");
+      const path = getPathFromUrl();
+      currentPath = path;
+      loadContent(path);
+    });
+    const favoritesTitle = favoritesPage.querySelector('.section-title');
+    if (favoritesTitle) {
+      favoritesPage.insertBefore(backBtn, favoritesTitle);
+    } else {
+      favoritesPage.insertBefore(backBtn, favoritesPage.firstChild);
+    }
+  }
+  
   renderGlobalFavorites();
 }
 
@@ -640,13 +695,15 @@ if (searchInput) {
                 const fileName = pathParts[pathParts.length - 1];
                 const folderPath = pathParts.slice(0, -1).join(' / ');
                 
-                div.onclick = () => {
+                // Nastavi onclick handler za navigacijo
+                div.style.cursor = "pointer";
+                div.addEventListener('click', () => {
                     if (isFolder) {
                         navigateTo(item.fullPath);
                     } else {
                         openPdfViewer(fileName, item.fullPath);
                     }
-                };
+                });
                 
                 const baseName = getBaseName(fileName).toLowerCase();
                 let displayIcon = isFolder ? getIconForName(baseName) : "📄";
