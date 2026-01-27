@@ -121,7 +121,7 @@ function showApp(email) {
   // Posodobi čas v notranjosti portala
   const buildDateInner = getElement("buildDateInner");
   if (buildDateInner) {
-    buildDateInner.textContent = "27.1.2026 12:25";
+    buildDateInner.textContent = "27.1.2026 12:30";
   }
   
   setViewMode(viewMode);
