@@ -121,9 +121,25 @@ function showApp(email) {
   
   setViewMode(viewMode);
   renderGlobalFavorites();
-  const path = getPathFromUrl();
-  currentPath = path;
-  loadContent(path);
+  
+  // Preveri, ali obstaja shranjena iskalna fraza
+  const savedQuery = sessionStorage.getItem('aluk_search_query');
+  if (savedQuery && searchInput && mainContent) {
+    // Obnovi rezultate iskanja
+    setTimeout(() => {
+      searchInput.value = savedQuery;
+      if (clearSearchBtn) clearSearchBtn.style.display = "flex";
+      // Ponovno izvedi iskanje
+      if (searchInput.value.trim()) {
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }, 300);
+  } else {
+    // Naloži normalno vsebino
+    const path = getPathFromUrl();
+    currentPath = path;
+    loadContent(path);
+  }
 }
 
 document.getElementById("logout").addEventListener("click", async () => { 
@@ -132,7 +148,16 @@ document.getElementById("logout").addEventListener("click", async () => {
 });
 
 // --- NAVIGACIJA ---
-window.navigateTo = function(path) { currentPath = path; searchInput.value = ""; window.history.pushState({ path }, "", "#" + path); loadContent(path); }
+window.navigateTo = function(path) { 
+  currentPath = path; 
+  searchInput.value = ""; 
+  // Počisti iskanje ob navigaciji
+  sessionStorage.removeItem('aluk_search_query');
+  sessionStorage.removeItem('aluk_search_results');
+  if (clearSearchBtn) clearSearchBtn.style.display = "none";
+  window.history.pushState({ path }, "", "#" + path); 
+  loadContent(path); 
+}
 function getPathFromUrl() { const h = window.location.hash; if (!h || h.length <= 1 || h.startsWith("#view=")) return ""; return decodeURIComponent(h.slice(1)); }
 window.addEventListener('popstate', () => { pdfModal.style.display = 'none'; pdfFrame.src = ""; const p = getPathFromUrl(); currentPath = p; loadContent(p); });
 
@@ -178,9 +203,23 @@ async function updateBannerAsync(path) {
     if (newFiles.length === 0) return;
     newFiles.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     updatesBanner.style.display = "block"; lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(newFiles[0].created_at)}`;
-    const show = (list) => list.forEach(f => { const li = document.createElement("li"); li.innerHTML = `<span style="cursor:pointer; color:var(--text-primary)" onclick="openFileFromBanner('${f.fullPath}')"><strong>${f.displayName||f.name}</strong></span> <small>(${formatDate(f.created_at)})</small>`; updatesList.appendChild(li); });
-    show(newFiles.slice(0, 5));
-    if (newFiles.length > 5) { showMoreUpdatesBtn.style.display = "block"; showMoreUpdatesBtn.onclick = () => { show(newFiles.slice(5)); showMoreUpdatesBtn.style.display = "none"; }; }
+    const show = (list) => list.forEach(f => { 
+      const li = document.createElement("li"); 
+      li.style.display = "flex";
+      li.style.justifyContent = "space-between";
+      li.style.alignItems = "center";
+      li.style.marginBottom = "6px";
+      li.innerHTML = `<span style="cursor:pointer; color:var(--text-primary); flex-grow:1;" onclick="openFileFromBanner('${f.fullPath}')"><strong>${f.displayName||f.name}</strong></span> <small style="color:var(--text-secondary); margin-left:15px; white-space:nowrap;">${formatDate(f.created_at)}</small>`; 
+      updatesList.appendChild(li); 
+    });
+    show(newFiles.slice(0, 3));
+    if (newFiles.length > 3) { 
+      showMoreUpdatesBtn.style.display = "block"; 
+      showMoreUpdatesBtn.onclick = () => { 
+        show(newFiles.slice(3)); 
+        showMoreUpdatesBtn.style.display = "none"; 
+      }; 
+    }
 }
 window.openFileFromBanner = function(path) { openPdfViewer(path.split('/').pop(), path); }
 
@@ -815,31 +854,24 @@ async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 8
    return results;
 }
 
-// Obnovi rezultate ob vračanju na stran
-window.addEventListener('pageshow', (e) => {
-  if (e.persisted) {
-    // Stran je bila obnovljena iz cache
-    const savedQuery = sessionStorage.getItem('aluk_search_query');
-    if (savedQuery && searchInput) {
-      searchInput.value = savedQuery;
-      // Ponovno izvedi iskanje
-      if (searchInput.value.trim()) {
-        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    }
-  }
-});
-
-// Obnovi rezultate ob vračanju fokusa na stran
+// Obnovi rezultate ob vračanju fokusa na stran (ko se uporabnik vrne na tab)
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
-    const savedQuery = sessionStorage.getItem('aluk_search_query');
-    if (savedQuery && searchInput && mainContent && mainContent.innerHTML.trim() === "") {
-      searchInput.value = savedQuery;
-      if (clearSearchBtn) clearSearchBtn.style.display = "flex";
-      // Ponovno izvedi iskanje
-      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-    }
+    // Počakaj malo, da se stran popolnoma naloži
+    setTimeout(() => {
+      const savedQuery = sessionStorage.getItem('aluk_search_query');
+      if (savedQuery && searchInput && mainContent && appCard && appCard.style.display !== 'none') {
+        // Preveri, če so rezultati izgubljeni
+        const hasResults = mainContent.querySelector('.search-results-grid');
+        if (!hasResults && mainContent.innerHTML.trim() !== "") {
+          // Rezultati so bili izgubljeni, obnovi jih
+          searchInput.value = savedQuery;
+          if (clearSearchBtn) clearSearchBtn.style.display = "flex";
+          // Ponovno izvedi iskanje
+          searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    }, 100);
   }
 });
 
