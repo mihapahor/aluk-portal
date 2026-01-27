@@ -19,7 +19,11 @@ const fileIcons = {
   "zip": "📦", "rar": "📦", "7z": "📦", "jpg": "🖼️", "jpeg": "🖼️", "png": "🖼️", "webp": "🖼️"
 };
 
-document.getElementById("requestAccessBtn").href = `mailto:${ADMIN_EMAIL}?subject=Prijava v AluK Portal&body=Prošnja za dostop...`;
+// Nastavi mailto link za request access (varno)
+const requestAccessBtn = getElement("requestAccessBtn");
+if (requestAccessBtn) {
+  requestAccessBtn.href = `mailto:${ADMIN_EMAIL}?subject=Prijava v AluK Portal&body=Prošnja za dostop...`;
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'aluk-portal-auth' }
@@ -380,14 +384,20 @@ function setViewMode(mode) {
 
 if (authForm) {
   authForm.addEventListener("submit", async (event) => {
+    // PREPREČI DEFAULT OBNAŠANJE - to je ključno!
     event.preventDefault();
+    event.stopPropagation();
     
-    const emailInput = getElement("email");
-    const nameInput = getElement("userName");
-    const companyInput = getElement("companyName");
+    const emailInput = document.getElementById("email");
+    const nameInput = document.getElementById("userName");
+    const companyInput = document.getElementById("companyName");
     
     if (!emailInput || !nameInput || !companyInput) {
       console.error("Nekateri vnosni elementi niso najdeni");
+      if (msgEl) {
+        msgEl.textContent = "Napaka: Nekateri elementi niso najdeni.";
+        msgEl.className = "error-msg";
+      }
       return;
     }
     
@@ -409,7 +419,7 @@ if (authForm) {
       console.error("Napaka pri shranjevanju uporabniških podatkov:", e);
     }
     
-    const btn = getElement("sendLink");
+    const btn = document.getElementById("sendLink");
     if (!btn) {
       console.error("Gumb 'sendLink' ni najden");
       return;
@@ -423,25 +433,37 @@ if (authForm) {
       msgEl.className = "";
     }
     
-    const { error } = await supabase.auth.signInWithOtp({
-      email: e, 
-      options: { emailRedirectTo: window.location.origin }
-    });
-    
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: e, 
+        options: { emailRedirectTo: window.location.origin }
+      });
+      
+      if (error) {
+        if (msgEl) {
+          msgEl.textContent = "Napaka: " + error.message;
+          msgEl.className = "error-msg";
+        }
+        btn.disabled = false;
+        btn.textContent = "Pošlji povezavo za prijavo";
+      } else {
+        if (msgEl) {
+          msgEl.textContent = "✅ Povezava poslana! Preverite svoj e-poštni predal.";
+          msgEl.className = "success-msg";
+        }
+        // Ne resetiraj forme - ohrani podatke
+      }
+    } catch (err) {
+      console.error("Napaka pri pošiljanju:", err);
       if (msgEl) {
-        msgEl.textContent = "Napaka: " + error.message;
+        msgEl.textContent = "Napaka: " + (err.message || "Neznana napaka");
         msgEl.className = "error-msg";
       }
       btn.disabled = false;
       btn.textContent = "Pošlji povezavo za prijavo";
-    } else {
-      if (msgEl) {
-        msgEl.textContent = "✅ Povezava poslana! Preverite svoj e-poštni predal.";
-        msgEl.className = "success-msg";
-      }
-      // Ne briši vnosnih polj - pustimo jih, da uporabnik vidi, kaj je vnesel
     }
+    
+    return false; // Dodatna zaščita
   });
 }
 
