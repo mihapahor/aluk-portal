@@ -93,7 +93,7 @@ body {
 }
 
 .header-content { 
-  width: 100% !important;
+  /* Ključni cilj: centriraj vsebino headerja nad zelenim glavnim delom */
   max-width: 1200px !important;
   margin: 0 auto !important;
   padding: 0 40px; 
