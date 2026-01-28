@@ -637,8 +637,8 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 
 /* --- LOGIN CARD (centrirana kartica) --- */
 .login-card-center {
-  max-width: 400px !important;
-  width: 100%;
+  max-width: 1200px !important;
+  width: 90%;
   margin: 120px auto !important;
   padding: 40px !important;
   background: white;
@@ -653,6 +653,12 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
     padding: 25px !important;
     max-width: calc(100% - 30px) !important;
   }
+}
+
+/* notranji layout login kartice, da vsebina ni preširoka */
+.login-card-center .login-inner {
+  max-width: 420px;
+  margin: 0 auto;
 }
 
 /* --- SIDEBAR & LAYOUT --- */

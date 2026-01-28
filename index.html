@@ -12,7 +12,7 @@
   
   <link rel="icon" type="image/png" href="favicon.png">
 
-  <link rel="stylesheet" href="style.css?v=1530">
+  <link rel="stylesheet" href="style.css?v=1535">
 </head>
 <body>
 
@@ -26,7 +26,7 @@
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:15px;">
-        <div id="buildDate" style="color:var(--text-secondary); font-size:12px; font-weight:400; font-family:monospace;">28.1.2026 09:49</div>
+        <div id="buildDate" style="color:var(--text-secondary); font-size:12px; font-weight:400; font-family:monospace;">28.1.2026 10:37</div>
         <button id="logout" class="ghost" style="display:none;">Odjava</button>
       </div>
     </div>
@@ -43,31 +43,28 @@
   </div>
 
   <form id="authForm" class="card login-card-center">
-    <div class="info-box">
-      <strong>🔒 Zavarovan dostop:</strong> Portal je namenjen izključno registriranim partnerjem. Za dostop potrebujete veljaven e-poštni naslov.
-    </div>
-    <div class="input-group">
-      <label for="userName">Ime in Priimek</label>
-      <input id="userName" type="text" placeholder="Janez Novak" autocomplete="name" />
-      <small style="color:var(--text-secondary); font-size:12px; margin-top:4px; display:block;">Vaše polno ime za identifikacijo</small>
-    </div>
-    <div class="input-group">
-      <label for="companyName">Naziv podjetja</label>
-      <input id="companyName" type="text" placeholder="Moje Podjetje d.o.o." autocomplete="organization" />
-      <small style="color:var(--text-secondary); font-size:12px; margin-top:4px; display:block;">Naziv vašega podjetja</small>
-    </div>
-    <div class="input-group">
-      <label for="email">E-poštni naslov</label>
-      <input id="email" type="email" placeholder="Vpišite e-poštni naslov" autocomplete="email" />
-      <small style="color:var(--text-secondary); font-size:12px; margin-top:4px; display:block;">Na ta naslov boste prejeli povezavo za prijavo (pritisnite Enter za pošiljanje)</small>
-    </div>
-    <button id="sendLink" class="primary" type="submit">Pošlji povezavo za prijavo</button>
-    <div id="authMsg"></div>
-    <div class="contact-section">
-      <div class="contact-text">Niste registrirani ali imate težave s prijavo?</div>
-      <a id="requestAccessBtn" href="#" style="text-decoration:none;">
-        <button class="secondary" type="button">📧 Kontaktiraj skrbnika</button>
-      </a>
+    <div class="login-inner">
+      <div class="info-box">
+        <strong>🔒 Zavarovan dostop:</strong> Portal je namenjen izključno registriranim partnerjem. Za dostop potrebujete veljaven e-poštni naslov.
+      </div>
+      <div class="input-group">
+        <label for="userName">Ime in Priimek</label>
+        <input id="userName" type="text" placeholder="Janez Novak" autocomplete="name" />
+        <small style="color:var(--text-secondary); font-size:12px; margin-top:4px; display:block;">Vaše polno ime za identifikacijo</small>
+      </div>
+      <div class="input-group">
+        <label for="email">E-poštni naslov</label>
+        <input id="email" type="email" placeholder="Vpišite e-poštni naslov" autocomplete="email" />
+        <small style="color:var(--text-secondary); font-size:12px; margin-top:4px; display:block;">Na ta naslov boste prejeli povezavo za prijavo (pritisnite Enter za pošiljanje)</small>
+      </div>
+      <button id="sendLink" class="primary" type="submit">Pošlji povezavo za prijavo</button>
+      <div id="authMsg"></div>
+      <div class="contact-section">
+        <div class="contact-text">Niste registrirani ali imate težave s prijavo?</div>
+        <a id="requestAccessBtn" href="#" style="text-decoration:none;">
+          <button class="secondary" type="button">📧 Kontaktiraj skrbnika</button>
+        </a>
+      </div>
     </div>
   </form>
 

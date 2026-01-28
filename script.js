@@ -932,13 +932,12 @@ function setupFormHandler() {
       
       const emailInput = document.getElementById("email");
       const nameInput = document.getElementById("userName");
-      const companyInput = document.getElementById("companyName");
       const msgEl = document.getElementById("authMsg");
       
-      if (!emailInput || !nameInput || !companyInput) {
-        console.error("Nekateri vnosni elementi niso najdeni");
+      if (!emailInput || !nameInput) {
+        console.error("Vnosna polja za ime ali e-pošto niso najdena");
         if (msgEl) {
-          msgEl.textContent = "Napaka: Nekateri elementi niso najdeni.";
+          msgEl.textContent = "Napaka: Polja za ime ali e-pošto niso na voljo.";
           msgEl.className = "error-msg";
         }
         return false;
@@ -946,20 +945,19 @@ function setupFormHandler() {
       
       const e = emailInput.value.trim();
       const n = nameInput.value.trim();
-      const c = companyInput.value.trim();
       
-      console.log("Vrednosti:", e, n, c);
+      console.log("Vrednosti:", e, n);
       
-      if (!e || !n || !c) { 
+      if (!e || !n) { 
         if (msgEl) {
-          msgEl.textContent = "Vsa polja so obvezna."; 
+          msgEl.textContent = "Prosimo, izpolnite svoje ime in e-poštni naslov."; 
           msgEl.className = "error-msg";
         }
         return false; 
       }
       
       try { 
-        localStorage.setItem('aluk_user_info', JSON.stringify({ name: n, company: c })); 
+        localStorage.setItem('aluk_user_info', JSON.stringify({ name: n })); 
       } catch(err) {
         console.error("Napaka pri shranjevanju uporabniških podatkov:", err);
       }
