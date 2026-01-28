@@ -496,13 +496,16 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .copy-btn { transition: all 0.2s; }
 .copy-btn:hover { background: #e5e7eb !important; transform: scale(1.05); }
 
-/* --- IKONA ZA ŠIFRANT ARTIKLOV --- */
-.item-icon-small {
-  width: 20px;
-  height: 20px;
-  vertical-align: middle;
-  margin-right: 8px;
-  object-fit: contain;
+/* --- IKONA ZA KOPIRANJE --- */
+.copy-icon-custom {
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.copy-icon-custom:active {
+  transform: scale(0.9);
 }
 
 /* Loading indikator */

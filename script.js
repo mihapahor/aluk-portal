@@ -601,18 +601,23 @@ if (searchInput) {
 // Funkcija za kopiranje v odložišče
 window.copyToClipboard = function(text, button) {
     navigator.clipboard.writeText(text).then(() => {
-        const originalText = button.textContent;
-        button.textContent = "✓ Kopirano";
+        // Shrani originalno vsebino (ikona ali besedilo)
+        const originalContent = button.innerHTML;
+        const originalBg = button.style.background;
+        const originalColor = button.style.color;
+        
+        button.innerHTML = "✓ Kopirano";
         button.style.background = "var(--success)";
         button.style.color = "white";
+        
         setTimeout(() => {
-            button.textContent = originalText;
-            button.style.background = "var(--bg-secondary)";
-            button.style.color = "var(--text-primary)";
+            button.innerHTML = originalContent;
+            button.style.background = originalBg;
+            button.style.color = originalColor;
         }, 2000);
     }).catch(err => {
         console.error("Napaka pri kopiranju:", err);
-        button.textContent = "✗ Napaka";
+        button.innerHTML = "✗ Napaka";
     });
 };
 
@@ -762,14 +767,14 @@ if (searchInput) {
                 
                 const copyText = `${a.sifra} - ${a.opis}`;
                 artDiv.innerHTML = `
-                    <div class="item-preview file-bg" style="background:var(--bg-secondary); width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-light);">
-                        <img src="icon.png" class="item-icon-small" alt="artikel">
+                    <div class="item-preview file-bg" style="background:var(--bg-secondary); width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:24px; border:1px solid var(--border-light);">
+                        🏷️
                     </div>
                     <div class="item-info" style="flex-grow:1; min-width:0; overflow:hidden;">
                         <strong style="color:var(--result-article-heading); display:block; margin-bottom:2px; font-weight:600;">${a.sifra}</strong>
                         <small style="color:var(--result-article-text); display:block; line-height:1.4; word-wrap:break-word;">${a.opis}</small>
                     </div>
-                    <button class="copy-btn" onclick="copyToClipboard('${copyText.replace(/'/g, "\\'")}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; font-size:16px; color:var(--text-primary); margin-left:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis">📋</button>
+                    <button class="copy-btn" onclick="copyToClipboard('${copyText.replace(/'/g, "\\'")}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; margin-left:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis"><img src="copy.png" class="copy-icon-custom"></button>
                 `;
                 artDiv.style.display = "flex";
                 artDiv.style.alignItems = "flex-start";
