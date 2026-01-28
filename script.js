@@ -402,25 +402,20 @@ async function createItemElement(item, cont) {
     const clean = normalizePath(full);
     let badges = "";
     
+    // Značka NOVO: natanko en element na .item (brez podvajanja)
     if (isFolder) {
         const isFav = favorites.includes(clean);
         div.innerHTML += `<button class="fav-btn ${isFav?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>`;
-        
-        // Preveri za NOVO badge asinhrono
-        getNewFilesRecursive(full, 0).then(n => { 
-            if(n.length > 0) { 
-                const b = div.querySelector('.new-badge'); 
-                if(b) {
-                    b.style.display = 'inline-block';
-                }
-            } 
+        badges = `<span class="new-badge" style="display:none">NOVO</span>`;
+        getNewFilesRecursive(full, 0).then(n => {
+            if (n.length > 0) {
+                const b = div.querySelector('.new-badge');
+                if (b) b.style.display = 'inline-block';
+            }
         });
     } else if (isRelevantFile(item.name) && item.created_at && new Date(item.created_at) > new Date(Date.now() - 30*24*3600*1000)) {
-        badges += `<span class="new-badge" style="display:inline-block">NOVO</span>`;
+        badges = `<span class="new-badge" style="display:inline-block">NOVO</span>`;
     }
-    
-    // Placeholder za NOVO badge (za mape)
-    badges = `<span class="new-badge" style="display:none">NOVO</span>` + badges;
     
     const base = getBaseName(item.name).toLowerCase();
     let icon = isFolder ? `<div class="big-icon">${getIconForName(base)}</div>` : `<div class="big-icon">${fileIcons[item.name.split('.').pop().toLowerCase()]||"📄"}</div>`;

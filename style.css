@@ -501,7 +501,17 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   top: -1px !important; /* Fina nastavitev, da sedi točno na sredini vrstice */
 }
 
-.file-container.list-view .new-badge { position: static !important; margin-left: 10px; }
+/* List view: značka NOVO v zgornjem desnem kotu vrstice (kot v gridu) */
+.file-container.list-view .item {
+  position: relative !important;
+  padding-right: 60px !important;
+}
+.file-container.list-view .item .new-badge {
+  position: absolute !important;
+  top: 10px !important;
+  right: 15px !important;
+  margin: 0 !important;
+}
 
 .fav-btn { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9); border: 1px solid #ddd; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 20; color: #ccc; font-size: 18px; transition: all 0.2s; }
 .fav-btn:hover { transform: scale(1.1); color: var(--fav-color); border-color: var(--fav-color); }
