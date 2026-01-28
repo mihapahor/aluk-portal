@@ -770,30 +770,25 @@ if (searchInput) {
         
         if (arts.length > 0) {
             found = true;
-            // Uporabi min-height za naslov in opis, da se poravnata z drugim stolpcem
-            sifrantCol.innerHTML += `<div style="min-height:60px;"><h3 style="margin-bottom:12px; color:var(--result-article-heading); font-size:15px; font-weight:600; margin-top:0;">📋 Šifrant artiklov (${arts.length})</h3><p style="font-size:12px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">Iskanje šifre artikla vrne opis artikla iz šifranta.</p></div>`;
+            // Glava sekcije z enako višino
+            sifrantCol.innerHTML += `<div class="search-section-header"><h3 style="color:var(--result-article-heading);">📋 Šifrant artiklov (${arts.length})</h3><p>Iskanje šifre artikla vrne opis artikla iz šifranta.</p></div>`;
             
             arts.forEach(a => {
                 const artDiv = document.createElement("div");
-                artDiv.className = "item";
+                artDiv.className = "item search-item-card";
                 artDiv.style.cursor = "default";
-                artDiv.style.marginBottom = "8px";
-                artDiv.style.position = "relative";
                 
                 const copyText = `${a.sifra} - ${a.opis}`;
                 artDiv.innerHTML = `
-                    <div class="item-preview file-bg" style="background:var(--bg-secondary); width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:24px; border:1px solid var(--border-light);">
+                    <div class="item-preview file-bg">
                         🏷️
                     </div>
-                    <div class="item-info" style="flex-grow:1; min-width:0; overflow:hidden;">
-                        <strong style="color:var(--result-article-heading); display:block; margin-bottom:2px; font-weight:600;">${a.sifra}</strong>
-                        <small style="color:var(--result-article-text); display:block; line-height:1.4; word-wrap:break-word;">${a.opis}</small>
+                    <div class="item-info">
+                        <strong style="color:var(--result-article-heading);">${a.sifra}</strong>
+                        <small style="color:var(--result-article-text);">${a.opis}</small>
                     </div>
-                    <button class="copy-btn" onclick="copyToClipboard('${copyText.replace(/'/g, "\\'")}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; margin-left:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis"><img src="copy.png" class="copy-icon-custom"></button>
+                    <button class="copy-btn" onclick="copyToClipboard('${copyText.replace(/'/g, "\\'")}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis"><img src="copy.png" class="copy-icon-custom"></button>
                 `;
-                artDiv.style.display = "flex";
-                artDiv.style.alignItems = "flex-start";
-                artDiv.style.paddingTop = "8px";
                 sifrantCol.appendChild(artDiv);
             });
         }
@@ -803,13 +798,13 @@ if (searchInput) {
         
         if (allMatches.length > 0) {
             found = true;
-            // Uporabi min-height za naslov in opis, da se poravnata z drugim stolpcem
-            mapsCol.innerHTML += `<div style="min-height:60px;"><h3 style="margin-bottom:12px; color:var(--result-doc-heading); font-size:15px; font-weight:600; margin-top:0;">📁 Tehnična dokumentacija (${allMatches.length})</h3><p style="font-size:12px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">Iskanje katalogov prikaže vse kataloge, ki se ujemajo in so na voljo na tem portalu.</p></div>`;
+            // Glava sekcije z enako višino
+            mapsCol.innerHTML += `<div class="search-section-header"><h3 style="color:var(--result-doc-heading);">📁 Tehnična dokumentacija (${allMatches.length})</h3><p>Iskanje katalogov prikaže vse kataloge, ki se ujemajo in so na voljo na tem portalu.</p></div>`;
 
             // Prikaži rezultate z potjo
             for (const item of allMatches) {
                 const div = document.createElement("div");
-                div.className = "item";
+                div.className = "item search-item-card";
                 const isFolder = !item.metadata;
                 const pathParts = item.fullPath.split('/');
                 const fileName = pathParts[pathParts.length - 1];
@@ -832,13 +827,14 @@ if (searchInput) {
                 }
                 
                 div.innerHTML = `
-                    <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}" style="width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:24px;">
+                    <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}">
                         ${displayIcon}
                     </div>
-                    <div class="item-info" style="flex-grow:1;">
-                        <strong style="color:var(--result-doc-text); display:block; margin-bottom:2px; font-weight:600;">${fileName}</strong>
-                        <small style="color:var(--text-secondary); font-size:12px;">${folderPath || 'Koren'}</small>
+                    <div class="item-info">
+                        <strong style="color:var(--result-doc-text);">${fileName}</strong>
+                        <small>${folderPath || 'Koren'}</small>
                     </div>
+                    <div class="item-arrow" style="color:var(--text-secondary); font-size:18px; flex-shrink:0; margin-left:10px;">→</div>
                 `;
                 mapsCol.appendChild(div);
             }
