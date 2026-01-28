@@ -682,9 +682,32 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   gap: 10px;
 }
 
-/* Glave sekcij - enaka višina za poravnavo */
+.search-results-grid .search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Gumb Pokaži več / Pokaži manj – minimalistično */
+.show-more-results-btn {
+  background: transparent;
+  border: none;
+  color: var(--primary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 0;
+  margin-top: 4px;
+  text-align: left;
+  transition: opacity 0.2s;
+}
+.show-more-results-btn:hover {
+  opacity: 0.85;
+  text-decoration: underline;
+}
+
+/* Glave sekcij - enaka višina za poravnavo začetka rezultatov (Y os) */
 .search-results-grid .search-section-header {
-  min-height: 80px;
+  min-height: 100px;
   margin-bottom: 0;
 }
 

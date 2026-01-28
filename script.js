@@ -774,75 +774,108 @@ if (searchInput) {
         sifrantCol.style.paddingTop = "0";
         mapsCol.style.paddingTop = "0";
         
+        const LIMIT = 10;
+        const buildArtCard = (a) => {
+            const artDiv = document.createElement("div");
+            artDiv.className = "item search-item-card";
+            artDiv.style.cursor = "default";
+            const copyText = `${a.sifra} - ${a.opis}`;
+            artDiv.innerHTML = `
+                <div class="item-preview file-bg">🏷️</div>
+                <div class="item-info">
+                    <strong style="color:var(--result-article-heading);">${a.sifra}</strong>
+                    <small style="color:var(--result-article-text);">${a.opis}</small>
+                </div>
+                <button class="copy-btn" onclick="copyToClipboard('${copyText.replace(/'/g, "\\'")}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis"><img src="copy.png" class="copy-icon-custom"></button>
+            `;
+            return artDiv;
+        };
+
         if (arts.length > 0) {
             found = true;
-            // Glava sekcije z enako višino
-            sifrantCol.innerHTML += `<div class="search-section-header"><h3 style="color:var(--result-article-heading);">📋 Šifrant artiklov (${arts.length})</h3><p>Iskanje šifre artikla vrne opis artikla iz šifranta.</p></div>`;
-            
-            arts.forEach(a => {
-                const artDiv = document.createElement("div");
-                artDiv.className = "item search-item-card";
-                artDiv.style.cursor = "default";
-                
-                const copyText = `${a.sifra} - ${a.opis}`;
-                artDiv.innerHTML = `
-                    <div class="item-preview file-bg">
-                        🏷️
-                    </div>
-                    <div class="item-info">
-                        <strong style="color:var(--result-article-heading);">${a.sifra}</strong>
-                        <small style="color:var(--result-article-text);">${a.opis}</small>
-                    </div>
-                    <button class="copy-btn" onclick="copyToClipboard('${copyText.replace(/'/g, "\\'")}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis"><img src="copy.png" class="copy-icon-custom"></button>
-                `;
-                sifrantCol.appendChild(artDiv);
-            });
+            sifrantCol.innerHTML = `<div class="search-section-header"><h3 style="color:var(--result-article-heading);">📋 Šifrant artiklov (${arts.length})</h3><p>Iskanje šifre artikla vrne opis artikla iz šifranta.</p></div>`;
+            const sifrantList = document.createElement("div");
+            sifrantList.className = "search-results-list";
+            const sifrantVisible = arts.slice(0, LIMIT);
+            sifrantVisible.forEach(a => sifrantList.appendChild(buildArtCard(a)));
+            sifrantCol.appendChild(sifrantList);
+            if (arts.length > LIMIT) {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "show-more-results-btn";
+                btn.textContent = "Pokaži več";
+                btn.addEventListener("click", function () {
+                    if (this.dataset.expanded === "true") {
+                        while (sifrantList.children.length > LIMIT) sifrantList.removeChild(sifrantList.lastChild);
+                        this.textContent = "Pokaži več";
+                        this.dataset.expanded = "false";
+                        resultsWrapper.scrollIntoView({ behavior: "smooth", block: "start" });
+                    } else {
+                        arts.slice(LIMIT).forEach(a => sifrantList.appendChild(buildArtCard(a)));
+                        this.textContent = "Pokaži manj";
+                        this.dataset.expanded = "true";
+                    }
+                });
+                sifrantCol.appendChild(btn);
+            }
         }
 
         // 2. REKURZIVNO ISKANJE PO VSEH MAPAH (optimizirano)
         const allMatches = await searchAllFilesRecursive("", val, 0, 8, 100);
         
+        const buildMapCard = (item) => {
+            const div = document.createElement("div");
+            div.className = "item search-item-card";
+            const isFolder = !item.metadata;
+            const pathParts = item.fullPath.split('/');
+            const fileName = pathParts[pathParts.length - 1];
+            const folderPath = pathParts.slice(0, -1).join(' / ');
+            div.onclick = () => {
+                if (isFolder) navigateTo(item.fullPath);
+                else openPdfViewer(fileName, item.fullPath);
+            };
+            const baseName = getBaseName(fileName).toLowerCase();
+            let displayIcon = isFolder ? getIconForName(baseName) : "📄";
+            const ext = fileName.split('.').pop().toLowerCase();
+            if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
+            if (!isFolder && (ext === 'dwg' || ext === 'dxf')) displayIcon = "📐";
+            div.innerHTML = `
+                <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}">${displayIcon}</div>
+                <div class="item-info">
+                    <strong style="color:var(--result-doc-text);">${fileName}</strong>
+                    <small>${folderPath || 'Koren'}</small>
+                </div>
+                <div class="item-arrow" style="color:var(--text-secondary); font-size:18px; flex-shrink:0; margin-left:10px;">→</div>
+            `;
+            return div;
+        };
+
         if (allMatches.length > 0) {
             found = true;
-            // Glava sekcije z enako višino
-            mapsCol.innerHTML += `<div class="search-section-header"><h3 style="color:var(--result-doc-heading);">📁 Tehnična dokumentacija (${allMatches.length})</h3><p>Iskanje katalogov prikaže vse kataloge, ki se ujemajo in so na voljo na tem portalu.</p></div>`;
-
-            // Prikaži rezultate z potjo
-            for (const item of allMatches) {
-                const div = document.createElement("div");
-                div.className = "item search-item-card";
-                const isFolder = !item.metadata;
-                const pathParts = item.fullPath.split('/');
-                const fileName = pathParts[pathParts.length - 1];
-                const folderPath = pathParts.slice(0, -1).join(' / ');
-                
-                div.onclick = () => {
-                    if (isFolder) {
-                        navigateTo(item.fullPath);
+            mapsCol.innerHTML = `<div class="search-section-header"><h3 style="color:var(--result-doc-heading);">📁 Tehnična dokumentacija (${allMatches.length})</h3><p>Iskanje katalogov prikaže vse kataloge, ki se ujemajo in so na voljo na tem portalu.</p></div>`;
+            const mapsList = document.createElement("div");
+            mapsList.className = "search-results-list";
+            const mapsVisible = allMatches.slice(0, LIMIT);
+            mapsVisible.forEach(item => mapsList.appendChild(buildMapCard(item)));
+            mapsCol.appendChild(mapsList);
+            if (allMatches.length > LIMIT) {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "show-more-results-btn";
+                btn.textContent = "Pokaži več";
+                btn.addEventListener("click", function () {
+                    if (this.dataset.expanded === "true") {
+                        while (mapsList.children.length > LIMIT) mapsList.removeChild(mapsList.lastChild);
+                        this.textContent = "Pokaži več";
+                        this.dataset.expanded = "false";
+                        resultsWrapper.scrollIntoView({ behavior: "smooth", block: "start" });
                     } else {
-                        openPdfViewer(fileName, item.fullPath);
+                        allMatches.slice(LIMIT).forEach(item => mapsList.appendChild(buildMapCard(item)));
+                        this.textContent = "Pokaži manj";
+                        this.dataset.expanded = "true";
                     }
-                };
-                
-                const baseName = getBaseName(fileName).toLowerCase();
-                let displayIcon = isFolder ? getIconForName(baseName) : "📄";
-                const ext = fileName.split('.').pop().toLowerCase();
-                if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
-                if (!isFolder && (ext === 'dwg' || ext === 'dxf')) {
-                    displayIcon = "📐";
-                }
-                
-                div.innerHTML = `
-                    <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}">
-                        ${displayIcon}
-                    </div>
-                    <div class="item-info">
-                        <strong style="color:var(--result-doc-text);">${fileName}</strong>
-                        <small>${folderPath || 'Koren'}</small>
-                    </div>
-                    <div class="item-arrow" style="color:var(--text-secondary); font-size:18px; flex-shrink:0; margin-left:10px;">→</div>
-                `;
-                mapsCol.appendChild(div);
+                });
+                mapsCol.appendChild(btn);
             }
         }
 
