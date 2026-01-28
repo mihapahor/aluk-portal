@@ -77,56 +77,42 @@ body {
 .fixed-header { 
   position: fixed;
   top: 0;
-  left: 260px;
-  width: calc(100% - 260px);
+  left: 0;
+  width: 100%;
   height: 90px;
   background-color: var(--header-bg);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-  z-index: 1000;
-  /* brez flex-centra, da margin:auto na .header-content deluje naravno */
+  z-index: 1100;
   display: block;
-  /* kompenzacija desnega scrollbarja na Windows (poravnava z body/main) */
-  padding-right: 17px;
-}
-
-@media (max-width: 1024px) {
-  /* poravnava z ožjim sidebarjem (220px) */
-  .fixed-header {
-    left: 220px;
-    width: calc(100% - 220px);
-  }
 }
 
 @media (max-width: 768px) {
-  .fixed-header { 
-    height: 80px; 
-    left: 0;
-    width: 100%;
-    padding-right: 0; /* na mobitelih ni desnega scrollbarja */
-  }
+  .fixed-header { height: 80px; }
 }
 
 @media (max-width: 480px) {
-  .fixed-header { 
-    height: 70px; 
-    left: 0;
-    width: 100%;
-  }
+  .fixed-header { height: 70px; }
 }
 
 .header-content { 
-  /* Ključni cilj: centriraj vsebino headerja nad zelenim glavnim delom */
   max-width: 1200px !important;
   margin: 0 auto !important;
   width: 100%;
-  padding: 0 40px; 
+  padding-left: calc(260px + 40px);
+  padding-right: 40px;
   height: 100%;
-  display: flex;           /* flex samo za notranje elemente */
+  display: flex;
   justify-content: space-between; 
   align-items: center; 
   flex-wrap: wrap;
   gap: 10px;
-  box-sizing: border-box;  /* zagotovi pravilno upoštevanje paddinga */
+  box-sizing: border-box;
+}
+
+@media (max-width: 1024px) {
+  .header-content {
+    padding-left: calc(220px + 40px);
+  }
 }
 
 @media (max-width: 768px) {
@@ -677,7 +663,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   background: var(--card-bg);
   border-right: 1px solid var(--border);
   overflow-y: auto;
-  z-index: 100;
+  z-index: 1000;
   display: flex;
   flex-direction: column;
 }
@@ -807,6 +793,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   display: flex;
   flex-direction: column;
   align-items: center;
+  box-sizing: border-box;
 }
 
 .main-content .card {
