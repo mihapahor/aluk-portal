@@ -698,7 +698,15 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   gap: 10px;
 }
 
-/* Gumb Pokaži več / Pokaži manj – minimalistično */
+/* Skupni gumb Pokaži več / Pokaži manj – pod obema stolpcema, centriran */
+.search-results-show-more-wrap {
+  text-align: center;
+  margin-top: 24px;
+  margin-bottom: 16px;
+}
+.search-results-show-more-wrap .show-more-results-btn {
+  display: inline-block;
+}
 .show-more-results-btn {
   background: transparent;
   border: none;
@@ -706,8 +714,8 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   font-size: 13px;
   cursor: pointer;
   padding: 8px 0;
-  margin-top: 4px;
-  text-align: left;
+  margin: 0;
+  text-align: center;
   transition: opacity 0.2s;
 }
 .show-more-results-btn:hover {

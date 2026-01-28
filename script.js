@@ -770,6 +770,8 @@ if (searchInput) {
         mapsCol.style.paddingTop = "0";
         
         const LIMIT = 10;
+        let sifrantList = null;
+        let mapsList = null;
         const buildArtCard = (a) => {
             const artDiv = document.createElement("div");
             artDiv.className = "item search-item-card";
@@ -789,30 +791,11 @@ if (searchInput) {
         if (arts.length > 0) {
             found = true;
             sifrantCol.innerHTML = `<div class="search-section-header"><h3 style="color:var(--result-article-heading);">📋 Šifrant artiklov (${arts.length})</h3><p>Iskanje šifre artikla vrne opis artikla iz šifranta.</p></div>`;
-            const sifrantList = document.createElement("div");
+            sifrantList = document.createElement("div");
             sifrantList.className = "search-results-list";
             const sifrantVisible = arts.slice(0, LIMIT);
             sifrantVisible.forEach(a => sifrantList.appendChild(buildArtCard(a)));
             sifrantCol.appendChild(sifrantList);
-            if (arts.length > LIMIT) {
-                const btn = document.createElement("button");
-                btn.type = "button";
-                btn.className = "show-more-results-btn";
-                btn.textContent = "Pokaži več";
-                btn.addEventListener("click", function () {
-                    if (this.dataset.expanded === "true") {
-                        while (sifrantList.children.length > LIMIT) sifrantList.removeChild(sifrantList.lastChild);
-                        this.textContent = "Pokaži več";
-                        this.dataset.expanded = "false";
-                        resultsWrapper.scrollIntoView({ behavior: "smooth", block: "start" });
-                    } else {
-                        arts.slice(LIMIT).forEach(a => sifrantList.appendChild(buildArtCard(a)));
-                        this.textContent = "Pokaži manj";
-                        this.dataset.expanded = "true";
-                    }
-                });
-                sifrantCol.appendChild(btn);
-            }
         }
 
         // 2. REKURZIVNO ISKANJE PO VSEH MAPAH (optimizirano)
@@ -848,30 +831,11 @@ if (searchInput) {
         if (allMatches.length > 0) {
             found = true;
             mapsCol.innerHTML = `<div class="search-section-header"><h3 style="color:var(--result-doc-heading);">📁 Tehnična dokumentacija (${allMatches.length})</h3><p>Iskanje katalogov prikaže vse kataloge, ki se ujemajo in so na voljo na tem portalu.</p></div>`;
-            const mapsList = document.createElement("div");
+            mapsList = document.createElement("div");
             mapsList.className = "search-results-list";
             const mapsVisible = allMatches.slice(0, LIMIT);
             mapsVisible.forEach(item => mapsList.appendChild(buildMapCard(item)));
             mapsCol.appendChild(mapsList);
-            if (allMatches.length > LIMIT) {
-                const btn = document.createElement("button");
-                btn.type = "button";
-                btn.className = "show-more-results-btn";
-                btn.textContent = "Pokaži več";
-                btn.addEventListener("click", function () {
-                    if (this.dataset.expanded === "true") {
-                        while (mapsList.children.length > LIMIT) mapsList.removeChild(mapsList.lastChild);
-                        this.textContent = "Pokaži več";
-                        this.dataset.expanded = "false";
-                        resultsWrapper.scrollIntoView({ behavior: "smooth", block: "start" });
-                    } else {
-                        allMatches.slice(LIMIT).forEach(item => mapsList.appendChild(buildMapCard(item)));
-                        this.textContent = "Pokaži manj";
-                        this.dataset.expanded = "true";
-                    }
-                });
-                mapsCol.appendChild(btn);
-            }
         }
 
         // Preveri, če je to še vedno aktualno iskanje
@@ -892,6 +856,31 @@ if (searchInput) {
         // Dodaj wrapper v resCont
         if (arts.length > 0 || allMatches.length > 0) {
             resCont.appendChild(resultsWrapper);
+            // En sam skupni gumb "Pokaži več" pod obema stolpcema
+            if (arts.length > LIMIT || allMatches.length > LIMIT) {
+                const showMoreWrap = document.createElement("div");
+                showMoreWrap.className = "search-results-show-more-wrap";
+                const showMoreBtn = document.createElement("button");
+                showMoreBtn.type = "button";
+                showMoreBtn.className = "show-more-results-btn";
+                showMoreBtn.textContent = "Pokaži več";
+                showMoreBtn.addEventListener("click", function () {
+                    if (this.dataset.expanded === "true") {
+                        if (sifrantList) while (sifrantList.children.length > LIMIT) sifrantList.removeChild(sifrantList.lastChild);
+                        if (mapsList) while (mapsList.children.length > LIMIT) mapsList.removeChild(mapsList.lastChild);
+                        this.textContent = "Pokaži več";
+                        this.dataset.expanded = "false";
+                        resultsWrapper.scrollIntoView({ behavior: "smooth", block: "start" });
+                    } else {
+                        if (sifrantList && arts.length > LIMIT) arts.slice(LIMIT).forEach(a => sifrantList.appendChild(buildArtCard(a)));
+                        if (mapsList && allMatches.length > LIMIT) allMatches.slice(LIMIT).forEach(item => mapsList.appendChild(buildMapCard(item)));
+                        this.textContent = "Pokaži manj";
+                        this.dataset.expanded = "true";
+                    }
+                });
+                showMoreWrap.appendChild(showMoreBtn);
+                resCont.appendChild(showMoreWrap);
+            }
         }
         
         // Shrani rezultate v sessionStorage
