@@ -373,28 +373,6 @@ async function renderItems(items, rId) {
   if (rId === currentRenderId) { mainContent.innerHTML = ""; mainContent.appendChild(cont); }
 }
 
-// Funkcija za pridobitev oznake sistema iz poti (zadnja beseda drugega nivoja)
-// Primer: "Okenski sistemi/C67K/Tehnični katalogi" → "C67K"
-function getSystemBadgeFromPath(path) {
-    if (!path) return null;
-    const parts = path.split('/').filter(p => p.trim());
-    // Če je pot "Okenski sistemi/C67K/..." → vrni "C67K" (drugi nivo)
-    if (parts.length >= 2) {
-        const secondLevel = parts[1];
-        // Vzemi zadnjo besedo (npr. "Okenski sistemi C67K" → "C67K")
-        // Ali pa celoten drugi nivo, če je kratek (npr. "C67K")
-        const words = secondLevel.split(' ');
-        // Če je zadnja beseda kratka (npr. "C67K", "C68K"), jo uporabi
-        const lastWord = words[words.length - 1];
-        if (lastWord.length <= 10 && /^[A-Z0-9]+$/i.test(lastWord)) {
-            return lastWord;
-        }
-        // Sicer uporabi celoten drugi nivo
-        return secondLevel;
-    }
-    return null;
-}
-
 async function createItemElement(item, cont) {
     const isFolder = !item.metadata; 
     const div = document.createElement("div"); 
@@ -407,21 +385,12 @@ async function createItemElement(item, cont) {
         const isFav = favorites.includes(clean);
         div.innerHTML += `<button class="fav-btn ${isFav?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>`;
         
-        // Pridobi oznako sistema iz poti (zadnja beseda drugega nivoja)
-        const systemBadge = getSystemBadgeFromPath(full);
-        if (systemBadge) {
-            badges += `<span class="system-badge" style="top:10px;">${systemBadge}</span>`;
-        }
-        
         // Preveri za NOVO badge asinhrono
         getNewFilesRecursive(full, 0).then(n => { 
             if(n.length > 0) { 
                 const b = div.querySelector('.new-badge'); 
                 if(b) {
                     b.style.display = 'inline-block';
-                    // Če ima tudi system badge, ga premakni navzdol
-                    const s = div.querySelector('.system-badge');
-                    if(s) s.style.top = '36px';
                 }
             } 
         });
@@ -486,16 +455,9 @@ async function renderGlobalFavorites() {
       div.className = "item";
       const news = await getNewFilesRecursive(p, 0);
       
-      // Pridobi oznako sistema iz poti
-      const systemBadge = getSystemBadgeFromPath(p);
       let badges = "";
       if (news.length > 0) {
           badges += '<span class="new-badge" style="display:inline-block">NOVO</span>';
-          if (systemBadge) {
-              badges += `<span class="system-badge" style="top:36px;">${systemBadge}</span>`;
-          }
-      } else if (systemBadge) {
-          badges += `<span class="system-badge" style="top:10px;">${systemBadge}</span>`;
       }
       
       div.innerHTML = `<div class="item-preview folder-bg" style="height:100px; position:relative;"><div class="big-icon" style="font-size:40px;">${getIconForName(name)}</div>${badges}</div>
