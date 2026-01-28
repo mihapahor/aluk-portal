@@ -56,6 +56,7 @@ const btnGrid = getElement("btnGrid");
 const btnList = getElement("btnList");
 const globalFavorites = getElement("globalFavorites");
 const globalFavContainer = getElement("globalFavContainer");
+const sidebarFavList = getElement("sidebarFavList");
 
 let currentPath = ""; 
 let currentItems = [];
@@ -63,7 +64,9 @@ let imageMap = {};
 let favorites = loadFavorites();
 let viewMode = localStorage.getItem('aluk_view_mode') || 'grid';
 let folderCache = {}; 
-let currentRenderId = 0; 
+let currentRenderId = 0;
+let imageUrlCache = {}; // Cache za signed URLs slik
+let isSearchActive = false; // Flag za preverjanje, če je aktivno iskanje 
 
 // --- ISKANJE (Cache) ---
 let articleDatabase = [];
@@ -73,6 +76,52 @@ let isDataLoaded = false;
 function normalizePath(path) { if (!path) return ""; try { return decodeURIComponent(path).trim(); } catch (e) { return path.trim(); } }
 function loadFavorites() { try { let raw = JSON.parse(localStorage.getItem('aluk_favorites') || '[]'); return [...new Set(raw.map(f => normalizePath(f)))].filter(f => f); } catch(e) { return []; } }
 function saveFavorites(favs) { localStorage.setItem('aluk_favorites', JSON.stringify(favs)); }
+
+// Preveri, če pot obstaja v Supabase Storage
+async function pathExists(path) {
+  try {
+    const parts = path.split('/').filter(p => p);
+    if (parts.length === 0) return true; // Root vedno obstaja
+    
+    const parentPath = parts.slice(0, -1).join('/');
+    const folderName = parts[parts.length - 1];
+    
+    const { data, error } = await supabase.storage.from('Catalogs').list(parentPath || '', {
+      limit: 1000
+    });
+    
+    if (error) {
+      console.warn(`Napaka pri preverjanju poti "${path}":`, error);
+      return false;
+    }
+    
+    return data && data.some(item => !item.metadata && item.name === folderName);
+  } catch (e) {
+    console.warn(`Napaka pri preverjanju poti "${path}":`, e);
+    return false;
+  }
+}
+
+// Očisti neobstoječe priljubljene
+async function cleanInvalidFavorites() {
+  favorites = loadFavorites();
+  if (favorites.length === 0) return;
+  
+  const validFavorites = [];
+  for (const path of favorites) {
+    const exists = await pathExists(path);
+    if (exists) {
+      validFavorites.push(path);
+    } else {
+      console.log(`Odstranjujem neobstoječo priljubljeno: ${path}`);
+    }
+  }
+  
+  if (validFavorites.length !== favorites.length) {
+    saveFavorites(validFavorites);
+    favorites = validFavorites;
+  }
+}
 function getCustomSortIndex(name) { 
   const i = customSortOrder.indexOf(name); 
   if (i !== -1) return i;
@@ -97,7 +146,7 @@ function showLogin() {
   document.getElementById("logout").style.display = "none"; 
 }
 
-function showApp(email) {
+async function showApp(email) {
   if (authForm) authForm.style.display = "none"; 
   if (appCard) {
     appCard.style.display = "flex"; 
@@ -112,15 +161,26 @@ function showApp(email) {
       const s = localStorage.getItem('aluk_user_info'); 
       if (s) { 
         const d = JSON.parse(s); 
-        if (d.name) userLine.textContent = `👤 ${d.name}, ${d.company}`; 
-      } 
-    } catch (e) {}
-    if (!userLine.textContent) userLine.textContent = `👤 ${email}`;
+        if (d.name) {
+          userLine.textContent = `👤 Dobrodošli, ${d.name}.`;
+        } else {
+          userLine.textContent = `👤 ${email}`;
+        }
+      } else {
+        userLine.textContent = `👤 ${email}`;
+      }
+    } catch (e) {
+      userLine.textContent = `👤 ${email}`;
+    }
   }
   
+  // Očisti neobstoječe priljubljene ob zagonu (asinhrono, da ne blokira)
+  cleanInvalidFavorites().then(() => {
+    setViewMode(viewMode);
+    renderGlobalFavorites();
+    updateSidebarFavorites(); // Posodobi sidebar priljubljene
+  });
   
-  setViewMode(viewMode);
-  renderGlobalFavorites();
   const path = getPathFromUrl();
   currentPath = path;
   loadContent(path);
@@ -132,7 +192,15 @@ document.getElementById("logout").addEventListener("click", async () => {
 });
 
 // --- NAVIGACIJA ---
-window.navigateTo = function(path) { currentPath = path; searchInput.value = ""; window.history.pushState({ path }, "", "#" + path); loadContent(path); }
+window.navigateTo = function(path) { 
+  currentPath = path; 
+  searchInput.value = ""; 
+  isSearchActive = false; // Deaktiviraj iskanje ob navigaciji
+  sessionStorage.removeItem('aluk_search_query');
+  sessionStorage.removeItem('aluk_search_results');
+  window.history.pushState({ path }, "", "#" + path); 
+  loadContent(path); 
+}
 function getPathFromUrl() { const h = window.location.hash; if (!h || h.length <= 1 || h.startsWith("#view=")) return ""; return decodeURIComponent(h.slice(1)); }
 window.addEventListener('popstate', () => { pdfModal.style.display = 'none'; pdfFrame.src = ""; const p = getPathFromUrl(); currentPath = p; loadContent(p); });
 
@@ -164,7 +232,10 @@ async function loadContent(path) {
   if (contentTitleEl) contentTitleEl.style.display = "";
   if (contentTitleDesc && contentTitleDesc.tagName === "P") contentTitleDesc.style.display = "";
   
-  if (path === "") updatesBanner.style.display = "none"; else updateBannerAsync(path);
+  // Prikaži posodobitve (vedno, razen če je aktivno iskanje)
+  if (!isSearchActive) {
+    updateBannerAsync(path);
+  }
   if (folderCache[path]) await processDataAndRender(folderCache[path], thisId); else { mainContent.innerHTML = ""; skeletonLoader.style.display = "grid"; }
   const { data, error } = await supabase.storage.from('Catalogs').list(path, { sortBy: { column: 'name', order: 'asc' }, limit: 1000 });
   skeletonLoader.style.display = "none";
@@ -173,14 +244,93 @@ async function loadContent(path) {
 }
 
 async function updateBannerAsync(path) {
-    updatesList.innerHTML = ""; showMoreUpdatesBtn.style.display = "none"; updatesBanner.style.display = "none";
+    updatesList.innerHTML = ""; 
+    showMoreUpdatesBtn.style.display = "none"; 
+    updatesBanner.style.display = "none";
+    updatesBanner.classList.remove("is-expanded"); // Reset expanded state
+    
     const newFiles = await getNewFilesRecursive(path, 0);
     if (newFiles.length === 0) return;
+    
     newFiles.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    updatesBanner.style.display = "block"; lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(newFiles[0].created_at)}`;
-    const show = (list) => list.forEach(f => { const li = document.createElement("li"); li.innerHTML = `<span style="cursor:pointer; color:var(--text-primary)" onclick="openFileFromBanner('${f.fullPath}')"><strong>${f.displayName||f.name}</strong></span> <small>(${formatDate(f.created_at)})</small>`; updatesList.appendChild(li); });
-    show(newFiles.slice(0, 5));
-    if (newFiles.length > 5) { showMoreUpdatesBtn.style.display = "block"; showMoreUpdatesBtn.onclick = () => { show(newFiles.slice(5)); showMoreUpdatesBtn.style.display = "none"; }; }
+    lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(newFiles[0].created_at)}`;
+    
+    // Ustvari vse elemente v DocumentFragment za optimizacijo
+    const fragment = document.createDocumentFragment();
+    
+    // Funkcija za prikaz posodobitev z flexbox poravnavo
+    const createItem = (f, isHidden = false) => {
+      const li = document.createElement("li");
+      if (isHidden) {
+        li.className = "update-item-hidden";
+      }
+      
+      const nameSpan = document.createElement("span");
+      nameSpan.innerHTML = `<strong>${f.displayName||f.name}</strong>`;
+      nameSpan.onclick = () => openFileFromBanner(f.fullPath);
+      
+      const dateSpan = document.createElement("span");
+      dateSpan.textContent = formatDate(f.created_at);
+      
+      li.appendChild(nameSpan);
+      li.appendChild(dateSpan);
+      return li;
+    };
+    
+    // Ustvari prvih 3 elemente (vidni)
+    const initialItems = newFiles.slice(0, 3);
+    initialItems.forEach(f => {
+      fragment.appendChild(createItem(f, false));
+    });
+    
+    // Ustvari preostale elemente (skriti)
+    const remainingItems = newFiles.slice(3);
+    remainingItems.forEach(f => {
+      fragment.appendChild(createItem(f, true));
+    });
+    
+    // Vstavi vse elemente naenkrat v DOM
+    updatesList.appendChild(fragment);
+    
+    // Prikaži banner
+    updatesBanner.style.display = "block";
+    
+    // Če so dodatni elementi, prikaži gumb za toggle
+    if (remainingItems.length > 0) {
+      showMoreUpdatesBtn.style.display = "block";
+      showMoreUpdatesBtn.textContent = "▼ Pokaži več posodobitev";
+      
+      // Uporabi closure za shranjevanje stanja
+      let isExpanded = false;
+      
+      showMoreUpdatesBtn.onclick = () => {
+        const allItems = updatesList.querySelectorAll("li");
+        
+        if (isExpanded) {
+          // Skrij dodatne elemente (vse razen prvih 3)
+          allItems.forEach((item, index) => {
+            if (index >= 3) {
+              item.classList.add("update-item-hidden");
+            }
+          });
+          updatesBanner.classList.remove("is-expanded");
+          showMoreUpdatesBtn.textContent = "▼ Pokaži več posodobitev";
+          isExpanded = false;
+          // Pomakni se na vrh bannerja
+          updatesBanner.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          // Prikaži dodatne elemente
+          allItems.forEach((item, index) => {
+            if (index >= 3) {
+              item.classList.remove("update-item-hidden");
+            }
+          });
+          updatesBanner.classList.add("is-expanded");
+          showMoreUpdatesBtn.textContent = "▲ Pokaži manj posodobitev";
+          isExpanded = true;
+        }
+      };
+    }
 }
 window.openFileFromBanner = function(path) { openPdfViewer(path.split('/').pop(), path); }
 
@@ -202,7 +352,19 @@ function updateBreadcrumbs(path) {
 // --- RENDER SEZNAMA ---
 async function renderItems(items, rId) {
   if (rId !== currentRenderId) return;
-  if (items.length === 0) { mainContent.innerHTML = ""; statusEl.textContent = "Mapa je prazna."; return; }
+  
+  // Preveri, če so prikazani rezultati iskanja - ne pobriši jih
+  const hasSearchResults = mainContent.querySelector('.search-results-grid');
+  if (hasSearchResults && isSearchActive) {
+    // Ne osvežuj, če so prikazani rezultati iskanja
+    return;
+  }
+  
+  if (items.length === 0) { 
+    mainContent.innerHTML = ""; 
+    statusEl.textContent = "Mapa je prazna."; 
+    return; 
+  }
   statusEl.textContent = `${items.length} elementov`;
   const cont = document.createElement("div"); cont.className = `file-container ${viewMode}-view`;
   favorites = loadFavorites();
@@ -218,28 +380,6 @@ async function renderItems(items, rId) {
   if (rId === currentRenderId) { mainContent.innerHTML = ""; mainContent.appendChild(cont); }
 }
 
-// Funkcija za pridobitev oznake sistema iz poti (zadnja beseda drugega nivoja)
-// Primer: "Okenski sistemi/C67K/Tehnični katalogi" → "C67K"
-function getSystemBadgeFromPath(path) {
-    if (!path) return null;
-    const parts = path.split('/').filter(p => p.trim());
-    // Če je pot "Okenski sistemi/C67K/..." → vrni "C67K" (drugi nivo)
-    if (parts.length >= 2) {
-        const secondLevel = parts[1];
-        // Vzemi zadnjo besedo (npr. "Okenski sistemi C67K" → "C67K")
-        // Ali pa celoten drugi nivo, če je kratek (npr. "C67K")
-        const words = secondLevel.split(' ');
-        // Če je zadnja beseda kratka (npr. "C67K", "C68K"), jo uporabi
-        const lastWord = words[words.length - 1];
-        if (lastWord.length <= 10 && /^[A-Z0-9]+$/i.test(lastWord)) {
-            return lastWord;
-        }
-        // Sicer uporabi celoten drugi nivo
-        return secondLevel;
-    }
-    return null;
-}
-
 async function createItemElement(item, cont) {
     const isFolder = !item.metadata; 
     const div = document.createElement("div"); 
@@ -252,21 +392,12 @@ async function createItemElement(item, cont) {
         const isFav = favorites.includes(clean);
         div.innerHTML += `<button class="fav-btn ${isFav?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>`;
         
-        // Pridobi oznako sistema iz poti (zadnja beseda drugega nivoja)
-        const systemBadge = getSystemBadgeFromPath(full);
-        if (systemBadge) {
-            badges += `<span class="system-badge" style="top:10px;">${systemBadge}</span>`;
-        }
-        
         // Preveri za NOVO badge asinhrono
         getNewFilesRecursive(full, 0).then(n => { 
             if(n.length > 0) { 
                 const b = div.querySelector('.new-badge'); 
                 if(b) {
                     b.style.display = 'inline-block';
-                    // Če ima tudi system badge, ga premakni navzdol
-                    const s = div.querySelector('.system-badge');
-                    if(s) s.style.top = '36px';
                 }
             } 
         });
@@ -280,12 +411,33 @@ async function createItemElement(item, cont) {
     const base = getBaseName(item.name).toLowerCase();
     let icon = isFolder ? `<div class="big-icon">${getIconForName(base)}</div>` : `<div class="big-icon">${fileIcons[item.name.split('.').pop().toLowerCase()]||"📄"}</div>`;
     if (item.name.toLowerCase().endsWith('dwg') || item.name.toLowerCase().endsWith('dxf')) icon = `<img src="dwg-file.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📐</div>'">`;
-    if (imageMap[base]) { const { data } = await supabase.storage.from('Catalogs').createSignedUrl(currentPath ? `${currentPath}/${imageMap[base].name}` : imageMap[base].name, 3600); if (data) icon = `<img src="${data.signedUrl}" loading="lazy" />`; }
+    
+    // Cache za slike - preveri, če že imamo URL
+    if (imageMap[base]) {
+      const imagePath = currentPath ? `${currentPath}/${imageMap[base].name}` : imageMap[base].name;
+      const cacheKey = imagePath;
+      
+      if (imageUrlCache[cacheKey]) {
+        // Uporabi cache URL (če ni pretekel - 3600s = 1h)
+        icon = `<img src="${imageUrlCache[cacheKey]}" loading="lazy" />`;
+      } else {
+        // Naloži nov URL in shrani v cache
+        const { data } = await supabase.storage.from('Catalogs').createSignedUrl(imagePath, 3600);
+        if (data) {
+          imageUrlCache[cacheKey] = data.signedUrl;
+          icon = `<img src="${data.signedUrl}" loading="lazy" />`;
+        }
+      }
+    }
 
+    // Za datoteke: prikaži datum takoj pod velikostjo
+    const fileSize = isFolder ? 'Mapa' : (item.metadata.size/1024/1024).toFixed(2)+' MB';
+    const dateInfo = !isFolder && item.created_at ? `<span class="item-date">Datum posodobitve: ${formatDate(item.created_at)}</span>` : '';
+    
     div.innerHTML = (isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>` : '') + 
                     badges + 
                     `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}">${icon}</div>` +
-                    `<div class="item-info"><strong>${item.name}</strong><small>${isFolder?'Mapa':(item.metadata.size/1024/1024).toFixed(2)+' MB'}</small>${!isFolder&&item.created_at?`<br><span style="font-size:10px;color:var(--text-tertiary)">${formatDate(item.created_at)}</span>`:''}</div>`;
+                    `<div class="item-info"><strong>${item.name}</strong><small>${fileSize}</small>${dateInfo}</div>`;
     
     div.onclick = () => isFolder ? navigateTo(full) : openPdfViewer(item.name, full);
     cont.appendChild(div);
@@ -293,16 +445,21 @@ async function createItemElement(item, cont) {
 
 // --- GLOBALNI PRILJUBLJENI ---
 async function renderGlobalFavorites() {
+  const container = getElement("globalFavContainer");
+  if (!container) {
+    console.warn("globalFavContainer ni najden, preskakujem renderGlobalFavorites");
+    return;
+  }
+  
   favorites = loadFavorites(); 
   if (favorites.length === 0) { 
     if (globalFavorites) globalFavorites.style.display = "none"; 
     return; 
   }
   if (globalFavorites) globalFavorites.style.display = "block"; 
-  if (globalFavContainer) {
-    globalFavContainer.innerHTML = ""; 
-    globalFavContainer.className = `file-container grid-view`;
-  }
+  
+  container.innerHTML = ""; 
+  container.className = `file-container grid-view`;
   
   for (const p of favorites) {
       const name = p.split('/').pop(); 
@@ -310,27 +467,128 @@ async function renderGlobalFavorites() {
       div.className = "item";
       const news = await getNewFilesRecursive(p, 0);
       
-      // Pridobi oznako sistema iz poti
-      const systemBadge = getSystemBadgeFromPath(p);
       let badges = "";
       if (news.length > 0) {
           badges += '<span class="new-badge" style="display:inline-block">NOVO</span>';
-          if (systemBadge) {
-              badges += `<span class="system-badge" style="top:36px;">${systemBadge}</span>`;
-          }
-      } else if (systemBadge) {
-          badges += `<span class="system-badge" style="top:10px;">${systemBadge}</span>`;
       }
       
       div.innerHTML = `<div class="item-preview folder-bg" style="height:100px; position:relative;"><div class="big-icon" style="font-size:40px;">${getIconForName(name)}</div>${badges}</div>
                        <div class="item-info" style="padding:10px;"><strong style="font-size:13px;">${name}</strong></div>
                        <button class="fav-btn active" style="top:5px; left:5px;">★</button>`;
       div.onclick = () => navigateTo(p);
-      div.querySelector('.fav-btn').onclick = (e) => { e.stopPropagation(); favorites = favorites.filter(f => f !== p); saveFavorites(favorites); renderGlobalFavorites(); renderItems(currentItems, currentRenderId); };
-      globalFavContainer.appendChild(div);
+      const favBtn = div.querySelector('.fav-btn');
+      if (favBtn) {
+        favBtn.onclick = (e) => { 
+          e.stopPropagation(); 
+          favorites = favorites.filter(f => f !== p); 
+          saveFavorites(favorites); 
+          renderGlobalFavorites(); 
+          updateSidebarFavorites(); // Posodobi sidebar
+          renderItems(currentItems, currentRenderId); 
+        };
+      }
+      container.appendChild(div);
   }
 }
-window.toggleFavorite = function(e, name) { e.stopPropagation(); const p = normalizePath(currentPath ? `${currentPath}/${name}` : name); favorites = loadFavorites(); if (favorites.includes(p)) favorites = favorites.filter(f => f !== p); else favorites.push(p); saveFavorites(favorites); renderGlobalFavorites(); renderItems(currentItems, currentRenderId); }
+window.toggleFavorite = function(e, name) { 
+  e.stopPropagation(); 
+  const p = normalizePath(currentPath ? `${currentPath}/${name}` : name); 
+  favorites = loadFavorites(); 
+  if (favorites.includes(p)) {
+    favorites = favorites.filter(f => f !== p);
+  } else {
+    favorites.push(p);
+  }
+  saveFavorites(favorites); 
+  renderGlobalFavorites(); 
+  updateSidebarFavorites(); // Posodobi sidebar
+  // Ne osvežuj glavne vsebine, če je aktivno iskanje
+  if (!isSearchActive && currentItems.length > 0) {
+    renderItems(currentItems, currentRenderId);
+  } 
+}
+
+// --- SIDEBAR PRILJUBLJENE ---
+function updateSidebarFavorites() {
+  if (!sidebarFavList) return;
+  
+  // Shrani fokus iskalnega polja, če je aktiven
+  const searchHasFocus = document.activeElement === searchInput;
+  const searchValue = searchInput ? searchInput.value : '';
+  
+  favorites = loadFavorites();
+  
+  if (favorites.length === 0) {
+    sidebarFavList.innerHTML = '<div class="sidebar-empty">Ni priljubljenih map. Kliknite ★ na mapi.</div>';
+    return;
+  }
+  
+  sidebarFavList.innerHTML = '';
+  
+  favorites.forEach(path => {
+    const name = path.split('/').pop();
+    const icon = getIconForName(name);
+    
+    const item = document.createElement('div');
+    item.className = 'sidebar-fav-item';
+    item.innerHTML = `
+      <span class="fav-icon">★</span>
+      <span class="fav-name" title="${path}">${icon} ${name}</span>
+      <span class="fav-remove" title="Odstrani iz priljubljenih">✕</span>
+    `;
+    
+    // Klik na element -> navigacija z preverjanjem obstoja
+    item.onclick = async (e) => {
+      if (e.target.classList.contains('fav-remove')) return;
+      
+      // Preveri, če pot obstaja
+      const exists = await pathExists(path);
+      if (!exists) {
+        // Odstrani iz priljubljenih in prikaži sporočilo
+        favorites = favorites.filter(f => f !== path);
+        saveFavorites(favorites);
+        updateSidebarFavorites();
+        renderGlobalFavorites();
+        
+        // Prikaži sporočilo uporabniku
+        if (statusEl) {
+          const originalText = statusEl.textContent;
+          statusEl.textContent = `⚠️ Mapa "${name}" je bila preimenovana ali premaknjena. Odstranjena iz priljubljenih.`;
+          statusEl.style.color = 'var(--error)';
+          setTimeout(() => {
+            statusEl.textContent = originalText;
+            statusEl.style.color = '';
+          }, 5000);
+        }
+        return;
+      }
+      
+      window.navigateTo(path);
+    };
+    
+    // Klik na X -> odstrani iz priljubljenih
+    item.querySelector('.fav-remove').onclick = (e) => {
+      e.stopPropagation();
+      favorites = favorites.filter(f => f !== path);
+      saveFavorites(favorites);
+      updateSidebarFavorites();
+      renderGlobalFavorites();
+      if (currentItems.length > 0 && !isSearchActive) renderItems(currentItems, currentRenderId);
+    };
+    
+    sidebarFavList.appendChild(item);
+  });
+  
+  // Obnovi fokus iskalnega polja, če je bil aktiven
+  if (searchHasFocus && searchInput) {
+    setTimeout(() => {
+      searchInput.focus();
+      if (searchValue) {
+        searchInput.setSelectionRange(searchValue.length, searchValue.length);
+      }
+    }, 0);
+  }
+}
 
 // --- ISKANJE (VSE: Šifrant + PDF Index) ---
 async function loadSearchData() {
@@ -358,18 +616,23 @@ if (searchInput) {
 // Funkcija za kopiranje v odložišče
 window.copyToClipboard = function(text, button) {
     navigator.clipboard.writeText(text).then(() => {
-        const originalText = button.textContent;
-        button.textContent = "✓ Kopirano";
+        // Shrani originalno vsebino (ikona ali besedilo)
+        const originalContent = button.innerHTML;
+        const originalBg = button.style.background;
+        const originalColor = button.style.color;
+        
+        button.innerHTML = "✓ Kopirano";
         button.style.background = "var(--success)";
         button.style.color = "white";
+        
         setTimeout(() => {
-            button.textContent = originalText;
-            button.style.background = "var(--bg-secondary)";
-            button.style.color = "var(--text-primary)";
+            button.innerHTML = originalContent;
+            button.style.background = originalBg;
+            button.style.color = originalColor;
         }, 2000);
     }).catch(err => {
         console.error("Napaka pri kopiranju:", err);
-        button.textContent = "✗ Napaka";
+        button.innerHTML = "✗ Napaka";
     });
 };
 
@@ -384,6 +647,15 @@ if (searchInput) {
     clearSearchBtn.addEventListener("click", () => {
       searchInput.value = "";
       clearSearchBtn.style.display = "none";
+      isSearchActive = false; // Deaktiviraj iskanje
+      sessionStorage.removeItem('aluk_search_query');
+      sessionStorage.removeItem('aluk_search_results');
+      
+      // Prikaži posodobitve nazaj
+      if (updatesBanner) {
+        updatesBanner.style.display = "";
+      }
+      
       if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
     });
   }
@@ -421,6 +693,7 @@ if (searchInput) {
       // Počisti sessionStorage
       sessionStorage.removeItem('aluk_search_query');
       sessionStorage.removeItem('aluk_search_results');
+      isSearchActive = false; // Deaktiviraj iskanje
       
       // Prikaži nazaj sekcijo "TEHNIČNA DOKUMENTACIJA"
       const contentTitleEl = getElement("contentTitle");
@@ -428,8 +701,20 @@ if (searchInput) {
       if (contentTitleEl) contentTitleEl.style.display = "";
       if (contentTitleDesc && contentTitleDesc.tagName === "P") contentTitleDesc.style.display = "";
       
+      // Prikaži posodobitve, če so bile skrite
+      if (updatesBanner) {
+        updatesBanner.style.display = "";
+      }
+      
       if (currentItems.length > 0) renderItems(currentItems, currentRenderId); 
       return; 
+    }
+    
+    isSearchActive = true; // Aktiviraj iskanje
+    
+    // Skrij posodobitve ob iskanju
+    if (updatesBanner) {
+      updatesBanner.style.display = "none";
     }
     
     searchTimeout = setTimeout(async () => {
@@ -485,30 +770,25 @@ if (searchInput) {
         
         if (arts.length > 0) {
             found = true;
-            // Uporabi min-height za naslov in opis, da se poravnata z drugim stolpcem
-            sifrantCol.innerHTML += `<div style="min-height:60px;"><h3 style="margin-bottom:12px; color:var(--result-article-heading); font-size:15px; font-weight:600; margin-top:0;">📋 Šifrant artiklov (${arts.length})</h3><p style="font-size:12px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">Iskanje šifre artikla vrne opis artikla iz šifranta.</p></div>`;
+            // Glava sekcije z enako višino
+            sifrantCol.innerHTML += `<div class="search-section-header"><h3 style="color:var(--result-article-heading);">📋 Šifrant artiklov (${arts.length})</h3><p>Iskanje šifre artikla vrne opis artikla iz šifranta.</p></div>`;
             
             arts.forEach(a => {
                 const artDiv = document.createElement("div");
-                artDiv.className = "item";
+                artDiv.className = "item search-item-card";
                 artDiv.style.cursor = "default";
-                artDiv.style.marginBottom = "8px";
-                artDiv.style.position = "relative";
                 
                 const copyText = `${a.sifra} - ${a.opis}`;
                 artDiv.innerHTML = `
-                    <div class="item-preview file-bg" style="background:var(--bg-secondary); width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:24px; border:1px solid var(--border-light);">
+                    <div class="item-preview file-bg">
                         🏷️
                     </div>
-                    <div class="item-info" style="flex-grow:1; min-width:0; overflow:hidden;">
-                        <strong style="color:var(--result-article-heading); display:block; margin-bottom:2px; font-weight:600;">${a.sifra}</strong>
-                        <small style="color:var(--result-article-text); display:block; line-height:1.4; word-wrap:break-word;">${a.opis}</small>
+                    <div class="item-info">
+                        <strong style="color:var(--result-article-heading);">${a.sifra}</strong>
+                        <small style="color:var(--result-article-text);">${a.opis}</small>
                     </div>
-                    <button class="copy-btn" onclick="copyToClipboard('${copyText.replace(/'/g, "\\'")}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; font-size:16px; color:var(--text-primary); margin-left:10px; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis">📋</button>
+                    <button class="copy-btn" onclick="copyToClipboard('${copyText.replace(/'/g, "\\'")}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis"><img src="copy.png" class="copy-icon-custom"></button>
                 `;
-                artDiv.style.display = "flex";
-                artDiv.style.alignItems = "flex-start";
-                artDiv.style.paddingTop = "8px";
                 sifrantCol.appendChild(artDiv);
             });
         }
@@ -518,13 +798,13 @@ if (searchInput) {
         
         if (allMatches.length > 0) {
             found = true;
-            // Uporabi min-height za naslov in opis, da se poravnata z drugim stolpcem
-            mapsCol.innerHTML += `<div style="min-height:60px;"><h3 style="margin-bottom:12px; color:var(--result-doc-heading); font-size:15px; font-weight:600; margin-top:0;">📁 Tehnična dokumentacija (${allMatches.length})</h3><p style="font-size:12px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">Iskanje katalogov prikaže vse kataloge, ki se ujemajo in so na voljo na tem portalu.</p></div>`;
+            // Glava sekcije z enako višino
+            mapsCol.innerHTML += `<div class="search-section-header"><h3 style="color:var(--result-doc-heading);">📁 Tehnična dokumentacija (${allMatches.length})</h3><p>Iskanje katalogov prikaže vse kataloge, ki se ujemajo in so na voljo na tem portalu.</p></div>`;
 
             // Prikaži rezultate z potjo
             for (const item of allMatches) {
                 const div = document.createElement("div");
-                div.className = "item";
+                div.className = "item search-item-card";
                 const isFolder = !item.metadata;
                 const pathParts = item.fullPath.split('/');
                 const fileName = pathParts[pathParts.length - 1];
@@ -547,13 +827,14 @@ if (searchInput) {
                 }
                 
                 div.innerHTML = `
-                    <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}" style="width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:24px;">
+                    <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}">
                         ${displayIcon}
                     </div>
-                    <div class="item-info" style="flex-grow:1;">
-                        <strong style="color:var(--result-doc-text); display:block; margin-bottom:2px; font-weight:600;">${fileName}</strong>
-                        <small style="color:var(--text-secondary); font-size:12px;">${folderPath || 'Koren'}</small>
+                    <div class="item-info">
+                        <strong style="color:var(--result-doc-text);">${fileName}</strong>
+                        <small>${folderPath || 'Koren'}</small>
                     </div>
+                    <div class="item-arrow" style="color:var(--text-secondary); font-size:18px; flex-shrink:0; margin-left:10px;">→</div>
                 `;
                 mapsCol.appendChild(div);
             }
@@ -654,13 +935,12 @@ function setupFormHandler() {
       
       const emailInput = document.getElementById("email");
       const nameInput = document.getElementById("userName");
-      const companyInput = document.getElementById("companyName");
       const msgEl = document.getElementById("authMsg");
       
-      if (!emailInput || !nameInput || !companyInput) {
-        console.error("Nekateri vnosni elementi niso najdeni");
+      if (!emailInput || !nameInput) {
+        console.error("Vnosna polja za ime ali e-pošto niso najdena");
         if (msgEl) {
-          msgEl.textContent = "Napaka: Nekateri elementi niso najdeni.";
+          msgEl.textContent = "Napaka: Polja za ime ali e-pošto niso na voljo.";
           msgEl.className = "error-msg";
         }
         return false;
@@ -668,20 +948,19 @@ function setupFormHandler() {
       
       const e = emailInput.value.trim();
       const n = nameInput.value.trim();
-      const c = companyInput.value.trim();
       
-      console.log("Vrednosti:", e, n, c);
+      console.log("Vrednosti:", e, n);
       
-      if (!e || !n || !c) { 
+      if (!e || !n) { 
         if (msgEl) {
-          msgEl.textContent = "Vsa polja so obvezna."; 
+          msgEl.textContent = "Prosimo, izpolnite svoje ime in e-poštni naslov."; 
           msgEl.className = "error-msg";
         }
         return false; 
       }
       
       try { 
-        localStorage.setItem('aluk_user_info', JSON.stringify({ name: n, company: c })); 
+        localStorage.setItem('aluk_user_info', JSON.stringify({ name: n })); 
       } catch(err) {
         console.error("Napaka pri shranjevanju uporabniških podatkov:", err);
       }
@@ -742,6 +1021,20 @@ function setupFormHandler() {
 
 // Pokliči takoj, ker je script type="module" naložen na koncu body
 setupFormHandler();
+
+// Prikaži datum in uro zgoraj desno v headerju
+(function setBuildDate() {
+  const el = getElement("buildDate");
+  if (el) {
+    const now = new Date();
+    const d = now.getDate();
+    const m = now.getMonth() + 1;
+    const y = now.getFullYear();
+    const h = now.getHours();
+    const min = now.getMinutes();
+    el.textContent = `${d}.${m}.${y} ${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  }
+})();
 
 if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid')); 
 if (btnList) btnList.addEventListener('click', () => setViewMode('list'));
@@ -822,6 +1115,7 @@ window.addEventListener('pageshow', (e) => {
     const savedQuery = sessionStorage.getItem('aluk_search_query');
     if (savedQuery && searchInput) {
       searchInput.value = savedQuery;
+      isSearchActive = true; // Aktiviraj iskanje
       // Ponovno izvedi iskanje
       if (searchInput.value.trim()) {
         searchInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -836,6 +1130,7 @@ document.addEventListener('visibilitychange', () => {
     const savedQuery = sessionStorage.getItem('aluk_search_query');
     if (savedQuery && searchInput && mainContent && mainContent.innerHTML.trim() === "") {
       searchInput.value = savedQuery;
+      isSearchActive = true; // Aktiviraj iskanje
       if (clearSearchBtn) clearSearchBtn.style.display = "flex";
       // Ponovno izvedi iskanje
       searchInput.dispatchEvent(new Event('input', { bubbles: true }));

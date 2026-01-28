@@ -12,7 +12,7 @@
   
   <link rel="icon" type="image/png" href="favicon.png">
 
-  <link rel="stylesheet" href="style.css?v=1345">
+  <link rel="stylesheet" href="style.css?v=1580">
 </head>
 <body>
 
@@ -26,7 +26,7 @@
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:15px;">
-        <div id="buildDate" style="color:var(--text-secondary); font-size:12px; font-weight:400; font-family:monospace;">27.1.2026 13:45</div>
+        <div id="buildDate" style="color:var(--text-secondary); font-size:12px; font-weight:400; font-family:monospace;">26.1.2026</div>
         <button id="logout" class="ghost" style="display:none;">Odjava</button>
       </div>
     </div>
@@ -42,69 +42,71 @@
     <iframe id="pdfFrame" class="viewer-iframe" src=""></iframe>
   </div>
 
-  <form id="authForm" class="card">
-    <div class="info-box">
-      <strong>🔒 Zavarovan dostop:</strong> Portal je namenjen izključno registriranim partnerjem. Za dostop potrebujete veljaven e-poštni naslov.
-    </div>
-    <div class="input-group">
-      <label for="userName">Ime in Priimek</label>
-      <input id="userName" type="text" placeholder="Janez Novak" autocomplete="name" />
-      <small style="color:var(--text-secondary); font-size:12px; margin-top:4px; display:block;">Vaše polno ime za identifikacijo</small>
-    </div>
-    <div class="input-group">
-      <label for="companyName">Naziv podjetja</label>
-      <input id="companyName" type="text" placeholder="Moje Podjetje d.o.o." autocomplete="organization" />
-      <small style="color:var(--text-secondary); font-size:12px; margin-top:4px; display:block;">Naziv vašega podjetja</small>
-    </div>
-    <div class="input-group">
-      <label for="email">E-poštni naslov</label>
-      <input id="email" type="email" placeholder="Vpišite e-poštni naslov" autocomplete="email" />
-      <small style="color:var(--text-secondary); font-size:12px; margin-top:4px; display:block;">Na ta naslov boste prejeli povezavo za prijavo (pritisnite Enter za pošiljanje)</small>
-    </div>
-    <button id="sendLink" class="primary" type="submit">Pošlji povezavo za prijavo</button>
-    <div id="authMsg"></div>
-    <div class="contact-section">
-      <div class="contact-text">Niste registrirani ali imate težave s prijavo?</div>
-      <a id="requestAccessBtn" href="#" style="text-decoration:none;">
-        <button class="secondary" type="button">📧 Kontaktiraj skrbnika</button>
-      </a>
+  <form id="authForm" class="card login-card-center">
+    <div class="login-inner">
+      <div class="info-box">
+        <strong>🔒 Zavarovan dostop:</strong> Portal je namenjen izključno registriranim partnerjem. Za dostop potrebujete veljaven e-poštni naslov.
+      </div>
+      <div class="input-group">
+        <label for="userName">Ime in Priimek</label>
+        <input id="userName" type="text" placeholder="Janez Novak" autocomplete="name" />
+      </div>
+      <div class="input-group">
+        <label for="email">E-poštni naslov</label>
+        <input id="email" type="email" placeholder="Vpišite e-poštni naslov" autocomplete="email" />
+        <small style="color:var(--text-secondary); font-size:12px; margin-top:4px; display:block;">Na ta naslov boste prejeli povezavo za prijavo (pritisnite Enter za pošiljanje)</small>
+      </div>
+      <button id="sendLink" class="primary" type="submit">Pošlji povezavo za prijavo</button>
+      <div id="authMsg"></div>
+      <div class="contact-section">
+        <div class="contact-text">Niste registrirani ali imate težave s prijavo?</div>
+        <a id="requestAccessBtn" href="#" style="text-decoration:none;">
+          <button class="secondary" type="button">📧 Kontaktiraj skrbnika</button>
+        </a>
+      </div>
     </div>
   </form>
 
-  <div id="appCard" style="display:none;">
-    <div class="card">
+  <div id="appCard" class="app-wrapper" style="display:none;">
+    <div class="app-container">
       
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-        <div id="userLine" style="font-weight:500; color:var(--text-primary); font-size: 18px;"></div>
-      </div>
-      
-      <div id="globalFavorites" style="display:none;">
-        <div class="section-title fav">★ Priljubljene mape</div>
-        <p style="font-size:13px; color:var(--text-secondary); margin-top:-10px; margin-bottom:15px;">Hitri dostop do pogosto uporabljanih map. Kliknite na zvezdo ★ na kateri koli mapi, da jo dodate med priljubljene.</p>
-        <div id="globalFavContainer" class="file-container grid-view"></div>
-      </div>
-
-      <div id="updatesBanner" class="updates-banner">
-        <div class="updates-title">
-          <span>📢 Nedavne posodobitve v tej mapi</span>
-          <span id="lastUpdateDate" style="font-weight:400; font-size:13px; color:var(--text-secondary)"></span>
+      <!-- SIDEBAR -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <div id="userLine" style="font-weight:600; color:var(--text-primary); font-size:14px; margin-bottom:5px;"></div>
         </div>
-        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">Datoteke, ki so bile dodane ali posodobljene v zadnjih 30 dneh. Kliknite na datoteko, da jo odprete.</p>
-        <ul id="updatesList" class="updates-list"></ul>
-        <button id="showMoreUpdates" class="show-more-btn" style="display:none;">▼ Pokaži več posodobitev</button>
-      </div>
+        
+        <nav class="sidebar-nav">
+          <div class="sidebar-section-title">Meni</div>
+          <a href="#" class="sidebar-link active" onclick="navigateTo(''); return false;">
+            <span class="sidebar-icon">🏠</span>
+            <span>Domov</span>
+          </a>
+        </nav>
+        
+        <div class="sidebar-favorites">
+          <div class="sidebar-section-title">★ Priljubljene</div>
+          <div id="sidebarFavList" class="sidebar-fav-list">
+            <div class="sidebar-empty">Ni priljubljenih map.</div>
+          </div>
+        </div>
+      </aside>
+      
+      <!-- MAIN CONTENT -->
+      <main class="main-content">
+        <div class="card">
+        
+        <div class="breadcrumbs" id="breadcrumbs"></div>
 
-      <div class="breadcrumbs" id="breadcrumbs"></div>
+        <div class="search-section">
+          <h3 style="font-size:16px; font-weight:600; color:var(--heading-color); margin-bottom:12px; margin-top:0;">🔍 Iskanje</h3>
+          <p style="font-size:13px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">
+            <strong style="color:var(--text-primary);">Iskanje šifre artikla:</strong> Vpišite šifro artikla in dobili boste opis artikla iz šifranta.<br>
+            <strong style="color:var(--text-primary);">Iskanje katalogov:</strong> Vpišite ime kataloga ali datoteke in dobili boste vse kataloge, ki se ujemajo in so na voljo na tem portalu.
+          </p>
+        </div>
 
-      <div class="search-section">
-        <h3 style="font-size:16px; font-weight:600; color:var(--heading-color); margin-bottom:12px; margin-top:0;">🔍 Iskanje</h3>
-        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">
-          <strong style="color:var(--text-primary);">Iskanje šifre artikla:</strong> Vpišite šifro artikla in dobili boste opis artikla iz šifranta.<br>
-          <strong style="color:var(--text-primary);">Iskanje katalogov:</strong> Vpišite ime kataloga ali datoteke in dobili boste vse kataloge, ki se ujemajo in so na voljo na tem portalu.
-        </p>
-      </div>
-
-      <div class="toolbar">
+        <div class="toolbar">
         <div class="search-box">
           <div style="position:relative;">
             <input id="search" type="text" placeholder="🔍 Išči po vseh mapah in šifrantu artiklov..." style="margin-bottom:0; padding-right:40px;" />
@@ -117,6 +119,16 @@
         </div>
       </div>
 
+        <div id="updatesBanner" class="updates-banner">
+          <div class="updates-title">
+            <span>📢 Nedavne posodobitve v tej mapi</span>
+            <span id="lastUpdateDate" style="font-weight:400; font-size:13px; color:var(--text-secondary)"></span>
+          </div>
+          <p style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">Datoteke, ki so bile dodane ali posodobljene v zadnjih 30 dneh. Kliknite na datoteko, da jo odprete.</p>
+          <ul id="updatesList" class="updates-list"></ul>
+          <button id="showMoreUpdates" class="show-more-btn" style="display:none;">▼ Pokaži več posodobitev</button>
+        </div>
+
       <div id="status" style="font-size:13px; color:var(--text-secondary); margin-bottom:10px;"></div>
       
       <div id="skeletonLoader" class="skeleton-container" style="display:none;">
@@ -124,16 +136,18 @@
       </div>
 
       <div class="section-title" id="contentTitle">📂 Tehnična dokumentacija</div>
-        <p style="font-size:13px; color:var(--text-secondary); margin-top:-10px; margin-bottom:15px;">Prebrskajte mape in datoteke. Kliknite na mapo za vstop ali na datoteko za predogled. Datoteke z oznako <span style="background:var(--new-badge); color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">NOVO</span> so bile dodane v zadnjih 30 dneh.</p>
+        <p style="font-size:13px; color:var(--text-secondary); margin-top:-10px; margin-bottom:15px;">Prebrskajte mape in datoteke. Kliknite na mapo za vstop ali na datoteko za predogled. Datoteke z oznako <span class="new-badge inline-badge">NOVO</span> so bile dodane v zadnjih 30 dneh.</p>
       <div id="mainContent"></div>
 
-    </div>
-    
-    <div class="footer">
-      &copy; 2026 Alumit. Tehnična pomoč: <a href="mailto:miha@aluk.si">miha@aluk.si</a>
+      </div>
+      
+        <div class="footer">
+          &copy; 2026 Alumit. Tehnična pomoč: <a href="mailto:miha@aluk.si">miha@aluk.si</a>
+        </div>
+      </main>
     </div>
   </div>
 
-  <script type="module" src="script.js?v=1345"></script>
+  <script type="module" src="script.js?v=1530"></script>
 </body>
 </html>
