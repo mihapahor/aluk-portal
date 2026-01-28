@@ -240,44 +240,56 @@ async function updateBannerAsync(path) {
     updatesList.innerHTML = ""; 
     showMoreUpdatesBtn.style.display = "none"; 
     updatesBanner.style.display = "none";
+    updatesBanner.classList.remove("is-expanded"); // Reset expanded state
     
     const newFiles = await getNewFilesRecursive(path, 0);
     if (newFiles.length === 0) return;
     
     newFiles.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    updatesBanner.style.display = "block"; 
     lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(newFiles[0].created_at)}`;
     
+    // Ustvari vse elemente v DocumentFragment za optimizacijo
+    const fragment = document.createDocumentFragment();
+    
     // Funkcija za prikaz posodobitev z flexbox poravnavo
-    const show = (list, isHidden = false) => {
-      list.forEach(f => { 
-        const li = document.createElement("li");
-        if (isHidden) {
-          li.className = "update-item-hidden";
-        }
-        
-        const nameSpan = document.createElement("span");
-        nameSpan.innerHTML = `<strong>${f.displayName||f.name}</strong>`;
-        nameSpan.onclick = () => openFileFromBanner(f.fullPath);
-        
-        const dateSpan = document.createElement("span");
-        dateSpan.textContent = formatDate(f.created_at);
-        
-        li.appendChild(nameSpan);
-        li.appendChild(dateSpan);
-        updatesList.appendChild(li);
-      });
+    const createItem = (f, isHidden = false) => {
+      const li = document.createElement("li");
+      if (isHidden) {
+        li.className = "update-item-hidden";
+      }
+      
+      const nameSpan = document.createElement("span");
+      nameSpan.innerHTML = `<strong>${f.displayName||f.name}</strong>`;
+      nameSpan.onclick = () => openFileFromBanner(f.fullPath);
+      
+      const dateSpan = document.createElement("span");
+      dateSpan.textContent = formatDate(f.created_at);
+      
+      li.appendChild(nameSpan);
+      li.appendChild(dateSpan);
+      return li;
     };
     
-    // Prikaži prvih 3 elemente
+    // Ustvari prvih 3 elemente (vidni)
     const initialItems = newFiles.slice(0, 3);
-    const remainingItems = newFiles.slice(3);
+    initialItems.forEach(f => {
+      fragment.appendChild(createItem(f, false));
+    });
     
-    show(initialItems, false);
+    // Ustvari preostale elemente (skriti)
+    const remainingItems = newFiles.slice(3);
+    remainingItems.forEach(f => {
+      fragment.appendChild(createItem(f, true));
+    });
+    
+    // Vstavi vse elemente naenkrat v DOM
+    updatesList.appendChild(fragment);
+    
+    // Prikaži banner
+    updatesBanner.style.display = "block";
     
     // Če so dodatni elementi, prikaži gumb za toggle
     if (remainingItems.length > 0) {
-      show(remainingItems, true); // Dodaj jih, vendar skrite
       showMoreUpdatesBtn.style.display = "block";
       showMoreUpdatesBtn.textContent = "▼ Pokaži več posodobitev";
       
@@ -294,6 +306,7 @@ async function updateBannerAsync(path) {
               item.classList.add("update-item-hidden");
             }
           });
+          updatesBanner.classList.remove("is-expanded");
           showMoreUpdatesBtn.textContent = "▼ Pokaži več posodobitev";
           isExpanded = false;
           // Pomakni se na vrh bannerja
@@ -305,6 +318,7 @@ async function updateBannerAsync(path) {
               item.classList.remove("update-item-hidden");
             }
           });
+          updatesBanner.classList.add("is-expanded");
           showMoreUpdatesBtn.textContent = "▲ Pokaži manj posodobitev";
           isExpanded = true;
         }

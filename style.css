@@ -462,6 +462,17 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .update-item-hidden {
   display: none !important;
 }
+
+/* Dodatna varnost: privzeto skrij elemente od četrtega naprej */
+.updates-list li:nth-child(n+4) {
+  display: none;
+}
+
+/* Prikaži vse elemente, ko je banner razširjen */
+.updates-banner.is-expanded .updates-list li:nth-child(n+4) {
+  display: flex;
+}
+
 .show-more-btn { background: transparent; color: #0284c7; border: none; cursor: pointer; font-size: 13px; font-weight: 600; padding: 0; text-align: left; }
 .show-more-btn:hover { text-decoration: underline; }
 
