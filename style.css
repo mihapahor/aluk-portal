@@ -72,8 +72,8 @@ body {
 .fixed-header { 
   position: fixed; 
   top: 0; 
-  left: 0; 
-  width: 100%; 
+  left: 260px; 
+  width: calc(100% - 260px); 
   height: 90px; 
   background-color: var(--header-bg); 
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); 
@@ -81,15 +81,30 @@ body {
   display: flex; 
   align-items: center; 
   justify-content: center; 
-  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  /* poravnava z ožjim sidebarjem (220px) */
+  .fixed-header {
+    left: 220px;
+    width: calc(100% - 220px);
+  }
 }
 
 @media (max-width: 768px) {
-  .fixed-header { height: 80px; }
+  .fixed-header { 
+    height: 80px; 
+    left: 0;
+    width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
-  .fixed-header { height: 70px; }
+  .fixed-header { 
+    height: 70px; 
+    left: 0;
+    width: 100%;
+  }
 }
 
 .header-content { 
