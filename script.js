@@ -627,26 +627,18 @@ if (searchInput) {
   console.error("✗ searchInput NI NAJDEN! Iskanje ne bo delovalo.");
 }
 
-// Funkcija za kopiranje v odložišče
+// Funkcija za kopiranje v odložišče (GitHub-style: ikona → kljukica, zelena, 2s nazaj)
 window.copyToClipboard = function(text, button) {
     navigator.clipboard.writeText(text).then(() => {
-        // Shrani originalno vsebino (ikona ali besedilo)
-        const originalContent = button.innerHTML;
-        const originalBg = button.style.background;
-        const originalColor = button.style.color;
-        
-        button.innerHTML = "✓ Kopirano";
-        button.style.background = "var(--success)";
-        button.style.color = "white";
-        
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<span class="copy-check-icon" aria-hidden="true">✓</span>';
+        button.classList.add("copied-success");
         setTimeout(() => {
-            button.innerHTML = originalContent;
-            button.style.background = originalBg;
-            button.style.color = originalColor;
+            button.innerHTML = originalHTML;
+            button.classList.remove("copied-success");
         }, 2000);
     }).catch(err => {
         console.error("Napaka pri kopiranju:", err);
-        button.innerHTML = "✗ Napaka";
     });
 };
 
