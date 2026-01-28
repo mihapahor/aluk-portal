@@ -421,6 +421,17 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   display: none; 
 }
 
+/* Inline badge za uporabo v besedilu */
+.new-badge.inline-badge {
+  position: static;
+  display: inline-block;
+  margin: 0 4px;
+  font-size: 11px;
+  vertical-align: baseline;
+  top: auto;
+  right: auto;
+}
+
 .file-container.list-view .new-badge { position: static; margin-left: 10px; }
 
 .fav-btn { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9); border: 1px solid #ddd; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 20; color: #ccc; font-size: 18px; transition: all 0.2s; }
