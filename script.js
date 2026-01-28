@@ -26,10 +26,24 @@ function getElement(id) {
   return el;
 }
 
-// Nastavi mailto link za request access (varno)
+// Nastavi mailto link za "Kontaktiraj skrbnika" (brez polja za telefon)
 const requestAccessBtn = getElement("requestAccessBtn");
 if (requestAccessBtn) {
-  requestAccessBtn.href = `mailto:${ADMIN_EMAIL}?subject=Prijava v AluK Portal&body=Prošnja za dostop...`;
+  const mailSubject = "Prijava v AluK Portal - Prošnja za dostop";
+  const mailBody = `Spoštovani,
+
+Prosim za ureditev dostopa do portala za partnerje.
+
+Moji podatki:
+
+Ime in priimek:
+
+Podjetje:
+
+E-naslov za prijavo:
+
+Hvala in lep pozdrav.`;
+  requestAccessBtn.href = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`;
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
