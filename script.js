@@ -438,16 +438,21 @@ async function createItemElement(item, cont) {
 
 // --- GLOBALNI PRILJUBLJENI ---
 async function renderGlobalFavorites() {
+  const container = getElement("globalFavContainer");
+  if (!container) {
+    console.warn("globalFavContainer ni najden, preskakujem renderGlobalFavorites");
+    return;
+  }
+  
   favorites = loadFavorites(); 
   if (favorites.length === 0) { 
     if (globalFavorites) globalFavorites.style.display = "none"; 
     return; 
   }
   if (globalFavorites) globalFavorites.style.display = "block"; 
-  if (globalFavContainer) {
-    globalFavContainer.innerHTML = ""; 
-    globalFavContainer.className = `file-container grid-view`;
-  }
+  
+  container.innerHTML = ""; 
+  container.className = `file-container grid-view`;
   
   for (const p of favorites) {
       const name = p.split('/').pop(); 
@@ -464,15 +469,18 @@ async function renderGlobalFavorites() {
                        <div class="item-info" style="padding:10px;"><strong style="font-size:13px;">${name}</strong></div>
                        <button class="fav-btn active" style="top:5px; left:5px;">★</button>`;
       div.onclick = () => navigateTo(p);
-      div.querySelector('.fav-btn').onclick = (e) => { 
-        e.stopPropagation(); 
-        favorites = favorites.filter(f => f !== p); 
-        saveFavorites(favorites); 
-        renderGlobalFavorites(); 
-        updateSidebarFavorites(); // Posodobi sidebar
-        renderItems(currentItems, currentRenderId); 
-      };
-      globalFavContainer.appendChild(div);
+      const favBtn = div.querySelector('.fav-btn');
+      if (favBtn) {
+        favBtn.onclick = (e) => { 
+          e.stopPropagation(); 
+          favorites = favorites.filter(f => f !== p); 
+          saveFavorites(favorites); 
+          renderGlobalFavorites(); 
+          updateSidebarFavorites(); // Posodobi sidebar
+          renderItems(currentItems, currentRenderId); 
+        };
+      }
+      container.appendChild(div);
   }
 }
 window.toggleFavorite = function(e, name) { 
