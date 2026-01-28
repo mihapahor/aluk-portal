@@ -762,8 +762,8 @@ if (searchInput) {
                 
                 const copyText = `${a.sifra} - ${a.opis}`;
                 artDiv.innerHTML = `
-                    <div class="item-preview file-bg" style="background:var(--bg-secondary); width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:24px; border:1px solid var(--border-light);">
-                        🏷️
+                    <div class="item-preview file-bg" style="background:var(--bg-secondary); width:50px; height:50px; border-radius:6px; margin-right:15px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border:1px solid var(--border-light);">
+                        <img src="icon.png" class="item-icon-small" alt="artikel">
                     </div>
                     <div class="item-info" style="flex-grow:1; min-width:0; overflow:hidden;">
                         <strong style="color:var(--result-article-heading); display:block; margin-bottom:2px; font-weight:600;">${a.sifra}</strong>
