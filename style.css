@@ -366,8 +366,8 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   .file-container.grid-view { gap: 15px; }
 }
 .file-container.grid-view .item {
-  display: flex;
-  flex-direction: column;
+  display: flex !important;
+  flex-direction: column !important;
   border: 1px solid var(--border);
   border-radius: 12px;
   text-decoration: none;
@@ -398,6 +398,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .file-container.grid-view .item-info {
   display: flex;
   flex-direction: column;
+  flex-grow: 1 !important;
   width: 100%;
   padding: 15px;
   text-align: center;
