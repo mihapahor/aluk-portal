@@ -50,9 +50,8 @@
 
 body { 
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-  max-width: 1000px; 
-  margin: 0 auto; 
-  padding: 0 20px; 
+  margin: 0; 
+  padding: 0; 
   padding-top: 120px; 
   color: var(--text-primary); 
   line-height: 1.6; 
@@ -63,11 +62,11 @@ body {
 }
 
 @media (max-width: 768px) {
-  body { padding: 0 15px; padding-top: 100px; }
+  body { padding-top: 100px; }
 }
 
 @media (max-width: 480px) {
-  body { padding: 0 10px; padding-top: 90px; }
+  body { padding-top: 90px; }
 }
 
 .fixed-header { 
@@ -93,10 +92,10 @@ body {
 }
 
 .header-content { 
-  width: 100%; 
-  max-width: 1200px; 
-  margin: 0 auto;
-  padding: 0 20px; 
+  width: 100% !important;
+  max-width: 1200px !important;
+  margin: 0 auto !important;
+  padding: 0 40px; 
   display: flex; 
   justify-content: space-between; 
   align-items: center; 
@@ -106,14 +105,14 @@ body {
 
 @media (max-width: 768px) {
   .header-content { 
-    padding: 0 15px; 
+    padding: 0 20px; 
     gap: 8px;
   }
 }
 
 @media (max-width: 480px) {
   .header-content { 
-    padding: 0 10px; 
+    padding: 0 20px; 
     gap: 5px;
   }
 }
@@ -770,13 +769,15 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .main-content {
   margin-left: 260px;
   flex: 1;
-  padding: 30px;
+  padding: 0 40px;
   min-width: 0;
+  width: 100%;
 }
 
 .main-content .card {
-  max-width: 1200px;
-  margin: 0 auto;
+  max-width: 1200px !important;
+  margin: 0 auto !important;
+  width: 100%;
 }
 
 /* Sticky toolbar */
@@ -817,7 +818,7 @@ body {
   }
   .main-content {
     margin-left: 0;
-    padding: 20px;
+    padding: 0 20px;
   }
   .toolbar {
     margin: 0 -20px;
@@ -828,7 +829,7 @@ body {
 
 @media (max-width: 480px) {
   .main-content {
-    padding: 15px;
+    padding: 0 20px;
   }
   .main-content .card {
     padding: 20px;
