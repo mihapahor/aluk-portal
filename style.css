@@ -94,7 +94,8 @@ body {
 
 .header-content { 
   width: 100%; 
-  max-width: 1000px; 
+  max-width: 1200px; 
+  margin: 0 auto;
   padding: 0 20px; 
   display: flex; 
   justify-content: space-between; 
@@ -104,17 +105,29 @@ body {
 }
 
 @media (max-width: 768px) {
-  .header-content { padding: 0 15px; }
+  .header-content { 
+    padding: 0 15px; 
+    gap: 8px;
+  }
 }
 
 @media (max-width: 480px) {
-  .header-content { padding: 0 10px; }
+  .header-content { 
+    padding: 0 10px; 
+    gap: 5px;
+  }
 }
 
 #buildDate { 
   font-family: monospace; 
   letter-spacing: 0.5px; 
   color: var(--text-secondary);
+}
+
+@media (max-width: 480px) {
+  #buildDate { 
+    font-size: 10px; 
+  }
 }
 
 .logo { 
@@ -127,8 +140,12 @@ body {
 
 .logo:hover { opacity: 0.8; }
 
+@media (max-width: 768px) {
+  .logo { height: 38px; }
+}
+
 @media (max-width: 480px) {
-  .logo { height: 35px; }
+  .logo { height: 32px; }
 }
 
 .header-text h1 { 
@@ -147,8 +164,16 @@ body {
 }
 
 @media (max-width: 768px) {
-  .header-text h1 { font-size: 18px; }
-  .header-text .subtitle { font-size: 12px; }
+  .header-text h1 { font-size: 16px; }
+  .header-text .subtitle { font-size: 11px; }
+}
+
+@media (max-width: 480px) {
+  .header-text h1 { font-size: 14px; }
+  .header-text .subtitle { 
+    font-size: 10px; 
+    display: none; /* Skrij podnaslov na zelo majhnih zaslonih */
+  }
 }
 
 .card { 
@@ -213,6 +238,20 @@ button.secondary:hover {
 }
 button.ghost { background: transparent; color: #fff; width: auto; padding: 8px 16px; font-size: 14px; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; }
 button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
+
+@media (max-width: 768px) {
+  button.ghost { 
+    padding: 6px 12px; 
+    font-size: 13px; 
+  }
+}
+
+@media (max-width: 480px) {
+  button.ghost { 
+    padding: 5px 10px; 
+    font-size: 12px; 
+  }
+}
 
 .toolbar { 
   display: flex; 
@@ -736,7 +775,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 }
 
 .main-content .card {
-  max-width: 1000px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
