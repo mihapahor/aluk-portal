@@ -457,27 +457,51 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 #globalFavorites .big-icon { font-size: 48px; }
 
 /* --- BADGES --- */
-.new-badge { 
-  position: absolute; 
-  top: 10px; right: 10px; 
-  background: var(--new-badge); color: white; 
-  font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 8px; 
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10; 
-  display: none; 
+/* Enotna definicija za vse NOVO značke (besedilo + kartice) */
+.new-badge {
+  /* Fiksne dimenzije - to je ključno! */
+  height: 20px !important;
+  min-width: 42px !important; /* Da so vsi enako široki */
+
+  /* Flexbox za centriranje teksta v fiksni višini */
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  /* Tekst */
+  font-size: 10px !important; /* Malo manjša pisava za kompakten videz */
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+
+  /* Izgled */
+  background-color: #dc2626 !important; /* Rdeča barva */
+  color: white !important;
+  border-radius: 4px !important; /* Enak radij kot ostali elementi */
+  padding: 0 6px !important; /* Samo levo/desno, višina je fiksna */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
 }
 
-/* Inline badge za uporabo v besedilu */
+/* Skript skriva značko z style="display:none" – obdržimo to */
+.new-badge[style*="display: none"] { display: none !important; }
+
+/* Značka na karticah (grid) – ohrani pozicijo v kotu */
+.file-container.grid-view .item .new-badge {
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  z-index: 10;
+}
+
+/* Značka v besedilu – samo poravnava s tekstom */
 .new-badge.inline-badge {
-  position: static;
-  display: inline-block;
-  margin: 0 4px;
-  font-size: 11px;
-  vertical-align: baseline;
-  top: auto;
-  right: auto;
+  vertical-align: middle !important;
+  margin: 0 6px !important; /* Malo prostora levo in desno */
+  position: relative !important;
+  top: -1px !important; /* Fina nastavitev, da sedi točno na sredini vrstice */
 }
 
-.file-container.list-view .new-badge { position: static; margin-left: 10px; }
+.file-container.list-view .new-badge { position: static !important; margin-left: 10px; }
 
 .fav-btn { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9); border: 1px solid #ddd; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 20; color: #ccc; font-size: 18px; transition: all 0.2s; }
 .fav-btn:hover { transform: scale(1.1); color: var(--fav-color); border-color: var(--fav-color); }
