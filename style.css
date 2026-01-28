@@ -396,10 +396,24 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 }
 
 .file-container.grid-view .item-info {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   padding: 15px;
   text-align: center;
   box-sizing: border-box;
+}
+
+/* Velikost (Mapa / MB) – margin-top: auto potisne velikost in datum na dno */
+.file-container.grid-view .item-info small {
+  margin-top: auto !important;
+  margin-bottom: 0 !important;
+}
+
+/* Datum – takoj pod velikostjo, minimalen odmik */
+.file-container.grid-view .item-info .item-date {
+  margin-top: 2px !important;
+  margin-bottom: 0 !important;
 }
 
 /* Rumeno ozadje za spodnji del map */
