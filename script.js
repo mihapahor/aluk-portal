@@ -161,10 +161,17 @@ async function showApp(email) {
       const s = localStorage.getItem('aluk_user_info'); 
       if (s) { 
         const d = JSON.parse(s); 
-        if (d.name) userLine.textContent = `👤 ${d.name}, ${d.company}`; 
-      } 
-    } catch (e) {}
-    if (!userLine.textContent) userLine.textContent = `👤 ${email}`;
+        if (d.name) {
+          userLine.textContent = `👤 Dobrodošli, ${d.name}.`;
+        } else {
+          userLine.textContent = `👤 ${email}`;
+        }
+      } else {
+        userLine.textContent = `👤 ${email}`;
+      }
+    } catch (e) {
+      userLine.textContent = `👤 ${email}`;
+    }
   }
   
   // Očisti neobstoječe priljubljene ob zagonu (asinhrono, da ne blokira)
@@ -1018,6 +1025,20 @@ function setupFormHandler() {
 
 // Pokliči takoj, ker je script type="module" naložen na koncu body
 setupFormHandler();
+
+// Prikaži datum in uro zgoraj desno v headerju
+(function setBuildDate() {
+  const el = getElement("buildDate");
+  if (el) {
+    const now = new Date();
+    const d = now.getDate();
+    const m = now.getMonth() + 1;
+    const y = now.getFullYear();
+    const h = now.getHours();
+    const min = now.getMinutes();
+    el.textContent = `${d}.${m}.${y} ${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  }
+})();
 
 if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid')); 
 if (btnList) btnList.addEventListener('click', () => setViewMode('list'));
