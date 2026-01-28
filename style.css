@@ -365,10 +365,42 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 @media (max-width: 480px) {
   .file-container.grid-view { gap: 15px; }
 }
-.file-container.grid-view .item { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: inherit; background: #fff; transition: all 0.2s; cursor: pointer; overflow: hidden; height: 100%; position: relative; }
+.file-container.grid-view .item {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  background: #fff;
+  transition: all 0.2s;
+  cursor: pointer;
+  overflow: hidden;
+  height: 100%;
+  position: relative;
+  padding: 0 !important;
+}
+
 .file-container.grid-view .item:hover { border-color: var(--primary); box-shadow: 0 8px 20px rgba(0,0,0,0.1); transform: translateY(-3px); }
-.file-container.grid-view .item-preview { width: 100%; height: 180px; background-color: #f3f4f6; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border); position: relative; overflow: hidden; }
-.file-container.grid-view .item-info { padding: 15px 15px 10px 15px; text-align: center; }
+
+.file-container.grid-view .item-preview {
+  width: 100%;
+  height: 180px;
+  background-color: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+.file-container.grid-view .item-info {
+  width: 100%;
+  padding: 15px;
+  text-align: center;
+  box-sizing: border-box;
+}
 
 /* Rumeno ozadje za spodnji del map */
 .file-container.grid-view .folder-item .item-info {
