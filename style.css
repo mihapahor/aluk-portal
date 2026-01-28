@@ -336,7 +336,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .file-container.grid-view .item { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; text-decoration: none; color: inherit; background: #fff; transition: all 0.2s; cursor: pointer; overflow: hidden; height: 100%; position: relative; }
 .file-container.grid-view .item:hover { border-color: var(--primary); box-shadow: 0 8px 20px rgba(0,0,0,0.1); transform: translateY(-3px); }
 .file-container.grid-view .item-preview { width: 100%; height: 180px; background-color: #f3f4f6; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border); position: relative; overflow: hidden; }
-.file-container.grid-view .item-info { padding: 15px; text-align: center; }
+.file-container.grid-view .item-info { padding: 15px 15px 10px 15px; text-align: center; }
 .file-container.grid-view .big-icon { font-size: 64px; }
 .icon-img { width: 64px; height: 64px; object-fit: contain; }
 
@@ -364,13 +364,15 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   color: var(--text-secondary); 
   font-size: 13px; 
   display: block; 
+  margin-bottom: 4px;
 }
 
 .item-date { 
   font-size: 11px; 
-  color: var(--text-tertiary); 
+  color: var(--text-secondary); 
   display: block; 
-  margin-top: 2px; 
+  margin-top: 4px; 
+  line-height: 1.3;
 }
 
 #globalFavorites { margin-bottom: 40px; }

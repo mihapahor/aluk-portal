@@ -454,10 +454,14 @@ async function createItemElement(item, cont) {
       }
     }
 
+    // Za datoteke: prikaži datum takoj pod velikostjo
+    const fileSize = isFolder ? 'Mapa' : (item.metadata.size/1024/1024).toFixed(2)+' MB';
+    const dateInfo = !isFolder && item.created_at ? `<span class="item-date">Datum posodobitve: ${formatDate(item.created_at)}</span>` : '';
+    
     div.innerHTML = (isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>` : '') + 
                     badges + 
                     `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}">${icon}</div>` +
-                    `<div class="item-info"><strong>${item.name}</strong><small>${isFolder?'Mapa':(item.metadata.size/1024/1024).toFixed(2)+' MB'}</small>${!isFolder&&item.created_at?`<br><span style="font-size:10px;color:var(--text-tertiary)">${formatDate(item.created_at)}</span>`:''}</div>`;
+                    `<div class="item-info"><strong>${item.name}</strong><small>${fileSize}</small>${dateInfo}</div>`;
     
     div.onclick = () => isFolder ? navigateTo(full) : openPdfViewer(item.name, full);
     cont.appendChild(div);
