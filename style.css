@@ -57,21 +57,10 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
   margin: 0; 
   padding: 0; 
-  padding-top: 120px; 
   color: var(--text-primary); 
   line-height: 1.6; 
   background-color: var(--bg-secondary); 
   min-height: 100vh; 
-  display: flex; 
-  flex-direction: column; 
-}
-
-@media (max-width: 768px) {
-  body { padding-top: 100px; }
-}
-
-@media (max-width: 480px) {
-  body { padding-top: 90px; }
 }
 
 .fixed-header { 
@@ -95,11 +84,10 @@ body {
 }
 
 .header-content { 
-  max-width: 1200px !important;
-  margin: 0 auto !important;
+  max-width: 1400px;
+  margin: 0 auto;
   width: 100%;
-  padding-left: calc(260px + 40px);
-  padding-right: 40px;
+  padding: 0 40px;
   height: 100%;
   display: flex;
   justify-content: space-between; 
@@ -107,12 +95,6 @@ body {
   flex-wrap: wrap;
   gap: 10px;
   box-sizing: border-box;
-}
-
-@media (max-width: 1024px) {
-  .header-content {
-    padding-left: calc(220px + 40px);
-  }
 }
 
 @media (max-width: 768px) {
@@ -124,7 +106,7 @@ body {
 
 @media (max-width: 480px) {
   .header-content { 
-    padding: 0 20px; 
+    padding: 0 15px; 
     gap: 5px;
   }
 }
@@ -623,21 +605,30 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 
 /* --- LOGIN CARD (centrirana kartica) --- */
 .login-card-center {
-  max-width: 1200px !important;
-  width: 90%;
-  margin: 120px auto !important;
-  padding: 40px !important;
+  max-width: 500px;
+  width: calc(100% - 80px);
+  margin: 120px auto 40px auto;
+  padding: 40px;
   background: white;
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: 0 10px 25px rgba(0,0,0,0.1);
   border: 1px solid var(--border);
 }
 
+@media (max-width: 768px) {
+  .login-card-center {
+    margin-top: 100px;
+    width: calc(100% - 40px);
+    padding: 30px;
+  }
+}
+
 @media (max-width: 480px) {
   .login-card-center {
-    margin: 100px 15px !important;
-    padding: 25px !important;
-    max-width: calc(100% - 30px) !important;
+    margin-top: 85px;
+    width: calc(100% - 30px);
+    padding: 25px;
+    border-radius: 12px;
   }
 }
 
@@ -647,23 +638,58 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   margin: 0 auto;
 }
 
-/* --- SIDEBAR & LAYOUT --- */
-.app-layout {
-  display: flex;
-  min-height: calc(100vh - 90px);
-  margin-top: 90px;
+/* --- SIDEBAR & LAYOUT (Centriran design) --- */
+
+/* Zunanji wrapper - zagotavlja prostor pod headerjem */
+.app-wrapper {
+  padding-top: 90px;
+  min-height: 100vh;
 }
 
+@media (max-width: 768px) {
+  .app-wrapper { padding-top: 80px; }
+}
+
+@media (max-width: 480px) {
+  .app-wrapper { padding-top: 70px; }
+}
+
+/* Glavni kontejner - centriran z max-width */
+.app-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 30px 40px;
+  display: flex;
+  gap: 30px;
+  align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    padding: 20px;
+    flex-direction: column;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-container {
+    padding: 15px;
+  }
+}
+
+/* Sidebar - sticky kartica */
 .sidebar {
-  position: fixed;
-  left: 0;
-  top: 90px;
-  width: 260px;
-  height: calc(100vh - 90px);
+  position: sticky;
+  top: 110px; /* header (90px) + 20px lufta */
+  width: 280px;
+  min-width: 280px;
+  max-height: calc(100vh - 130px);
   background: var(--card-bg);
-  border-right: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05);
   overflow-y: auto;
-  z-index: 1000;
   display: flex;
   flex-direction: column;
 }
@@ -672,6 +698,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   padding: 20px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-secondary);
+  border-radius: 16px 16px 0 0;
 }
 
 .sidebar-nav {
@@ -783,22 +810,15 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   font-style: italic;
 }
 
-/* Main content z margin za sidebar */
+/* Main content - zapolni preostali prostor */
 .main-content {
-  margin-left: 260px;
   flex: 1;
-  padding: 0 40px;
   min-width: 0;
-  width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  box-sizing: border-box;
 }
 
 .main-content .card {
-  max-width: 1200px !important;
-  margin: 0 auto !important;
   width: 100%;
 }
 
@@ -817,20 +837,35 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-/* Body reset za layout */
-body {
-  max-width: none;
-  padding: 0;
-  padding-top: 0;
+@media (max-width: 768px) {
+  .toolbar {
+    margin: 0 -30px;
+    padding-left: 30px;
+    padding-right: 30px;
+  }
 }
 
-/* Responsive - skrij sidebar na manjših zaslonih */
+@media (max-width: 480px) {
+  .toolbar {
+    margin: 0 -20px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+
+/* Responsive - prilagodi sidebar na manjših zaslonih */
+@media (max-width: 1200px) {
+  .sidebar {
+    width: 240px;
+    min-width: 240px;
+  }
+}
+
 @media (max-width: 1024px) {
   .sidebar {
     width: 220px;
-  }
-  .main-content {
-    margin-left: 220px;
+    min-width: 220px;
   }
 }
 
@@ -838,27 +873,14 @@ body {
   .sidebar {
     display: none;
   }
-  .main-content {
-    margin-left: 0;
-    padding: 0 20px;
-  }
-  .toolbar {
-    margin: 0 -20px;
-    padding-left: 20px;
-    padding-right: 20px;
+  .main-content .card {
+    padding: 30px;
   }
 }
 
 @media (max-width: 480px) {
-  .main-content {
-    padding: 0 20px;
-  }
   .main-content .card {
     padding: 20px;
-  }
-  .toolbar {
-    margin: 0 -20px;
-    padding-left: 20px;
-    padding-right: 20px;
+    border-radius: 12px;
   }
 }

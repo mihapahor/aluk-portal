@@ -12,7 +12,7 @@
   
   <link rel="icon" type="image/png" href="favicon.png">
 
-  <link rel="stylesheet" href="style.css?v=1540">
+  <link rel="stylesheet" href="style.css?v=1550">
 </head>
 <body>
 
@@ -68,33 +68,34 @@
     </div>
   </form>
 
-  <div id="appCard" class="app-layout" style="display:none;">
-    
-    <!-- SIDEBAR -->
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <div id="userLine" style="font-weight:600; color:var(--text-primary); font-size:14px; margin-bottom:5px;"></div>
-      </div>
+  <div id="appCard" class="app-wrapper" style="display:none;">
+    <div class="app-container">
       
-      <nav class="sidebar-nav">
-        <div class="sidebar-section-title">Meni</div>
-        <a href="#" class="sidebar-link active" onclick="navigateTo(''); return false;">
-          <span class="sidebar-icon">🏠</span>
-          <span>Domov</span>
-        </a>
-      </nav>
-      
-      <div class="sidebar-favorites">
-        <div class="sidebar-section-title">★ Priljubljene</div>
-        <div id="sidebarFavList" class="sidebar-fav-list">
-          <div class="sidebar-empty">Ni priljubljenih map.</div>
+      <!-- SIDEBAR -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <div id="userLine" style="font-weight:600; color:var(--text-primary); font-size:14px; margin-bottom:5px;"></div>
         </div>
-      </div>
-    </aside>
-    
-    <!-- MAIN CONTENT -->
-    <main class="main-content">
-      <div class="card">
+        
+        <nav class="sidebar-nav">
+          <div class="sidebar-section-title">Meni</div>
+          <a href="#" class="sidebar-link active" onclick="navigateTo(''); return false;">
+            <span class="sidebar-icon">🏠</span>
+            <span>Domov</span>
+          </a>
+        </nav>
+        
+        <div class="sidebar-favorites">
+          <div class="sidebar-section-title">★ Priljubljene</div>
+          <div id="sidebarFavList" class="sidebar-fav-list">
+            <div class="sidebar-empty">Ni priljubljenih map.</div>
+          </div>
+        </div>
+      </aside>
+      
+      <!-- MAIN CONTENT -->
+      <main class="main-content">
+        <div class="card">
         
         <div class="breadcrumbs" id="breadcrumbs"></div>
 
@@ -141,12 +142,13 @@
 
       </div>
       
-      <div class="footer">
-        &copy; 2026 Alumit. Tehnična pomoč: <a href="mailto:miha@aluk.si">miha@aluk.si</a>
-      </div>
-    </main>
+        <div class="footer">
+          &copy; 2026 Alumit. Tehnična pomoč: <a href="mailto:miha@aluk.si">miha@aluk.si</a>
+        </div>
+      </main>
+    </div>
   </div>
 
-  <script type="module" src="script.js?v=1520"></script>
+  <script type="module" src="script.js?v=1525"></script>
 </body>
 </html>
