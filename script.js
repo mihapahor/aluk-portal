@@ -383,7 +383,7 @@ async function renderItems(items, rId) {
 async function createItemElement(item, cont) {
     const isFolder = !item.metadata; 
     const div = document.createElement("div"); 
-    div.className = "item";
+    div.className = isFolder ? "item folder-item" : "item";
     const full = currentPath ? `${currentPath}/${item.name}` : item.name; 
     const clean = normalizePath(full);
     let badges = "";
