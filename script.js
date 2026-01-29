@@ -21,6 +21,18 @@ const fileIcons = {
   "zip": "📦", "rar": "📦", "7z": "📦", "jpg": "🖼️", "jpeg": "🖼️", "png": "🖼️", "webp": "🖼️"
 };
 
+// Escapiranje za vstavljanje v HTML (prepreči XSS)
+function escapeHtml(str) {
+  if (str == null) return '';
+  const s = String(str);
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // --- VARNOSTNA FUNKCIJA ZA DOM DOSTOP (definirana na vrhu!) ---
 function getElement(id) {
   const el = document.getElementById(id);
@@ -759,13 +771,14 @@ if (searchInput) {
             artDiv.className = "item search-item-card";
             artDiv.style.cursor = "default";
             const copyText = `${a.sifra} - ${a.opis}`;
+            const safeCopyAttr = copyText.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             artDiv.innerHTML = `
                 <div class="item-preview file-bg">🏷️</div>
                 <div class="item-info">
-                    <strong style="color:var(--result-article-heading);">${a.sifra}</strong>
-                    <small style="color:var(--result-article-text);">${a.opis}</small>
+                    <strong style="color:var(--result-article-heading);">${escapeHtml(a.sifra)}</strong>
+                    <small style="color:var(--result-article-text);">${escapeHtml(a.opis)}</small>
                 </div>
-                <button class="copy-btn" onclick="copyToClipboard('${copyText.replace(/'/g, "\\'")}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis"><img src="copy.png" class="copy-icon-custom"></button>
+                <button class="copy-btn" onclick="copyToClipboard('${safeCopyAttr}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis"><img src="copy.png" class="copy-icon-custom"></button>
             `;
             return artDiv;
         };
@@ -802,8 +815,8 @@ if (searchInput) {
             div.innerHTML = `
                 <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}">${displayIcon}</div>
                 <div class="item-info">
-                    <strong style="color:var(--result-doc-text);">${fileName}</strong>
-                    <small>${folderPath || 'Koren'}</small>
+                    <strong style="color:var(--result-doc-text);">${escapeHtml(fileName)}</strong>
+                    <small>${escapeHtml(folderPath || 'Koren')}</small>
                 </div>
                 <div class="item-arrow" style="color:var(--text-secondary); font-size:18px; flex-shrink:0; margin-left:10px;">→</div>
             `;
@@ -884,7 +897,7 @@ if (searchInput) {
                 statusEl.style.fontWeight = "400";
             }
             if (mainContent) {
-                mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);"><h3 style="color:var(--text-primary);">Ni zadetkov za "${val}"</h3></div>`;
+                mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);"><h3 style="color:var(--text-primary);">Ni zadetkov za "${escapeHtml(val)}"</h3></div>`;
             }
         } else { 
             if (statusEl) {
