@@ -600,6 +600,14 @@ function updateSidebarFavorites() {
 }
 
 // --- ISKANJE (VSE: Šifrant + PDF Index) ---
+// loadSifrant: naloži CSV (vrstice \n, stolpci ;), samo Šifra + Opis, rezultate prikaže v "Rezultati iz šifranta"
+function cleanCsvCell(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/^["'\s]+|["'\s]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
 async function loadSearchData() {
     if (isDataLoaded) return;
     try {
@@ -607,13 +615,13 @@ async function loadSearchData() {
         if (!artRes.ok) return;
         const buf = await artRes.arrayBuffer();
         const text = new TextDecoder('utf-8').decode(buf);
-        const lines = text.split(/\r?\n/).filter((line) => line.trim());
+        const lines = text.split('\n').filter((line) => line.trim());
         articleDatabase = [];
         for (let i = 0; i < lines.length; i++) {
-            if (i === 0) continue; // preskoči glavo (npr. _t.;Opis)
+            if (i === 0) continue; // preskoči glavo (Št.;Opis;;;)
             const parts = lines[i].split(';');
-            const sifra = (parts[0] || '').trim();
-            const opis = parts.slice(1).join(';').trim();
+            const sifra = cleanCsvCell(parts[0]);
+            const opis = cleanCsvCell(parts[1]);
             if (sifra || opis) articleDatabase.push({ sifra, opis });
         }
         isDataLoaded = true;
