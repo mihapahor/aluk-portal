@@ -26,26 +26,6 @@ function getElement(id) {
   return el;
 }
 
-// Nastavi mailto link za "Kontaktiraj skrbnika" (brez polja za telefon)
-const requestAccessBtn = getElement("requestAccessBtn");
-if (requestAccessBtn) {
-  const mailSubject = "Prijava v AluK Portal - Prošnja za dostop";
-  const mailBody = `Spoštovani,
-
-Prosim za ureditev dostopa do portala za partnerje.
-
-Moji podatki:
-
-Ime in priimek:
-
-Podjetje:
-
-E-naslov za prijavo:
-
-Hvala in lep pozdrav.`;
-  requestAccessBtn.href = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`;
-}
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'aluk-portal-auth' }
 });
@@ -944,102 +924,130 @@ function setViewMode(mode) {
   if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
 }
 
-// Registriraj form submit handler
+// --- ZAVIHKI PRIJAVE (Obstoječi / Nov uporabnik) ---
+function setupAuthTabs() {
+  const tabs = document.querySelectorAll(".auth-tab");
+  const loginSection = document.getElementById("loginSection");
+  const requestSection = document.getElementById("requestSection");
+  if (!tabs.length || !loginSection || !requestSection) return;
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const target = tab.getAttribute("data-tab");
+      tabs.forEach((t) => {
+        t.classList.remove("active");
+        t.setAttribute("aria-selected", "false");
+      });
+      tab.classList.add("active");
+      tab.setAttribute("aria-selected", "true");
+      if (target === "login") {
+        loginSection.style.display = "";
+        loginSection.setAttribute("aria-hidden", "false");
+        requestSection.style.display = "none";
+        requestSection.setAttribute("aria-hidden", "true");
+      } else {
+        loginSection.style.display = "none";
+        loginSection.setAttribute("aria-hidden", "true");
+        requestSection.style.display = "";
+        requestSection.setAttribute("aria-hidden", "false");
+      }
+    });
+  });
+}
+
+// --- PERSISTENCA POLJ (localStorage) ---
+const AUTH_KEYS = { loginEmail: "aluk_loginEmail", reqName: "aluk_reqName", reqCompany: "aluk_reqCompany", reqEmail: "aluk_reqEmail" };
+function setupAuthPersistence() {
+  ["loginEmail", "reqName", "reqCompany", "reqEmail"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const key = AUTH_KEYS[id];
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) el.value = saved;
+    } catch (e) {}
+    el.addEventListener("input", () => {
+      try {
+        localStorage.setItem(key, el.value);
+      } catch (e) {}
+    });
+  });
+}
+
+// --- GUMB "Odpri e-pošto za zahtevek" ---
+function setupRequestMailBtn() {
+  const btn = document.getElementById("requestMailBtn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const name = (document.getElementById("reqName") && document.getElementById("reqName").value.trim()) || "";
+    const company = (document.getElementById("reqCompany") && document.getElementById("reqCompany").value.trim()) || "";
+    const email = (document.getElementById("reqEmail") && document.getElementById("reqEmail").value.trim()) || "";
+    const subject = "Prošnja za dostop do AluK Portala";
+    const body = `Pozdravljeni,
+
+Prosim za dostop do portala.
+
+Podatki:
+Ime: ${name}
+Podjetje: ${company}
+Email: ${email}
+
+Hvala.`;
+    const mailtoLink = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoLink;
+  });
+}
+
+// Registriraj form submit handler (Magic Link iz #loginSection)
 function setupFormHandler() {
   const form = document.getElementById("authForm");
   if (form) {
-    console.log("✓ Form najden, registriram event listener");
-    
     form.addEventListener("submit", async (event) => {
-      console.log("✓ Form submit triggered");
-      // PREPREČI DEFAULT OBNAŠANJE
       event.preventDefault();
       event.stopPropagation();
-      
-      const emailInput = document.getElementById("email");
-      const nameInput = document.getElementById("userName");
+      const emailInput = document.getElementById("loginEmail");
       const msgEl = document.getElementById("authMsg");
-      
-      if (!emailInput || !nameInput) {
-        console.error("Vnosna polja za ime ali e-pošto niso najdena");
-        if (msgEl) {
-          msgEl.textContent = "Napaka: Polja za ime ali e-pošto niso na voljo.";
-          msgEl.className = "error-msg";
-        }
+      if (!emailInput) {
+        if (msgEl) { msgEl.textContent = "Napaka: Polje za e-pošto ni na voljo."; msgEl.className = "error-msg"; }
         return false;
       }
-      
       const e = emailInput.value.trim();
-      const n = nameInput.value.trim();
-      
-      console.log("Vrednosti:", e, n);
-      
-      if (!e || !n) { 
-        if (msgEl) {
-          msgEl.textContent = "Prosimo, izpolnite svoje ime in e-poštni naslov."; 
-          msgEl.className = "error-msg";
-        }
-        return false; 
-      }
-      
-      try { 
-        localStorage.setItem('aluk_user_info', JSON.stringify({ name: n })); 
-      } catch(err) {
-        console.error("Napaka pri shranjevanju uporabniških podatkov:", err);
-      }
-      
-      const btn = document.getElementById("sendLink");
-      if (!btn) {
-        console.error("Gumb 'sendLink' ni najden");
+      if (!e) {
+        if (msgEl) { msgEl.textContent = "Prosimo, vpišite e-poštni naslov."; msgEl.className = "error-msg"; }
         return false;
       }
-      
+      const btn = document.getElementById("sendLink");
+      if (!btn) return false;
       btn.disabled = true;
       btn.textContent = "Pošiljam...";
-      
-      if (msgEl) {
-        msgEl.textContent = "";
-        msgEl.className = "";
-      }
-      
+      if (msgEl) { msgEl.textContent = ""; msgEl.className = ""; }
       try {
-        console.log("Pošiljam OTP na:", e);
+        let redirectUrl = window.location.href;
+        redirectUrl = redirectUrl.split("#")[0].split("?")[0];
+        if (!redirectUrl.endsWith("/")) redirectUrl += "/";
         const { error } = await supabase.auth.signInWithOtp({
-          email: e, 
-          options: { emailRedirectTo: window.location.origin }
+          email: e,
+          options: { emailRedirectTo: redirectUrl }
         });
-        
         if (error) {
-          console.error("Supabase error:", error);
-          if (msgEl) {
-            msgEl.textContent = "Napaka: " + error.message;
-            msgEl.className = "error-msg";
-          }
+          if (msgEl) { msgEl.textContent = "Napaka: " + error.message; msgEl.className = "error-msg"; }
           btn.disabled = false;
-          btn.textContent = "Pošlji povezavo za prijavo";
+          btn.textContent = "Pošlji povezavo za vstop";
         } else {
-          console.log("OTP uspešno poslan");
-          if (msgEl) {
-            msgEl.textContent = "✅ Povezava poslana! Preverite svoj e-poštni predal.";
-            msgEl.className = "success-msg";
-          }
-          // Ne resetiraj forme - ohrani podatke
+          if (msgEl) { msgEl.textContent = "✅ Povezava poslana! Preverite svoj e-poštni predal."; msgEl.className = "success-msg"; }
+          btn.textContent = "Pošlji povezavo za vstop";
+          btn.disabled = false;
         }
       } catch (err) {
-        console.error("Napaka pri pošiljanju:", err);
-        if (msgEl) {
-          msgEl.textContent = "Napaka: " + (err.message || "Neznana napaka");
-          msgEl.className = "error-msg";
-        }
+        if (msgEl) { msgEl.textContent = "Napaka: " + (err.message || "Neznana napaka"); msgEl.className = "error-msg"; }
         btn.disabled = false;
-        btn.textContent = "Pošlji povezavo za prijavo";
+        btn.textContent = "Pošlji povezavo za vstop";
       }
-      
       return false;
     });
-  } else {
-    console.error("✗ authForm NI NAJDEN!");
   }
+  setupAuthTabs();
+  setupAuthPersistence();
+  setupRequestMailBtn();
 }
 
 // Pokliči takoj, ker je script type="module" naložen na koncu body
