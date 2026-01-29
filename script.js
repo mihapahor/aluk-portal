@@ -925,7 +925,7 @@ if (searchInput) {
             }
         } else { 
             if (statusEl) {
-                statusEl.textContent = `Najdeno: ${arts.length} artiklov, ${allMatches.length} datotek/map`;
+                statusEl.textContent = `Najdeno: ${allMatches.length} datotek/map, ${arts.length} artiklov`;
                 statusEl.style.color = "var(--success)";
                 statusEl.style.fontWeight = "500";
             }
