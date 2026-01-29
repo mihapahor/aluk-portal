@@ -603,11 +603,22 @@ function updateSidebarFavorites() {
 async function loadSearchData() {
     if (isDataLoaded) return;
     try {
-        const artRes = await fetch('/sifrant.json?v=99');
-        if (artRes.ok) articleDatabase = await artRes.json();
+        const artRes = await fetch('/sifrant.csv?v=99');
+        if (!artRes.ok) return;
+        const buf = await artRes.arrayBuffer();
+        const text = new TextDecoder('utf-8').decode(buf);
+        const lines = text.split(/\r?\n/).filter((line) => line.trim());
+        articleDatabase = [];
+        for (let i = 0; i < lines.length; i++) {
+            if (i === 0) continue; // preskoči glavo (npr. _t.;Opis)
+            const parts = lines[i].split(';');
+            const sifra = (parts[0] || '').trim();
+            const opis = parts.slice(1).join(';').trim();
+            if (sifra || opis) articleDatabase.push({ sifra, opis });
+        }
         isDataLoaded = true;
-    } catch (e) { 
-        console.error("Napaka pri nalaganju iskalnih baz", e); 
+    } catch (e) {
+        console.error("Napaka pri nalaganju šifranta (CSV)", e);
     }
 }
 
@@ -790,7 +801,7 @@ if (searchInput) {
 
         if (arts.length > 0) {
             found = true;
-            sifrantCol.innerHTML = `<div class="search-section-header"><h3 style="color:var(--result-article-heading);">📋 Šifrant artiklov (${arts.length})</h3><p>Iskanje šifre artikla vrne opis artikla iz šifranta.</p></div>`;
+            sifrantCol.innerHTML = `<div class="search-section-header"><h3 style="color:var(--result-article-heading);">📋 Rezultati iz šifranta (${arts.length})</h3><p>Iskanje šifre artikla vrne opis artikla iz šifranta.</p></div>`;
             sifrantList = document.createElement("div");
             sifrantList.className = "search-results-list";
             const sifrantVisible = arts.slice(0, LIMIT);
@@ -844,9 +855,9 @@ if (searchInput) {
             return;
         }
         
-        // Dodaj stolpce v wrapper
-        if (arts.length > 0) resultsWrapper.appendChild(sifrantCol);
+        // Dodaj stolpce v wrapper: najprej datoteke, nato rezultati iz šifranta
         if (allMatches.length > 0) resultsWrapper.appendChild(mapsCol);
+        if (arts.length > 0) resultsWrapper.appendChild(sifrantCol);
         
         // Če imamo samo en stolpec, spremeni grid na 1 stolpec
         if (arts.length === 0 || allMatches.length === 0) {
