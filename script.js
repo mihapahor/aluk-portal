@@ -2,7 +2,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = "https://ugwchsznxsuxbxdvigsu.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnd2Noc3pueHN1eGJ4ZHZpZ3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTY0NzEsImV4cCI6MjA4NDY5MjQ3MX0.iFzB--KryoBedjIJnybL55-xfQFIBxWnKq9RqwxuyK4";
-const ADMIN_EMAIL = "miha@aluk.si"; 
+const ADMIN_EMAIL = "miha@aluk.si";
+// Tabela v Supabase: ustvari z stolpci email, name, company, created_at (RLS dovoli INSERT za anon)
+const ACCESS_REQUESTS_TABLE = "access_requests"; 
 
 // --- KONFIGURACIJA ---
 const customSortOrder = [
@@ -973,16 +975,28 @@ function setupAuthPersistence() {
   });
 }
 
-// --- GUMB "Odpri e-pošto za zahtevek" ---
-function setupRequestMailBtn() {
-  const btn = document.getElementById("requestMailBtn");
-  if (!btn) return;
-  btn.addEventListener("click", () => {
-    const name = (document.getElementById("reqName") && document.getElementById("reqName").value.trim()) || "";
-    const company = (document.getElementById("reqCompany") && document.getElementById("reqCompany").value.trim()) || "";
-    const email = (document.getElementById("reqEmail") && document.getElementById("reqEmail").value.trim()) || "";
-    const subject = "Prošnja za dostop do AluK Portala";
-    const body = `Pozdravljeni,
+// --- ZAHTEVEK ZA DOSTOP: shrani ime v localStorage (prikaz v portalu), v Supabase, odpri mailto ---
+function doRequestAccess() {
+  const name = (document.getElementById("reqName") && document.getElementById("reqName").value.trim()) || "";
+  const company = (document.getElementById("reqCompany") && document.getElementById("reqCompany").value.trim()) || "";
+  const email = (document.getElementById("reqEmail") && document.getElementById("reqEmail").value.trim()) || "";
+  if (name) {
+    try {
+      localStorage.setItem("aluk_user_info", JSON.stringify({ name, company: company || undefined }));
+    } catch (e) {}
+  }
+  try {
+    supabase.from(ACCESS_REQUESTS_TABLE).insert({
+      email: email || null,
+      name: name || null,
+      company: company || null,
+      created_at: new Date().toISOString()
+    }).then(({ error }) => { if (error) console.warn("Supabase access_requests insert:", error.message); });
+  } catch (e) {
+    console.warn("Supabase access_requests ni na voljo:", e);
+  }
+  const subject = "Prošnja za dostop do AluK Portala";
+  const body = `Pozdravljeni,
 
 Prosim za dostop do portala.
 
@@ -992,18 +1006,28 @@ Podjetje: ${company}
 Email: ${email}
 
 Hvala.`;
-    const mailtoLink = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.location.href = mailtoLink;
-  });
+  const mailtoLink = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = mailtoLink;
 }
 
-// Registriraj form submit handler (Magic Link iz #loginSection)
+function setupRequestMailBtn() {
+  const btn = document.getElementById("requestMailBtn");
+  if (btn) btn.addEventListener("click", doRequestAccess);
+}
+
+// Registriraj form submit handler (Magic Link iz #loginSection ali Enter v #requestSection → mailto)
 function setupFormHandler() {
   const form = document.getElementById("authForm");
   if (form) {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       event.stopPropagation();
+      const requestSection = document.getElementById("requestSection");
+      const isRequestVisible = requestSection && requestSection.style.display !== "none";
+      if (isRequestVisible) {
+        doRequestAccess();
+        return false;
+      }
       const emailInput = document.getElementById("loginEmail");
       const msgEl = document.getElementById("authMsg");
       if (!emailInput) {
