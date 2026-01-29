@@ -136,6 +136,16 @@ function getCustomSortIndex(name) {
   const partial = customSortOrder.findIndex(o => name.includes(o));
   return partial === -1 ? 999 : partial;
 }
+
+/** Vrne prioriteto za sortiranje (1 = najvišja): Tehnični katalogi → Vgradni detajli/prerezi → Izjave o lastnostih → ostalo. */
+function getFolderFilePriority(name) {
+  const n = (name || "").toLowerCase();
+  if (n.includes("tehnični katalogi") || n.includes("tehnicni katalogi")) return 1;
+  if (n.includes("vgradni detajli") || n.includes("prerezi")) return 2;
+  if (n.includes("izjave o lastnostih")) return 3;
+  return 4;
+}
+
 function formatDate(iso) { if (!iso) return ""; return new Date(iso).toLocaleDateString('sl-SI'); }
 function getBaseName(fn) { const i = fn.lastIndexOf('.'); return i === -1 ? fn : fn.substring(0, i); }
 function getIconForName(name) { const l = name.toLowerCase(); for (const [k, e] of Object.entries(folderIcons)) if (l.includes(k)) return e; return "📂"; }
@@ -379,6 +389,8 @@ async function renderItems(items, rId) {
   const favs = [], norms = [];
   items.forEach(i => { const p = normalizePath(currentPath ? `${currentPath}/${i.name}` : i.name); (!i.metadata && favorites.includes(p)) ? favs.push(i) : norms.push(i); });
   const sorted = [...favs, ...norms].sort((a, b) => {
+     const pa = getFolderFilePriority(a.name), pb = getFolderFilePriority(b.name);
+     if (pa !== pb) return pa - pb;
      const fa = !a.metadata, fb = !b.metadata;
      if (fa && !fb) return -1; if (!fa && fb) return 1;
      if (fa && fb) { const ia = getCustomSortIndex(a.name), ib = getCustomSortIndex(b.name); if (ia !== ib) return ia - ib; }
