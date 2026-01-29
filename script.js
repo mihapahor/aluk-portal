@@ -1053,16 +1053,45 @@ function setupFormHandler() {
           options: { emailRedirectTo: redirectUrl }
         });
         if (error) {
-          if (msgEl) { msgEl.textContent = "Napaka: " + error.message; msgEl.className = "error-msg"; }
+          const isSignupsNotAllowed = (error.message || "").toLowerCase().includes("signups not allowed");
+          if (msgEl) {
+            msgEl.textContent = isSignupsNotAllowed
+              ? "Vaš e-naslov še ni registriran v našem sistemu. Prosimo, oddajte zahtevek za dostop v sosednjem zavihku."
+              : "Napaka: " + error.message;
+            msgEl.className = "error-msg";
+            msgEl.style.color = "#E2001A";
+          }
           btn.disabled = false;
           btn.textContent = "Pošlji povezavo za vstop";
+          if (isSignupsNotAllowed) {
+            setTimeout(() => {
+              const loginSection = document.getElementById("loginSection");
+              const requestSection = document.getElementById("requestSection");
+              const tabs = document.querySelectorAll(".auth-tab");
+              const requestTab = document.querySelector('.auth-tab[data-tab="request"]');
+              const reqEmailInput = document.getElementById("reqEmail");
+              if (loginSection) { loginSection.style.display = "none"; loginSection.setAttribute("aria-hidden", "true"); }
+              if (requestSection) { requestSection.style.display = ""; requestSection.setAttribute("aria-hidden", "false"); }
+              tabs.forEach((t) => { t.classList.remove("active"); t.setAttribute("aria-selected", "false"); });
+              if (requestTab) { requestTab.classList.add("active"); requestTab.setAttribute("aria-selected", "true"); }
+              if (reqEmailInput && e) { reqEmailInput.value = e; try { localStorage.setItem("aluk_reqEmail", e); } catch (err) {} }
+            }, 2000);
+          }
         } else {
-          if (msgEl) { msgEl.textContent = "✅ Povezava poslana! Preverite svoj e-poštni predal."; msgEl.className = "success-msg"; }
+          if (msgEl) {
+            msgEl.textContent = "✅ Povezava poslana! Preverite svoj e-poštni predal.";
+            msgEl.className = "success-msg";
+            msgEl.style.color = "";
+          }
           btn.textContent = "Pošlji povezavo za vstop";
           btn.disabled = false;
         }
       } catch (err) {
-        if (msgEl) { msgEl.textContent = "Napaka: " + (err.message || "Neznana napaka"); msgEl.className = "error-msg"; }
+        if (msgEl) {
+          msgEl.textContent = "Napaka: " + (err.message || "Neznana napaka");
+          msgEl.className = "error-msg";
+          msgEl.style.color = "#E2001A";
+        }
         btn.disabled = false;
         btn.textContent = "Pošlji povezavo za vstop";
       }
