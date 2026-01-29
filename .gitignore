@@ -2,3 +2,8 @@
 node_modules/
 venv/
 __pycache__/
+
+# Env / secrets (če kasneje preneseš ključe v env)
+.env
+.env.local
+.env.*.local

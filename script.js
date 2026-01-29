@@ -2,7 +2,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = "https://ugwchsznxsuxbxdvigsu.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnd2Noc3pueHN1eGJ4ZHZpZ3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTY0NzEsImV4cCI6MjA4NDY5MjQ3MX0.iFzB--KryoBedjIJnybL55-xfQFIBxWnKq9RqwxuyK4";
-const ADMIN_EMAIL = "miha@aluk.si"; 
+const ADMIN_EMAIL = "miha@aluk.si";
+// Tabela v Supabase: ustvari z stolpci email, name, company, created_at (RLS dovoli INSERT za anon)
+const ACCESS_REQUESTS_TABLE = "access_requests"; 
 
 // --- KONFIGURACIJA ---
 const customSortOrder = [
@@ -19,31 +21,23 @@ const fileIcons = {
   "zip": "📦", "rar": "📦", "7z": "📦", "jpg": "🖼️", "jpeg": "🖼️", "png": "🖼️", "webp": "🖼️"
 };
 
+// Escapiranje za vstavljanje v HTML (prepreči XSS)
+function escapeHtml(str) {
+  if (str == null) return '';
+  const s = String(str);
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // --- VARNOSTNA FUNKCIJA ZA DOM DOSTOP (definirana na vrhu!) ---
 function getElement(id) {
   const el = document.getElementById(id);
   if (!el) console.warn(`Element z ID "${id}" ni najden.`);
   return el;
-}
-
-// Nastavi mailto link za "Kontaktiraj skrbnika" (brez polja za telefon)
-const requestAccessBtn = getElement("requestAccessBtn");
-if (requestAccessBtn) {
-  const mailSubject = "Prijava v AluK Portal - Prošnja za dostop";
-  const mailBody = `Spoštovani,
-
-Prosim za ureditev dostopa do portala za partnerje.
-
-Moji podatki:
-
-Ime in priimek:
-
-Podjetje:
-
-E-naslov za prijavo:
-
-Hvala in lep pozdrav.`;
-  requestAccessBtn.href = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`;
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -418,8 +412,10 @@ async function createItemElement(item, cont) {
     }
     
     const base = getBaseName(item.name).toLowerCase();
-    let icon = isFolder ? `<div class="big-icon">${getIconForName(base)}</div>` : `<div class="big-icon">${fileIcons[item.name.split('.').pop().toLowerCase()]||"📄"}</div>`;
-    if (item.name.toLowerCase().endsWith('dwg') || item.name.toLowerCase().endsWith('dxf')) icon = `<img src="dwg-file.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📐</div>'">`;
+    const ext = item.name.split('.').pop().toLowerCase();
+    const isLinkFile = !isFolder && isUrlLinkFile(item.name);
+    let icon = isFolder ? `<div class="big-icon">${getIconForName(base)}</div>` : `<div class="big-icon">${isLinkFile ? '🔗' : (fileIcons[ext]||"📄")}</div>`;
+    if (!isFolder && !isLinkFile && (item.name.toLowerCase().endsWith('dwg') || item.name.toLowerCase().endsWith('dxf'))) icon = `<img src="dwg-file.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📐</div>'">`;
     
     // Cache za slike - preveri, če že imamo URL
     if (imageMap[base]) {
@@ -448,7 +444,7 @@ async function createItemElement(item, cont) {
                     `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}">${icon}</div>` +
                     `<div class="item-info"><strong>${item.name}</strong><small>${fileSize}</small>${dateInfo}</div>`;
     
-    div.onclick = () => isFolder ? navigateTo(full) : openPdfViewer(item.name, full);
+    div.onclick = () => isFolder ? navigateTo(full) : (isLinkFile ? handleUrlFile(full) : openPdfViewer(item.name, full));
     cont.appendChild(div);
 }
 
@@ -797,13 +793,14 @@ if (searchInput) {
             artDiv.className = "item search-item-card";
             artDiv.style.cursor = "default";
             const copyText = `${a.sifra} - ${a.opis}`;
+            const safeCopyAttr = copyText.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             artDiv.innerHTML = `
                 <div class="item-preview file-bg">🏷️</div>
                 <div class="item-info">
-                    <strong style="color:var(--result-article-heading);">${a.sifra}</strong>
-                    <small style="color:var(--result-article-text);">${a.opis}</small>
+                    <strong style="color:var(--result-article-heading);">${escapeHtml(a.sifra)}</strong>
+                    <small style="color:var(--result-article-text);">${escapeHtml(a.opis)}</small>
                 </div>
-                <button class="copy-btn" onclick="copyToClipboard('${copyText.replace(/'/g, "\\'")}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis"><img src="copy.png" class="copy-icon-custom"></button>
+                <button class="copy-btn" onclick="copyToClipboard('${safeCopyAttr}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis"><img src="copy.png" class="copy-icon-custom"></button>
             `;
             return artDiv;
         };
@@ -828,20 +825,23 @@ if (searchInput) {
             const pathParts = item.fullPath.split('/');
             const fileName = pathParts[pathParts.length - 1];
             const folderPath = pathParts.slice(0, -1).join(' / ');
+            const isLinkFile = !isFolder && isUrlLinkFile(fileName);
             div.onclick = () => {
                 if (isFolder) navigateTo(item.fullPath);
+                else if (isLinkFile) handleUrlFile(item.fullPath);
                 else openPdfViewer(fileName, item.fullPath);
             };
             const baseName = getBaseName(fileName).toLowerCase();
             let displayIcon = isFolder ? getIconForName(baseName) : "📄";
             const ext = fileName.split('.').pop().toLowerCase();
-            if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
-            if (!isFolder && (ext === 'dwg' || ext === 'dxf')) displayIcon = "📐";
+            if (!isFolder && isLinkFile) displayIcon = "🔗";
+            else if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
+            if (!isFolder && !isLinkFile && (ext === 'dwg' || ext === 'dxf')) displayIcon = "📐";
             div.innerHTML = `
                 <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}">${displayIcon}</div>
                 <div class="item-info">
-                    <strong style="color:var(--result-doc-text);">${fileName}</strong>
-                    <small>${folderPath || 'Koren'}</small>
+                    <strong style="color:var(--result-doc-text);">${escapeHtml(fileName)}</strong>
+                    <small>${escapeHtml(folderPath || 'Koren')}</small>
                 </div>
                 <div class="item-arrow" style="color:var(--text-secondary); font-size:18px; flex-shrink:0; margin-left:10px;">→</div>
             `;
@@ -922,7 +922,7 @@ if (searchInput) {
                 statusEl.style.fontWeight = "400";
             }
             if (mainContent) {
-                mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);"><h3 style="color:var(--text-primary);">Ni zadetkov za "${val}"</h3></div>`;
+                mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);"><h3 style="color:var(--text-primary);">Ni zadetkov za "${escapeHtml(val)}"</h3></div>`;
             }
         } else { 
             if (statusEl) {
@@ -942,6 +942,44 @@ if (searchInput) {
 }
 
 // --- OSTALO ---
+function isUrlLinkFile(fileName) {
+  const ext = (fileName || '').split('.').pop().toLowerCase();
+  return ext === 'url' || ext === 'link' || ext === 'txt';
+}
+
+async function handleUrlFile(storagePath) {
+  try {
+    const { data } = await supabase.storage.from('Catalogs').createSignedUrl(storagePath, 3600);
+    if (!data || !data.signedUrl) return;
+    const res = await fetch(data.signedUrl);
+    const text = await res.text();
+    let extractedUrl = null;
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      if (line.toUpperCase().startsWith('URL=')) {
+        extractedUrl = line.slice(4).trim();
+        break;
+      }
+      if (/^https?:\/\//i.test(line)) {
+        extractedUrl = line;
+        break;
+      }
+    }
+    if (!extractedUrl && /https?:\/\//i.test(text)) extractedUrl = text.trim();
+    if (extractedUrl && /^https?:\/\//i.test(extractedUrl)) {
+      window.open(extractedUrl, '_blank');
+    } else if (data?.signedUrl) {
+      window.open(data.signedUrl, '_blank');
+    }
+  } catch (e) {
+    console.warn('handleUrlFile:', e);
+    try {
+      const { data } = await supabase.storage.from('Catalogs').createSignedUrl(storagePath, 3600);
+      if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+    } catch (e2) {}
+  }
+}
+
 window.openPdfViewer = async function(fn, path) { const url = "#view=" + fn; window.history.pushState({ type: 'viewer', file: fn }, "", url); pdfModal.style.display = 'flex'; viewerFileName.textContent = fn; const p = path || (currentPath ? `${currentPath}/${fn}` : fn); const { data } = await supabase.storage.from('Catalogs').createSignedUrl(p, 3600); if(data) pdfFrame.src = data.signedUrl; }
 window.closePdfViewer = function() { 
   pdfModal.style.display = 'none'; 
@@ -964,109 +1002,181 @@ function setViewMode(mode) {
   if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
 }
 
-// Registriraj form submit handler
+// --- ZAVIHKI PRIJAVE (Obstoječi / Nov uporabnik) ---
+function setupAuthTabs() {
+  const tabs = document.querySelectorAll(".auth-tab");
+  const loginSection = document.getElementById("loginSection");
+  const requestSection = document.getElementById("requestSection");
+  if (!tabs.length || !loginSection || !requestSection) return;
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const target = tab.getAttribute("data-tab");
+      tabs.forEach((t) => {
+        t.classList.remove("active");
+        t.setAttribute("aria-selected", "false");
+      });
+      tab.classList.add("active");
+      tab.setAttribute("aria-selected", "true");
+      if (target === "login") {
+        loginSection.style.display = "";
+        loginSection.setAttribute("aria-hidden", "false");
+        requestSection.style.display = "none";
+        requestSection.setAttribute("aria-hidden", "true");
+      } else {
+        loginSection.style.display = "none";
+        loginSection.setAttribute("aria-hidden", "true");
+        requestSection.style.display = "";
+        requestSection.setAttribute("aria-hidden", "false");
+      }
+    });
+  });
+}
+
+// --- PERSISTENCA POLJ (localStorage) ---
+const AUTH_KEYS = { loginEmail: "aluk_loginEmail", reqName: "aluk_reqName", reqCompany: "aluk_reqCompany", reqEmail: "aluk_reqEmail" };
+function setupAuthPersistence() {
+  ["loginEmail", "reqName", "reqCompany", "reqEmail"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const key = AUTH_KEYS[id];
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) el.value = saved;
+    } catch (e) {}
+    el.addEventListener("input", () => {
+      try {
+        localStorage.setItem(key, el.value);
+      } catch (e) {}
+    });
+  });
+}
+
+// --- ZAHTEVEK ZA DOSTOP: shrani ime v localStorage (prikaz v portalu), v Supabase, odpri mailto ---
+function doRequestAccess() {
+  const name = (document.getElementById("reqName") && document.getElementById("reqName").value.trim()) || "";
+  const company = (document.getElementById("reqCompany") && document.getElementById("reqCompany").value.trim()) || "";
+  const email = (document.getElementById("reqEmail") && document.getElementById("reqEmail").value.trim()) || "";
+  if (name) {
+    try {
+      localStorage.setItem("aluk_user_info", JSON.stringify({ name, company: company || undefined }));
+    } catch (e) {}
+  }
+  try {
+    supabase.from(ACCESS_REQUESTS_TABLE).insert({
+      email: email || null,
+      name: name || null,
+      company: company || null,
+      created_at: new Date().toISOString()
+    }).then(({ error }) => { if (error) console.warn("Supabase access_requests insert:", error.message); });
+  } catch (e) {
+    console.warn("Supabase access_requests ni na voljo:", e);
+  }
+  const subject = "Prošnja za dostop do AluK Portala";
+  const body = `Pozdravljeni,
+
+Prosim za dostop do portala.
+
+Podatki:
+Ime: ${name}
+Podjetje: ${company}
+Email: ${email}
+
+Hvala.`;
+  const mailtoLink = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = mailtoLink;
+}
+
+function setupRequestMailBtn() {
+  const btn = document.getElementById("requestMailBtn");
+  if (btn) btn.addEventListener("click", doRequestAccess);
+}
+
+// Registriraj form submit handler (Magic Link iz #loginSection ali Enter v #requestSection → mailto)
 function setupFormHandler() {
   const form = document.getElementById("authForm");
   if (form) {
-    console.log("✓ Form najden, registriram event listener");
-    
     form.addEventListener("submit", async (event) => {
-      console.log("✓ Form submit triggered");
-      // PREPREČI DEFAULT OBNAŠANJE
       event.preventDefault();
       event.stopPropagation();
-      
-      const emailInput = document.getElementById("email");
-      const nameInput = document.getElementById("userName");
+      const requestSection = document.getElementById("requestSection");
+      const isRequestVisible = requestSection && requestSection.style.display !== "none";
+      if (isRequestVisible) {
+        doRequestAccess();
+        return false;
+      }
+      const emailInput = document.getElementById("loginEmail");
       const msgEl = document.getElementById("authMsg");
-      
-      if (!emailInput || !nameInput) {
-        console.error("Vnosna polja za ime ali e-pošto niso najdena");
-        if (msgEl) {
-          msgEl.textContent = "Napaka: Polja za ime ali e-pošto niso na voljo.";
-          msgEl.className = "error-msg";
-        }
+      if (!emailInput) {
+        if (msgEl) { msgEl.textContent = "Napaka: Polje za e-pošto ni na voljo."; msgEl.className = "error-msg"; }
         return false;
       }
-      
       const e = emailInput.value.trim();
-      const n = nameInput.value.trim();
-      
-      console.log("Vrednosti:", e, n);
-      
-      if (!e || !n) { 
-        if (msgEl) {
-          msgEl.textContent = "Prosimo, izpolnite svoje ime in e-poštni naslov."; 
-          msgEl.className = "error-msg";
-        }
-        return false; 
-      }
-      
-      try { 
-        localStorage.setItem('aluk_user_info', JSON.stringify({ name: n })); 
-      } catch(err) {
-        console.error("Napaka pri shranjevanju uporabniških podatkov:", err);
-      }
-      
-      const btn = document.getElementById("sendLink");
-      if (!btn) {
-        console.error("Gumb 'sendLink' ni najden");
+      if (!e) {
+        if (msgEl) { msgEl.textContent = "Prosimo, vpišite e-poštni naslov."; msgEl.className = "error-msg"; }
         return false;
       }
-      
+      const btn = document.getElementById("sendLink");
+      if (!btn) return false;
       btn.disabled = true;
       btn.textContent = "Pošiljam...";
-      
-      if (msgEl) {
-        msgEl.textContent = "";
-        msgEl.className = "";
-      }
-      
+      if (msgEl) { msgEl.textContent = ""; msgEl.className = ""; }
       try {
-        // Celoten naslov (vključno z /aluk-portal/) za pravilen redirect na GitHub Pages
         let redirectUrl = window.location.href;
-        redirectUrl = redirectUrl.split('#')[0].split('?')[0];
-        if (!redirectUrl.endsWith('/')) {
-          redirectUrl += '/';
-        }
-        console.log("Magic Link Redirect bo:", redirectUrl);
-        console.log("Pošiljam OTP na:", e);
+        redirectUrl = redirectUrl.split("#")[0].split("?")[0];
+        if (!redirectUrl.endsWith("/")) redirectUrl += "/";
         const { error } = await supabase.auth.signInWithOtp({
           email: e,
           options: { emailRedirectTo: redirectUrl }
         });
-        
         if (error) {
-          console.error("Supabase error:", error);
+          const isSignupsNotAllowed = (error.message || "").toLowerCase().includes("signups not allowed");
           if (msgEl) {
-            msgEl.textContent = "Napaka: " + error.message;
+            msgEl.textContent = isSignupsNotAllowed
+              ? "Vaš e-naslov še ni registriran v našem sistemu. Prosimo, oddajte zahtevek za dostop v sosednjem zavihku."
+              : "Napaka: " + error.message;
             msgEl.className = "error-msg";
+            msgEl.style.color = "#E2001A";
           }
           btn.disabled = false;
-          btn.textContent = "Pošlji povezavo za prijavo";
+          btn.textContent = "Pošlji povezavo za vstop";
+          if (isSignupsNotAllowed) {
+            setTimeout(() => {
+              const loginSection = document.getElementById("loginSection");
+              const requestSection = document.getElementById("requestSection");
+              const tabs = document.querySelectorAll(".auth-tab");
+              const requestTab = document.querySelector('.auth-tab[data-tab="request"]');
+              const reqEmailInput = document.getElementById("reqEmail");
+              if (loginSection) { loginSection.style.display = "none"; loginSection.setAttribute("aria-hidden", "true"); }
+              if (requestSection) { requestSection.style.display = ""; requestSection.setAttribute("aria-hidden", "false"); }
+              tabs.forEach((t) => { t.classList.remove("active"); t.setAttribute("aria-selected", "false"); });
+              if (requestTab) { requestTab.classList.add("active"); requestTab.setAttribute("aria-selected", "true"); }
+              if (reqEmailInput && e) { reqEmailInput.value = e; try { localStorage.setItem("aluk_reqEmail", e); } catch (err) {} }
+            }, 2000);
+          }
         } else {
-          console.log("OTP uspešno poslan");
           if (msgEl) {
             msgEl.textContent = "✅ Povezava poslana! Preverite svoj e-poštni predal.";
             msgEl.className = "success-msg";
+            msgEl.style.color = "";
           }
-          // Ne resetiraj forme - ohrani podatke
+          btn.textContent = "Pošlji povezavo za vstop";
+          btn.disabled = false;
         }
       } catch (err) {
-        console.error("Napaka pri pošiljanju:", err);
         if (msgEl) {
           msgEl.textContent = "Napaka: " + (err.message || "Neznana napaka");
           msgEl.className = "error-msg";
+          msgEl.style.color = "#E2001A";
         }
         btn.disabled = false;
-        btn.textContent = "Pošlji povezavo za prijavo";
+        btn.textContent = "Pošlji povezavo za vstop";
       }
-      
       return false;
     });
-  } else {
-    console.error("✗ authForm NI NAJDEN!");
   }
+  setupAuthTabs();
+  setupAuthPersistence();
+  setupRequestMailBtn();
 }
 
 // Pokliči takoj, ker je script type="module" naložen na koncu body
