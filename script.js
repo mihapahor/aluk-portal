@@ -611,7 +611,8 @@ function cleanCsvCell(str) {
 async function loadSearchData() {
     if (isDataLoaded) return;
     try {
-        const artRes = await fetch('/sifrant.csv?v=99');
+        const sifrantPath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1) + 'sifrant.csv?v=' + Date.now();
+        const artRes = await fetch(sifrantPath);
         if (!artRes.ok) return;
         const buf = await artRes.arrayBuffer();
         const text = new TextDecoder('utf-8').decode(buf);
