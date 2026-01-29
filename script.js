@@ -412,8 +412,10 @@ async function createItemElement(item, cont) {
     }
     
     const base = getBaseName(item.name).toLowerCase();
-    let icon = isFolder ? `<div class="big-icon">${getIconForName(base)}</div>` : `<div class="big-icon">${fileIcons[item.name.split('.').pop().toLowerCase()]||"📄"}</div>`;
-    if (item.name.toLowerCase().endsWith('dwg') || item.name.toLowerCase().endsWith('dxf')) icon = `<img src="dwg-file.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📐</div>'">`;
+    const ext = item.name.split('.').pop().toLowerCase();
+    const isLinkFile = !isFolder && isUrlLinkFile(item.name);
+    let icon = isFolder ? `<div class="big-icon">${getIconForName(base)}</div>` : `<div class="big-icon">${isLinkFile ? '🔗' : (fileIcons[ext]||"📄")}</div>`;
+    if (!isFolder && !isLinkFile && (item.name.toLowerCase().endsWith('dwg') || item.name.toLowerCase().endsWith('dxf'))) icon = `<img src="dwg-file.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📐</div>'">`;
     
     // Cache za slike - preveri, če že imamo URL
     if (imageMap[base]) {
@@ -442,7 +444,7 @@ async function createItemElement(item, cont) {
                     `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}">${icon}</div>` +
                     `<div class="item-info"><strong>${item.name}</strong><small>${fileSize}</small>${dateInfo}</div>`;
     
-    div.onclick = () => isFolder ? navigateTo(full) : openPdfViewer(item.name, full);
+    div.onclick = () => isFolder ? navigateTo(full) : (isLinkFile ? handleUrlFile(full) : openPdfViewer(item.name, full));
     cont.appendChild(div);
 }
 
@@ -803,15 +805,18 @@ if (searchInput) {
             const pathParts = item.fullPath.split('/');
             const fileName = pathParts[pathParts.length - 1];
             const folderPath = pathParts.slice(0, -1).join(' / ');
+            const isLinkFile = !isFolder && isUrlLinkFile(fileName);
             div.onclick = () => {
                 if (isFolder) navigateTo(item.fullPath);
+                else if (isLinkFile) handleUrlFile(item.fullPath);
                 else openPdfViewer(fileName, item.fullPath);
             };
             const baseName = getBaseName(fileName).toLowerCase();
             let displayIcon = isFolder ? getIconForName(baseName) : "📄";
             const ext = fileName.split('.').pop().toLowerCase();
-            if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
-            if (!isFolder && (ext === 'dwg' || ext === 'dxf')) displayIcon = "📐";
+            if (!isFolder && isLinkFile) displayIcon = "🔗";
+            else if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
+            if (!isFolder && !isLinkFile && (ext === 'dwg' || ext === 'dxf')) displayIcon = "📐";
             div.innerHTML = `
                 <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}">${displayIcon}</div>
                 <div class="item-info">
@@ -917,6 +922,44 @@ if (searchInput) {
 }
 
 // --- OSTALO ---
+function isUrlLinkFile(fileName) {
+  const ext = (fileName || '').split('.').pop().toLowerCase();
+  return ext === 'url' || ext === 'link' || ext === 'txt';
+}
+
+async function handleUrlFile(storagePath) {
+  try {
+    const { data } = await supabase.storage.from('Catalogs').createSignedUrl(storagePath, 3600);
+    if (!data || !data.signedUrl) return;
+    const res = await fetch(data.signedUrl);
+    const text = await res.text();
+    let extractedUrl = null;
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      if (line.toUpperCase().startsWith('URL=')) {
+        extractedUrl = line.slice(4).trim();
+        break;
+      }
+      if (/^https?:\/\//i.test(line)) {
+        extractedUrl = line;
+        break;
+      }
+    }
+    if (!extractedUrl && /https?:\/\//i.test(text)) extractedUrl = text.trim();
+    if (extractedUrl && /^https?:\/\//i.test(extractedUrl)) {
+      window.open(extractedUrl, '_blank');
+    } else if (data?.signedUrl) {
+      window.open(data.signedUrl, '_blank');
+    }
+  } catch (e) {
+    console.warn('handleUrlFile:', e);
+    try {
+      const { data } = await supabase.storage.from('Catalogs').createSignedUrl(storagePath, 3600);
+      if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+    } catch (e2) {}
+  }
+}
+
 window.openPdfViewer = async function(fn, path) { const url = "#view=" + fn; window.history.pushState({ type: 'viewer', file: fn }, "", url); pdfModal.style.display = 'flex'; viewerFileName.textContent = fn; const p = path || (currentPath ? `${currentPath}/${fn}` : fn); const { data } = await supabase.storage.from('Catalogs').createSignedUrl(p, 3600); if(data) pdfFrame.src = data.signedUrl; }
 window.closePdfViewer = function() { 
   pdfModal.style.display = 'none'; 
