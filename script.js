@@ -1003,10 +1003,17 @@ function setupFormHandler() {
       }
       
       try {
+        // Celoten naslov (vključno z /aluk-portal/) za pravilen redirect na GitHub Pages
+        let redirectUrl = window.location.href;
+        redirectUrl = redirectUrl.split('#')[0].split('?')[0];
+        if (!redirectUrl.endsWith('/')) {
+          redirectUrl += '/';
+        }
+        console.log("Magic Link Redirect bo:", redirectUrl);
         console.log("Pošiljam OTP na:", e);
         const { error } = await supabase.auth.signInWithOtp({
-          email: e, 
-          options: { emailRedirectTo: window.location.origin }
+          email: e,
+          options: { emailRedirectTo: redirectUrl }
         });
         
         if (error) {
