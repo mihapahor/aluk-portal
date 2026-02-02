@@ -337,6 +337,8 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .content-title-row .section-title {
   margin-top: 0;
   margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
   flex-shrink: 0;
 }
 .content-status {
