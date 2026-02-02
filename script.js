@@ -249,9 +249,9 @@ async function loadContent(path) {
   
   // Prikaži sekcijo "TEHNIČNA DOKUMENTACIJA" ko naložiš normalno vsebino
   const contentTitleEl = getElement("contentTitle");
-  const contentTitleDesc = contentTitleEl ? contentTitleEl.nextElementSibling : null;
+  const contentTitleDesc = getElement("contentTitleDesc");
   if (contentTitleEl) contentTitleEl.style.display = "";
-  if (contentTitleDesc && contentTitleDesc.tagName === "P") contentTitleDesc.style.display = "";
+  if (contentTitleDesc) contentTitleDesc.style.display = "";
   
   // Prikaži posodobitve (vedno, razen če je aktivno iskanje)
   if (!isSearchActive) {
@@ -734,9 +734,9 @@ if (searchInput) {
       
       // Prikaži nazaj sekcijo "TEHNIČNA DOKUMENTACIJA"
       const contentTitleEl = getElement("contentTitle");
-      const contentTitleDesc = contentTitleEl ? contentTitleEl.nextElementSibling : null;
+      const contentTitleDesc = getElement("contentTitleDesc");
       if (contentTitleEl) contentTitleEl.style.display = "";
-      if (contentTitleDesc && contentTitleDesc.tagName === "P") contentTitleDesc.style.display = "";
+      if (contentTitleDesc) contentTitleDesc.style.display = "";
       
       // Prikaži posodobitve, če so bile skrite
       if (updatesBanner) {
@@ -769,9 +769,9 @@ if (searchInput) {
         
         // Skrij sekcijo "TEHNIČNA DOKUMENTACIJA" ko iščeš
         const contentTitleEl = getElement("contentTitle");
-        const contentTitleDesc = contentTitleEl ? contentTitleEl.nextElementSibling : null;
+        const contentTitleDesc = getElement("contentTitleDesc");
         if (contentTitleEl) contentTitleEl.style.display = "none";
-        if (contentTitleDesc && contentTitleDesc.tagName === "P") contentTitleDesc.style.display = "none";
+        if (contentTitleDesc) contentTitleDesc.style.display = "none";
         
         // Prikaži loading indikator
         if (statusEl) {
