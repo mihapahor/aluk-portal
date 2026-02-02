@@ -797,13 +797,9 @@ if (searchInput) {
             a.opis.toLowerCase().includes(lowerVal)
         ).slice(0, 50);
         
-        // Ustvari container za rezultate v dveh stolpcih
+        // Ustvari container za rezultate (layout v style.css)
         const resultsWrapper = document.createElement("div");
         resultsWrapper.className = "search-results-grid";
-        resultsWrapper.style.display = "grid";
-        resultsWrapper.style.gridTemplateColumns = "1fr 1fr";
-        resultsWrapper.style.gap = "20px";
-        resultsWrapper.style.marginTop = "15px";
         
         const sifrantCol = document.createElement("div");
         const mapsCol = document.createElement("div");
@@ -895,9 +891,8 @@ if (searchInput) {
         if (allMatches.length > 0) resultsWrapper.appendChild(mapsCol);
         if (arts.length > 0) resultsWrapper.appendChild(sifrantCol);
         
-        // Če imamo samo en stolpec, spremeni grid na 1 stolpec
         if (arts.length === 0 || allMatches.length === 0) {
-            resultsWrapper.style.gridTemplateColumns = "1fr";
+            resultsWrapper.classList.add("search-results-single-col");
         }
         
         // Dodaj wrapper v resCont

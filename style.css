@@ -384,11 +384,16 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 
 .file-container.grid-view { 
   display: grid; 
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+  grid-template-columns: repeat(3, 1fr) !important;
   gap: 20px; 
 }
 
+@media (max-width: 1024px) {
+  .file-container.grid-view { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
 @media (max-width: 768px) { 
+  .file-container.grid-view { grid-template-columns: 1fr !important; } 
   .header-text { display: none; }
   .search-results-grid { grid-template-columns: 1fr !important; }
 }
@@ -409,7 +414,6 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   cursor: pointer;
   overflow: hidden;
   height: 100%;
-  aspect-ratio: 1 / 1;
   position: relative;
   padding: 0 !important;
 }
@@ -418,8 +422,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 
 .file-container.grid-view .item-preview {
   width: 100%;
-  height: 65%;
-  flex-shrink: 0;
+  height: 180px;
   background-color: #f3f4f6;
   display: flex;
   align-items: center;
@@ -815,6 +818,10 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   gap: 20px; 
   margin-top: 15px; 
   align-items: start;
+}
+
+.search-results-grid.search-results-single-col {
+  grid-template-columns: 1fr;
 }
 
 .search-results-grid > div {
@@ -1317,15 +1324,14 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   display: flex !important;
   flex-direction: column !important;
 }
-/* Zgornji del (ikona) v mapi – enako razmerje kot pri datotekah (65%) */
+/* Zgornji del (ikona) v mapi */
 .file-container.grid-view .item.folder-item .item-preview {
   width: 100% !important;
-  height: 65% !important;
-  flex-shrink: 0 !important;
   border: none !important;
   border-bottom: 1px solid rgba(0,0,0,0.05) !important;
   background-color: #fff !important;
   margin: 0 !important;
+  flex-grow: 1 !important;
 }
 /* Spodnji del (tekst) v mapi - RUMEN */
 .file-container.grid-view .item.folder-item .item-info {
