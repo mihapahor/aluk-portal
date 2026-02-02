@@ -376,6 +376,7 @@ function updateBreadcrumbs(path) {
 }
 
 // --- RENDER SEZNAMA ---
+// Enaka HTML struktura in razredi za korensko stran in vse podmape (en sam izris).
 async function renderItems(items, rId) {
   if (rId !== currentRenderId) return;
   
@@ -392,7 +393,9 @@ async function renderItems(items, rId) {
     return; 
   }
   statusEl.textContent = `${items.length} elementov`;
-  const cont = document.createElement("div"); cont.className = `file-container ${viewMode}-view`;
+  // Isti kontejner in razredi povsod (koren in vsi nivoji podmap)
+  const cont = document.createElement("div");
+  cont.className = `file-container ${viewMode}-view`;
   favorites = loadFavorites();
   const favs = [], norms = [];
   items.forEach(i => { const p = normalizePath(currentPath ? `${currentPath}/${i.name}` : i.name); (!i.metadata && favorites.includes(p)) ? favs.push(i) : norms.push(i); });
@@ -415,10 +418,11 @@ async function renderItems(items, rId) {
   }
 }
 
+// Enaka struktura in razredi za vsako kartico (koren in vse podmape) – brez dodatnih razredov glede na globino.
 async function createItemElement(item, cont) {
     const isFolder = !item.metadata; 
-    const div = document.createElement("div"); 
-    div.className = isFolder ? "item folder-item" : "item";
+    const div = document.createElement("div");
+    div.className = isFolder ? "item item-card folder-item" : "item item-card";
     const full = currentPath ? `${currentPath}/${item.name}` : item.name; 
     const clean = normalizePath(full);
     let badges = "";
