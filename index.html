@@ -129,14 +129,19 @@
         </div>
       </div>
 
-        <div id="updatesBanner" class="updates-banner">
-          <div class="updates-title">
-            <span>📢 Nedavne posodobitve v tej mapi</span>
-            <span id="lastUpdateDate" style="font-weight:400; font-size:13px; color:var(--text-secondary)"></span>
+        <div id="updatesBanner" class="updates-banner" style="display:none;">
+          <button type="button" class="updates-accordion-header" id="updatesAccordionHeader" aria-expanded="false">
+            <span class="updates-accordion-icon" aria-hidden="true">🔔</span>
+            <span class="updates-accordion-title">Zadnje posodobitve</span>
+            <span id="updatesBadge" class="updates-badge" style="display:none;"></span>
+            <span class="updates-accordion-chevron" aria-hidden="true">▼</span>
+          </button>
+          <div class="updates-accordion-body" id="updatesAccordionBody">
+            <span id="lastUpdateDate" style="font-weight:400; font-size:13px; color:var(--text-secondary); display:block; margin-bottom:8px;"></span>
+            <p style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">Datoteke, ki so bile dodane ali posodobljene v zadnjih 30 dneh. Kliknite na datoteko, da jo odprete.</p>
+            <ul id="updatesList" class="updates-list"></ul>
+            <button id="showMoreUpdates" class="show-more-btn" style="display:none;">▼ Pokaži več posodobitev</button>
           </div>
-          <p style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">Datoteke, ki so bile dodane ali posodobljene v zadnjih 30 dneh. Kliknite na datoteko, da jo odprete.</p>
-          <ul id="updatesList" class="updates-list"></ul>
-          <button id="showMoreUpdates" class="show-more-btn" style="display:none;">▼ Pokaži več posodobitev</button>
         </div>
 
       <div id="status" style="font-size:13px; color:var(--text-secondary); margin-bottom:10px;"></div>

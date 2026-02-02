@@ -543,14 +543,86 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   background: #f0f9ff; 
   border: 1px solid #bae6fd; 
   border-left: 4px solid #0284c7; 
-  padding: 15px; 
   border-radius: 8px; 
   margin-top: 20px;
   margin-bottom: 30px; 
   font-size: 14px; 
-  display: none; 
+  overflow: hidden;
 }
-.updates-title { font-weight: 700; color: #075985; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+.updates-accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  max-height: 50px;
+  padding: 0 15px;
+  background: #e8f4fc;
+  border: none;
+  border-bottom: 1px solid #bae6fd;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #075985;
+  text-align: left;
+  transition: background 0.2s;
+}
+.updates-accordion-header:hover {
+  background: #d6eef9;
+}
+.updates-accordion-header:focus-visible {
+  outline: 2px solid #0284c7;
+  outline-offset: 2px;
+}
+.updates-accordion-icon { font-size: 18px; flex-shrink: 0; }
+.updates-accordion-title { flex-grow: 1; }
+.updates-accordion-chevron {
+  flex-shrink: 0;
+  font-size: 12px;
+  transition: transform 0.25s ease;
+  color: var(--text-secondary);
+}
+.updates-banner.is-open .updates-accordion-chevron {
+  transform: rotate(-180deg);
+}
+.updates-banner.is-open .updates-accordion-header {
+  border-bottom-color: #bae6fd;
+}
+.updates-badge {
+  background: #0284c7;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.updates-accordion-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+  background: #f0f9ff;
+}
+.updates-banner.is-open .updates-accordion-body {
+  max-height: 600px;
+  transition: max-height 0.35s ease-in;
+}
+.updates-accordion-body .updates-list,
+.updates-accordion-body .show-more-btn,
+.updates-accordion-body > p {
+  padding-left: 15px;
+  padding-right: 15px;
+}
+.updates-accordion-body {
+  padding: 0 0 15px 0;
+}
+.updates-accordion-body #lastUpdateDate {
+  padding: 12px 15px 0;
+}
 .updates-list { 
   margin: 0; 
   padding-left: 20px; 

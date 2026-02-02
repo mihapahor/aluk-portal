@@ -54,6 +54,9 @@ const searchInput = getElement("search");
 const breadcrumbsEl = getElement("breadcrumbs");
 const msgEl = getElement("authMsg");
 const updatesBanner = getElement("updatesBanner");
+const updatesAccordionHeader = getElement("updatesAccordionHeader");
+const updatesAccordionBody = getElement("updatesAccordionBody");
+const updatesBadge = getElement("updatesBadge");
 const updatesList = getElement("updatesList");
 const lastUpdateDateEl = getElement("lastUpdateDate");
 const showMoreUpdatesBtn = getElement("showMoreUpdates");
@@ -265,13 +268,18 @@ async function updateBannerAsync(path) {
     updatesList.innerHTML = ""; 
     showMoreUpdatesBtn.style.display = "none"; 
     updatesBanner.style.display = "none";
-    updatesBanner.classList.remove("is-expanded"); // Reset expanded state
+    updatesBanner.classList.remove("is-expanded");
+    updatesBanner.classList.remove("is-open"); // Accordion privzeto zaprt
     
     const newFiles = await getNewFilesRecursive(path, 0);
     if (newFiles.length === 0) return;
     
     newFiles.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(newFiles[0].created_at)}`;
+    if (updatesBadge) {
+      updatesBadge.textContent = newFiles.length;
+      updatesBadge.style.display = newFiles.length > 0 ? "inline-flex" : "none";
+    }
     
     // Ustvari vse elemente v DocumentFragment za optimizacijo
     const fragment = document.createDocumentFragment();
@@ -1210,6 +1218,13 @@ setupFormHandler();
 
 if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid')); 
 if (btnList) btnList.addEventListener('click', () => setViewMode('list'));
+
+if (updatesAccordionHeader && updatesBanner) {
+  updatesAccordionHeader.addEventListener("click", () => {
+    const isOpen = updatesBanner.classList.toggle("is-open");
+    updatesAccordionHeader.setAttribute("aria-expanded", isOpen);
+  });
+}
 
 // --- REKURZIVNO ISKANJE PO VSEH MAPAH (Za iskanje) - OPTIMIZIRANO ---
 async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 8, maxResults = 100) {
