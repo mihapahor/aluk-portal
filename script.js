@@ -1204,18 +1204,11 @@ function setupFormHandler() {
 // Pokliči takoj, ker je script type="module" naložen na koncu body
 setupFormHandler();
 
-// Prikaži datum in uro zgoraj desno v headerju
+// Fiksni časovni žig zadnje posodobitve (Build Date). Ob vsaki spremembi kode ročno posodobi na trenutni datum in uro.
+const BUILD_DATE_STRING = "29.1.2026 12:00";
 (function setBuildDate() {
   const el = getElement("buildDate");
-  if (el) {
-    const now = new Date();
-    const d = now.getDate();
-    const m = now.getMonth() + 1;
-    const y = now.getFullYear();
-    const h = now.getHours();
-    const min = now.getMinutes();
-    el.textContent = `${d}.${m}.${y} ${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
-  }
+  if (el) el.textContent = BUILD_DATE_STRING;
 })();
 
 if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid')); 
