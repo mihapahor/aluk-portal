@@ -393,7 +393,6 @@ async function renderItems(items, rId) {
     return; 
   }
   statusEl.textContent = `${items.length} elementov`;
-  // Isti kontejner in razredi povsod (koren in vsi nivoji podmap) – grid-view takoj ob ustvarjanju
   const cont = document.createElement("div");
   cont.className = viewMode === "list" ? "file-container list-view" : "file-container grid-view";
   favorites = loadFavorites();
@@ -1205,7 +1204,7 @@ function setupFormHandler() {
 setupFormHandler();
 
 // Fiksni časovni žig zadnje posodobitve (Build Date) – posodobi se ob vsaki spremembi kode na trenutni datum in uro.
-const BUILD_DATE_STRING = "2.2.2026 21:12";
+const BUILD_DATE_STRING = "2.2.2026 21:17";
 (function setBuildDate() {
   const el = getElement("buildDate");
   if (el) el.textContent = BUILD_DATE_STRING;

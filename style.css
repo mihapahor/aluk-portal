@@ -382,19 +382,25 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 }
 
 .file-container {
+  width: 100%;
+  box-sizing: border-box;
   transition: opacity 0.2s ease-out;
 }
 
+/* Layout izključno s CSS @media – brez JS, brez skakanja */
+/* Desktop (nad 1200px): 3 stolpci */
 .file-container.grid-view { 
   display: grid; 
   grid-template-columns: repeat(3, 1fr) !important;
   gap: 20px; 
 }
 
-@media (max-width: 1024px) {
+/* Laptop/Tablet (768px do 1200px): 2 stolpca */
+@media (max-width: 1200px) {
   .file-container.grid-view { grid-template-columns: repeat(2, 1fr) !important; }
 }
 
+/* Mobile (pod 768px): 1 stolpec */
 @media (max-width: 768px) { 
   .file-container.grid-view { grid-template-columns: 1fr !important; } 
   .header-text { display: none; }
