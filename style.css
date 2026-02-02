@@ -374,6 +374,14 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   margin-top: 0; 
 }
 
+#mainContent {
+  min-height: max(80vh, 600px);
+}
+
+.file-container {
+  transition: opacity 0.2s ease-out;
+}
+
 .file-container.grid-view { 
   display: grid; 
   grid-template-columns: repeat(3, 1fr); 

@@ -405,7 +405,14 @@ async function renderItems(items, rId) {
      return a.name.localeCompare(b.name);
   });
   for (const item of sorted) { if (rId !== currentRenderId) return; await createItemElement(item, cont); }
-  if (rId === currentRenderId) { mainContent.innerHTML = ""; mainContent.appendChild(cont); }
+  if (rId === currentRenderId) {
+    mainContent.innerHTML = "";
+    cont.style.opacity = "0";
+    mainContent.appendChild(cont);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { cont.style.opacity = "1"; });
+    });
+  }
 }
 
 async function createItemElement(item, cont) {
