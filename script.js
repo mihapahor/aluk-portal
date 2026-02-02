@@ -393,9 +393,9 @@ async function renderItems(items, rId) {
     return; 
   }
   statusEl.textContent = `${items.length} elementov`;
-  // Isti kontejner in razredi povsod (koren in vsi nivoji podmap)
+  // Isti kontejner in razredi povsod (koren in vsi nivoji podmap) – grid-view takoj ob ustvarjanju
   const cont = document.createElement("div");
-  cont.className = `file-container ${viewMode}-view`;
+  cont.className = viewMode === "list" ? "file-container list-view" : "file-container grid-view";
   favorites = loadFavorites();
   const favs = [], norms = [];
   items.forEach(i => { const p = normalizePath(currentPath ? `${currentPath}/${i.name}` : i.name); (!i.metadata && favorites.includes(p)) ? favs.push(i) : norms.push(i); });
@@ -410,11 +410,7 @@ async function renderItems(items, rId) {
   for (const item of sorted) { if (rId !== currentRenderId) return; await createItemElement(item, cont); }
   if (rId === currentRenderId) {
     mainContent.innerHTML = "";
-    cont.style.opacity = "0";
     mainContent.appendChild(cont);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => { cont.style.opacity = "1"; });
-    });
   }
 }
 
