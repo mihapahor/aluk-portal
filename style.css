@@ -438,6 +438,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .file-container.grid-view .item-preview {
   width: 100%;
   height: 180px;
+  flex-shrink: 0;
   background-color: #f3f4f6;
   display: flex;
   align-items: center;
@@ -445,6 +446,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   border-bottom: 1px solid var(--border);
   position: relative;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .file-container.grid-view .item-info {
@@ -469,17 +471,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   margin-bottom: 0 !important;
 }
 
-/* Rumeno ozadje za spodnji del map */
-.file-container.grid-view .folder-item .item-info {
-  background-color: #fffdf0;
-  border-top: 1px solid rgba(0,0,0,0.05);
-  border-bottom-left-radius: 11px;
-  border-bottom-right-radius: 11px;
-}
-
-.file-container.grid-view .folder-item:hover .item-info {
-  background-color: #fef9e7;
-}
+/* Rumeno ozadje za spodnji del map – definirano spodaj v .item.folder-item pravilih */
 
 .file-container.grid-view .big-icon { font-size: 64px; }
 .icon-img { width: 64px; height: 64px; object-fit: contain; }
@@ -1332,41 +1324,23 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   }
 }
 
-/* Resetiranje odmikov SAMO za mape, da gre barva do roba */
-.file-container.grid-view .item.folder-item {
-  padding: 0 !important;
-  border: 1px solid #e5e7eb !important;
-  overflow: hidden !important;
-  display: flex !important;
-  flex-direction: column !important;
-}
-/* Zgornji del (ikona) v mapi – enaka višina kot pri datotekah (180px) */
+/* =====================================================
+   MAPE (folder-item) - samo razlike v barvah, struktura je enaka kot datoteke
+   ===================================================== */
+/* Mape: bela barva predogleda namesto sive */
 .file-container.grid-view .item.folder-item .item-preview {
-  width: 100% !important;
-  height: 180px !important;
-  flex-shrink: 0 !important;
-  border: none !important;
-  border-bottom: 1px solid rgba(0,0,0,0.05) !important;
-  background-color: #fff !important;
-  margin: 0 !important;
+  background-color: #fff;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
 }
-/* Spodnji del (tekst) v mapi - RUMEN */
+/* Mape: rumeno ozadje za info del */
 .file-container.grid-view .item.folder-item .item-info {
-  background-color: #fffbeb !important;
-  width: 100% !important;
-  padding: 15px !important;
-  margin: 0 !important;
-  box-sizing: border-box !important;
-  border-top: 1px solid rgba(0,0,0,0.03) !important;
-  border-bottom-left-radius: 11px !important;
-  border-bottom-right-radius: 11px !important;
+  background-color: #fffbeb;
+  border-top: 1px solid rgba(0,0,0,0.03);
 }
-/* Hover efekt za mapo */
+/* Mape: hover efekt */
 .file-container.grid-view .item.folder-item:hover {
-  border-color: #fbbf24 !important;
-  transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+  border-color: #fbbf24;
 }
 .file-container.grid-view .item.folder-item:hover .item-info {
-  background-color: #fef3c7 !important;
+  background-color: #fef3c7;
 }
