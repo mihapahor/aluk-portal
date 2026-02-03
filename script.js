@@ -1204,7 +1204,7 @@ function setupFormHandler() {
 setupFormHandler();
 
 // Fiksni časovni žig zadnje posodobitve (Build Date) – posodobi se ob vsaki spremembi kode na trenutni datum in uro.
-const BUILD_DATE_STRING = "3.2.2026 07:05";
+const BUILD_DATE_STRING = "3.2.2026 07:09";
 (function setBuildDate() {
   const el = getElement("buildDate");
   if (el) el.textContent = BUILD_DATE_STRING;

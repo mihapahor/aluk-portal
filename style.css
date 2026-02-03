@@ -384,7 +384,6 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .file-container {
   width: 100%;
   box-sizing: border-box;
-  transition: opacity 0.2s ease-out;
 }
 
 /* Layout izključno s CSS @media – brez JS, brez skakanja */
@@ -1336,14 +1335,15 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   display: flex !important;
   flex-direction: column !important;
 }
-/* Zgornji del (ikona) v mapi */
+/* Zgornji del (ikona) v mapi – enaka višina kot pri datotekah (180px) */
 .file-container.grid-view .item.folder-item .item-preview {
   width: 100% !important;
+  height: 180px !important;
+  flex-shrink: 0 !important;
   border: none !important;
   border-bottom: 1px solid rgba(0,0,0,0.05) !important;
   background-color: #fff !important;
   margin: 0 !important;
-  flex-grow: 1 !important;
 }
 /* Spodnji del (tekst) v mapi - RUMEN */
 .file-container.grid-view .item.folder-item .item-info {
