@@ -151,6 +151,24 @@ function getFolderFilePriority(name) {
 
 function formatDate(iso) { if (!iso) return ""; return new Date(iso).toLocaleDateString('sl-SI'); }
 function getBaseName(fn) { const i = fn.lastIndexOf('.'); return i === -1 ? fn : fn.substring(0, i); }
+
+const nameTranslations = {
+  "Catalogo Tecnico": "Tehnični katalog",
+  "Maniglie": "Kljuke",
+  "Manuale di lavorazioni e assemblaggio": "Delavniški katalog"
+};
+
+function formatDisplayName(name) {
+  if (!name || typeof name !== "string") return name;
+  let s = name.replace(/_/g, " ");
+  for (const [from, to] of Object.entries(nameTranslations)) {
+    const re = new RegExp(from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    s = s.replace(re, to);
+  }
+  if (s.toLowerCase().endsWith(".pdf")) s = s.slice(0, -4);
+  return s;
+}
+
 function getIconForName(name) { const l = name.toLowerCase(); for (const [k, e] of Object.entries(folderIcons)) if (l.includes(k)) return e; return "📂"; }
 function isRelevantFile(fn) { if (fn.startsWith('.')) return false; return relevantExtensions.includes(fn.split('.').pop().toLowerCase()); }
 
@@ -168,6 +186,7 @@ function showLogin() {
 }
 
 async function showApp(email) {
+  window.scrollTo(0, 0);
   if (authForm) authForm.style.display = "none"; 
   if (appCard) {
     appCard.style.display = "flex"; 
@@ -213,7 +232,8 @@ document.getElementById("logout").addEventListener("click", async () => {
 });
 
 // --- NAVIGACIJA ---
-window.navigateTo = function(path) { 
+window.navigateTo = function(path) {
+  window.scrollTo(0, 0);
   currentPath = path; 
   searchInput.value = ""; 
   isSearchActive = false; // Deaktiviraj iskanje ob navigaciji
@@ -468,7 +488,7 @@ async function createItemElement(item, cont) {
     div.innerHTML = (isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>` : '') + 
                     badges + 
                     `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}">${icon}</div>` +
-                    `<div class="item-info"><strong>${item.name}</strong><small>${fileSize}</small>${dateInfo}</div>`;
+                    `<div class="item-info"><strong>${formatDisplayName(item.name)}</strong><small>${fileSize}</small>${dateInfo}</div>`;
     
     div.onclick = () => isFolder ? navigateTo(full) : (isLinkFile ? handleUrlFile(full) : openPdfViewer(item.name, full));
     cont.appendChild(div);
@@ -1204,7 +1224,7 @@ function setupFormHandler() {
 setupFormHandler();
 
 // Fiksni časovni žig zadnje posodobitve (Build Date) – posodobi se ob vsaki spremembi kode na trenutni datum in uro.
-const BUILD_DATE_STRING = "3.2.2026 10:30";
+const BUILD_DATE_STRING = "4.2.2026 09:30";
 (function setBuildDate() {
   const el = getElement("buildDate");
   if (el) el.textContent = BUILD_DATE_STRING;

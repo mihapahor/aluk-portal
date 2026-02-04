@@ -187,6 +187,14 @@ body {
 @media (max-width: 480px) {
   .card { padding: 20px; border-radius: 10px; }
 }
+
+.sticky-nav-bar {
+  position: sticky;
+  top: 60px;
+  background: #ffffff;
+  border-bottom: 1px solid #eee;
+}
+
 .input-group { margin-bottom: 20px; }
 label { 
   display: block; 
