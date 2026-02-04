@@ -1162,12 +1162,9 @@ function setupFormHandler() {
       btn.textContent = "Pošiljam...";
       if (msgEl) { msgEl.textContent = ""; msgEl.className = ""; }
       try {
-        let redirectUrl = window.location.href;
-        redirectUrl = redirectUrl.split("#")[0].split("?")[0];
-        if (!redirectUrl.endsWith("/")) redirectUrl += "/";
         const { error } = await supabase.auth.signInWithOtp({
           email: e,
-          options: { emailRedirectTo: redirectUrl }
+          options: { emailRedirectTo: window.location.origin }
         });
         if (error) {
           const isSignupsNotAllowed = (error.message || "").toLowerCase().includes("signups not allowed");
