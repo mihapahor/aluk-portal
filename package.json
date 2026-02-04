@@ -1,0 +1,13 @@
+{
+  "name": "aluk-portal",
+  "version": "1.0.0",
+  "description": "AluK Portal - Tehnična dokumentacija in katalogi",
+  "private": true,
+  "scripts": {
+    "dev": "serve",
+    "start": "serve"
+  },
+  "devDependencies": {
+    "serve": "^14.2.4"
+  }
+}
