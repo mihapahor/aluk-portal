@@ -1,4 +1,8 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.94.1";
+
+console.log("SCRIPT LOADED SUCCESSFULLY");
+window.onerror = function (msg, url, line) { console.log("ERROR: " + msg + " at " + line); };
+console.log("--- DEBUG START ---");
 
 const SUPABASE_URL = "https://ugwchsznxsuxbxdvigsu.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnd2Noc3pueHN1eGJ4ZHZpZ3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTY0NzEsImV4cCI6MjA4NDY5MjQ3MX0.iFzB--KryoBedjIJnybL55-xfQFIBxWnKq9RqwxuyK4";
@@ -1139,13 +1143,15 @@ function setupFormHandler() {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       event.stopPropagation();
+      console.log("Form handler triggered");
+      const emailInput = document.getElementById("loginEmail");
+      console.log("Login button actually clicked!", emailInput ? emailInput.value : "(no email input)");
       const requestSection = document.getElementById("requestSection");
       const isRequestVisible = requestSection && requestSection.style.display !== "none";
       if (isRequestVisible) {
         doRequestAccess();
         return false;
       }
-      const emailInput = document.getElementById("loginEmail");
       const msgEl = document.getElementById("authMsg");
       if (!emailInput) {
         if (msgEl) { msgEl.textContent = "Napaka: Polje za e-pošto ni na voljo."; msgEl.className = "error-msg"; }
@@ -1162,12 +1168,9 @@ function setupFormHandler() {
       btn.textContent = "Pošiljam...";
       if (msgEl) { msgEl.textContent = ""; msgEl.className = ""; }
       try {
-        let redirectUrl = window.location.href;
-        redirectUrl = redirectUrl.split("#")[0].split("?")[0];
-        if (!redirectUrl.endsWith("/")) redirectUrl += "/";
         const { error } = await supabase.auth.signInWithOtp({
           email: e,
-          options: { emailRedirectTo: redirectUrl }
+          options: { emailRedirectTo: window.location.origin }
         });
         if (error) {
           const isSignupsNotAllowed = (error.message || "").toLowerCase().includes("signups not allowed");
@@ -1389,4 +1392,10 @@ document.addEventListener('visibilitychange', () => {
       if (s.user) showApp(s.user.email);
     }
   });
+})();
+
+// Ensure any loading overlay is hidden so the page is interactive
+(function hideLoader() {
+  const loader = document.getElementById("loader");
+  if (loader) loader.style.display = "none";
 })();
