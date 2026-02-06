@@ -191,7 +191,7 @@ function formatDisplayName(name) {
     const re = new RegExp(from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
     s = s.replace(re, to);
   }
-  if (s.toLowerCase().endsWith(".pdf")) s = s.slice(0, -4);
+  /* Končnice (npr. .pdf) ostanejo vidne */
   return s;
 }
 
@@ -488,8 +488,10 @@ async function createItemElement(item, cont) {
     const isLinkFile = !isFolder && isUrlLinkFile(item.name);
     let icon = isFolder ? `<div class="big-icon">${getIconForName(base)}</div>` : `<div class="big-icon">${isLinkFile ? '🔗' : (fileIcons[ext]||"📄")}</div>`;
     if (!isFolder && !isLinkFile && (item.name.toLowerCase().endsWith('dwg') || item.name.toLowerCase().endsWith('dxf'))) icon = `<img src="dwg-file.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📐</div>'">`;
+    if (!isFolder && !isLinkFile && (item.name.toLowerCase().endsWith('xlsx') || item.name.toLowerCase().endsWith('xls'))) icon = `<img src="excel_icon.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📊</div>'">`;
+    if (!isFolder && !isLinkFile && item.name.toLowerCase().endsWith('pdf')) icon = `<img src="256px-PDF_file_icon.svg.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📕</div>'">`;
     
-    // Cache za slike - preveri, če že imamo URL
+    // Cache za slike – če PDF ima predogled (npr. jpg v mapi), ga prikaži; sicer ostane ikona zgoraj
     if (imageMap[base]) {
       const imagePath = currentPath ? `${currentPath}/${imageMap[base].name}` : imageMap[base].name;
       const cacheKey = imagePath;
@@ -905,6 +907,8 @@ if (searchInput) {
             if (!isFolder && isLinkFile) displayIcon = "🔗";
             else if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
             if (!isFolder && !isLinkFile && (ext === 'dwg' || ext === 'dxf')) displayIcon = "📐";
+            if (!isFolder && !isLinkFile && (ext === 'xlsx' || ext === 'xls')) displayIcon = `<img src="excel_icon.png" class="icon-img" onerror="this.outerHTML='<span class=\\'big-icon\\'>📊</span>'">`;
+            if (!isFolder && !isLinkFile && ext === 'pdf') displayIcon = `<img src="256px-PDF_file_icon.svg.png" class="icon-img" onerror="this.outerHTML='<span class=\\'big-icon\\'>📕</span>'">`;
             div.innerHTML = `
                 <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}">${displayIcon}</div>
                 <div class="item-info">
