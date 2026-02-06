@@ -157,6 +157,19 @@ function getFolderFilePriority(name) {
 function formatDate(iso) { if (!iso) return ""; return new Date(iso).toLocaleDateString('sl-SI'); }
 function getBaseName(fn) { const i = fn.lastIndexOf('.'); return i === -1 ? fn : fn.substring(0, i); }
 
+/** Sklanjanje besede "element" v slovenščini glede na število (1 element, 2 elementa, 3/4 elementi, 0/5+ elementov). */
+function elementWord(n) {
+  const num = Math.abs(Number(n));
+  if (num % 100 >= 11 && num % 100 <= 14) return "elementov";
+  switch (num % 10) {
+    case 1: return "element";
+    case 2: return "elementa";
+    case 3:
+    case 4: return "elementi";
+    default: return "elementov";
+  }
+}
+
 const nameTranslations = {
   "Catalogo Tecnico": "Tehnični katalog",
   "Maniglie": "Kljuke",
@@ -425,7 +438,7 @@ async function renderItems(items, rId) {
     statusEl.textContent = "Mapa je prazna."; 
     return; 
   }
-  statusEl.textContent = `${items.length} elementov`;
+  statusEl.textContent = `${items.length} ${elementWord(items.length)}`;
   const cont = document.createElement("div");
   cont.className = viewMode === "list" ? "file-container list-view" : "file-container grid-view";
   favorites = loadFavorites();
