@@ -111,21 +111,6 @@ body {
   }
 }
 
-#buildDate { 
-  font-family: monospace; 
-  font-size: 11px; 
-  font-weight: 400;
-  letter-spacing: 0.5px; 
-  color: #888;
-  opacity: 0.9;
-}
-
-@media (max-width: 480px) {
-  #buildDate { 
-    font-size: 10px; 
-  }
-}
-
 .logo { 
   height: 45px; 
   width: auto; 
@@ -188,34 +173,141 @@ body {
   .card { padding: 20px; border-radius: 10px; }
 }
 
+/* --- Sticky nav bar (2-row file-explorer style) --- */
 .sticky-nav-bar {
-  height: 68px;
-  display: flex;
-  align-items: center;
-  background: var(--bg-secondary);
+  position: sticky;
+  top: 90px;
+  z-index: 100;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   border-bottom: 1px solid var(--border);
   border-radius: 15px 15px 0 0;
   margin: 0 -40px 0 -40px;
-  padding: 0 40px;
+  margin-bottom: 20px;
+  overflow: hidden;
 }
 
-.sticky-nav-bar .breadcrumbs {
+.sticky-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 40px;
+  min-height: 48px;
+}
+
+/* Back button: compact, never full width – reset global button styles */
+.sticky-nav-back-btn {
+  width: auto !important;
+  min-width: auto !important;
+  max-width: none !important;
+  padding: 8px 16px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.sticky-nav-back-btn:hover {
+  background: var(--border);
+  border-color: var(--text-tertiary);
+}
+
+.sticky-nav-row .breadcrumbs {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+/* Scrollable toolbar (search + view toggles) – not sticky */
+.toolbar.toolbar-scrollable {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.toolbar-scrollable .search-box {
+  flex: 1;
+  min-width: 200px;
+}
+
+.toolbar-scrollable .view-toggles {
+  flex-shrink: 0;
+}
+
+.search-input-wrap {
+  position: relative;
+}
+
+.search-input-wrap input {
   margin-bottom: 0;
+  padding-right: 40px;
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 18px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.clear-search-btn:hover {
+  color: var(--text-primary);
 }
 
 @media (max-width: 768px) {
   .sticky-nav-bar {
+    top: 80px;
     border-radius: 12px 12px 0 0;
-    margin: -1px -30px 0 -30px;
-    padding: 0 30px;
+    margin: 0 -30px 0 -30px;
+  }
+  .sticky-nav-row {
+    padding-left: 30px;
+    padding-right: 30px;
   }
 }
 
 @media (max-width: 480px) {
   .sticky-nav-bar {
+    top: 70px;
     border-radius: 10px 10px 0 0;
-    margin: -1px -20px 0 -20px;
-    padding: 0 20px;
+    margin: 0 -20px 0 -20px;
+  }
+  .sticky-nav-row {
+    padding-left: 20px;
+    padding-right: 20px;
+    min-height: 44px;
+  }
+  .sticky-nav-back-btn {
+    padding: 6px 12px !important;
+    font-size: 13px !important;
+  }
+  .sticky-nav-row .breadcrumbs {
+    font-size: 12px;
+  }
+  .toolbar-scrollable .search-box {
+    min-width: 100%;
   }
 }
 
@@ -279,18 +371,6 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
     padding: 5px 10px; 
     font-size: 12px; 
   }
-}
-
-.toolbar { 
-  display: flex; 
-  gap: 10px; 
-  margin-bottom: 20px; 
-  flex-wrap: wrap; 
-  align-items: flex-start; 
-}
-
-@media (max-width: 480px) {
-  .toolbar { gap: 8px; margin-bottom: 15px; }
 }
 
 .search-box { 
@@ -1312,38 +1392,6 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   box-sizing: border-box;
   padding-top: 0;
 }
-
-/* Sticky toolbar */
-.toolbar {
-  position: sticky;
-  top: 0;
-  background: var(--card-bg);
-  z-index: 100;
-  padding: 15px 0;
-  margin: 0 -40px;
-  padding-left: 40px;
-  padding-right: 40px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 20px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-
-@media (max-width: 768px) {
-  .toolbar {
-    margin: 0 -30px;
-    padding-left: 30px;
-    padding-right: 30px;
-  }
-}
-
-@media (max-width: 480px) {
-  .toolbar {
-    margin: 0 -20px;
-    padding-left: 20px;
-    padding-right: 20px;
-  }
-}
-
 
 /* Responsive - prilagodi sidebar na manjših zaslonih */
 @media (max-width: 1200px) {

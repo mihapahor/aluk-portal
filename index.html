@@ -26,7 +26,6 @@
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:15px;">
-        <div id="buildDate" style="color:var(--text-secondary); font-size:12px; font-weight:400; font-family:monospace;">26.1.2026</div>
         <button id="logout" class="ghost" style="display:none;">Odjava</button>
       </div>
     </div>
@@ -106,7 +105,22 @@
       <main class="main-content">
         <div class="card">
         <div class="sticky-nav-bar">
-          <div class="breadcrumbs" id="breadcrumbs"></div>
+          <div class="sticky-nav-row">
+            <button type="button" id="backBtn" class="sticky-nav-back-btn" style="display:none;" title="Nazaj v nadrejeno mapo">← Nazaj</button>
+            <div class="breadcrumbs" id="breadcrumbs"></div>
+          </div>
+        </div>
+        <div class="toolbar toolbar-scrollable">
+          <div class="search-box">
+            <div class="search-input-wrap">
+              <input id="search" type="text" placeholder="🔍 Išči po vseh mapah in šifrantu artiklov..." />
+              <button id="clearSearch" type="button" class="clear-search-btn" style="display:none;" title="Izbriši iskanje">✕</button>
+            </div>
+          </div>
+          <div class="view-toggles">
+            <button class="view-btn active" id="btnGrid" title="Mrežni prikaz">⊞</button>
+            <button class="view-btn" id="btnList" title="Seznamski prikaz">☰</button>
+          </div>
         </div>
         <div class="search-section">
           <h3 style="font-size:16px; font-weight:600; color:var(--heading-color); margin-bottom:12px; margin-top:0;">🔍 Iskanje</h3>
@@ -115,19 +129,6 @@
             <strong style="color:var(--text-primary);">Iskanje katalogov:</strong> Vpišite ime kataloga ali datoteke in dobili boste vse kataloge, ki se ujemajo in so na voljo na tem portalu.
           </p>
         </div>
-
-        <div class="toolbar">
-        <div class="search-box">
-          <div style="position:relative;">
-            <input id="search" type="text" placeholder="🔍 Išči po vseh mapah in šifrantu artiklov..." style="margin-bottom:0; padding-right:40px;" />
-            <button id="clearSearch" type="button" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-secondary); font-size:18px; width:32px; height:32px; display:none; align-items:center; justify-content:center; border-radius:4px; transition:color 0.2s;" title="Izbriši iskanje" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'">✕</button>
-          </div>
-        </div>
-        <div class="view-toggles">
-          <button class="view-btn active" id="btnGrid" title="Mrežni prikaz">⊞</button>
-          <button class="view-btn" id="btnList" title="Seznamski prikaz">☰</button>
-        </div>
-      </div>
 
         <div id="updatesBanner" class="updates-banner" style="display:none;">
           <button type="button" class="updates-accordion-header" id="updatesAccordionHeader" aria-expanded="false">

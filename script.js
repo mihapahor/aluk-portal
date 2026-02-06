@@ -57,6 +57,7 @@ const skeletonLoader = getElement("skeletonLoader");
 const statusEl = getElement("status");
 const searchInput = getElement("search");
 const breadcrumbsEl = getElement("breadcrumbs");
+const backBtn = getElement("backBtn");
 const msgEl = getElement("authMsg");
 const updatesBanner = getElement("updatesBanner");
 const updatesAccordionHeader = getElement("updatesAccordionHeader");
@@ -415,10 +416,11 @@ async function processDataAndRender(data, rId) {
 }
 
 function updateBreadcrumbs(path) {
-  const p = path ? path.split('/') : [];
+  const p = path ? path.split('/').filter(Boolean) : [];
   let h = `<span class="breadcrumb-item" onclick="navigateTo('')">Domov</span>`, b = "";
   p.forEach((pt, i) => { b += (i > 0 ? "/" : "") + pt; const label = formatDisplayName(decodeURIComponent(pt)); h += ` <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${b}')">${escapeHtml(label)}</span>`; });
   breadcrumbsEl.innerHTML = h;
+  if (backBtn) backBtn.style.display = p.length > 0 ? "inline-flex" : "none";
 }
 
 // --- RENDER SEZNAMA ---
@@ -1252,15 +1254,14 @@ function setupFormHandler() {
 // Pokliči takoj, ker je script type="module" naložen na koncu body
 setupFormHandler();
 
-// Fiksni časovni žig zadnje posodobitve (Build Date) – posodobi se ob vsaki spremembi kode na trenutni datum in uro.
-const BUILD_DATE_STRING = "4.2.2026 09:30";
-(function setBuildDate() {
-  const el = getElement("buildDate");
-  if (el) el.textContent = BUILD_DATE_STRING;
-})();
-
 if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid')); 
 if (btnList) btnList.addEventListener('click', () => setViewMode('list'));
+if (backBtn) backBtn.addEventListener('click', () => {
+  const parts = currentPath.split('/').filter(Boolean);
+  if (parts.length === 0) return;
+  const parentPath = parts.slice(0, -1).join('/');
+  navigateTo(parentPath);
+});
 
 if (updatesAccordionHeader && updatesBanner) {
   updatesAccordionHeader.addEventListener("click", () => {
