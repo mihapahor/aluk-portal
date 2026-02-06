@@ -271,19 +271,45 @@ window.navigateTo = function(path) {
 function getPathFromUrl() { const h = window.location.hash; if (!h || h.length <= 1 || h.startsWith("#view=")) return ""; return decodeURIComponent(h.slice(1)); }
 window.addEventListener('popstate', () => { pdfModal.style.display = 'none'; pdfFrame.src = ""; const p = getPathFromUrl(); currentPath = p; loadContent(p); });
 
-// --- REKURZIVNO ISKANJE (Banner) ---
+// --- REKURZIVNO ISKANJE (Banner) – z vseh podmap ---
+// Listati po imenu z velikim limitom, da dobimo VSE mape in rekurziramo v vsako.
+// Za "zadnje posodobitve" uporabimo updated_at (če obstaja), sicer created_at.
+function getFileSortDate(f) {
+  const raw = f.updated_at || f.created_at;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
+}
 async function getNewFilesRecursive(path, depth = 0) {
-   if (depth > 2) return [];
+   if (depth > 4) return [];
    const d30 = new Date(); d30.setDate(d30.getDate() - 30);
-   const { data } = await supabase.storage.from('Catalogs').list(path, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } });
-   if (!data) return [];
+   let data;
+   try {
+     const res = await supabase.storage.from('Catalogs').list(path, { limit: 1000, sortBy: { column: 'name', order: 'asc' } });
+     data = res.data;
+   } catch (e) {
+     console.warn("getNewFilesRecursive list error:", path, e);
+     return [];
+   }
+   if (!data || !Array.isArray(data)) return [];
    let all = [];
    const files = data.filter(i => i.metadata);
-   all = [...all, ...files.filter(f => isRelevantFile(f.name) && new Date(f.created_at) > d30).map(f => ({...f, displayName: f.name, fullPath: path ? `${path}/${f.name}` : f.name}))];
+   for (const f of files) {
+     if (!isRelevantFile(f.name)) continue;
+     const sortDate = getFileSortDate(f);
+     if (!sortDate || sortDate <= d30) continue;
+     all.push({
+       ...f,
+       created_at: f.updated_at || f.created_at,
+       displayName: f.name,
+       fullPath: path ? `${path}/${f.name}` : f.name
+     });
+   }
    const folders = data.filter(i => !i.metadata && i.name !== ".emptyFolderPlaceholder");
    const sub = await Promise.all(folders.map(async f => {
-       const s = await getNewFilesRecursive(path ? `${path}/${f.name}` : f.name, depth + 1);
-       return s.map(sf => depth === 0 ? {...sf, displayName: `${f.name} / ${sf.name}`} : sf);
+       const subPath = path ? `${path}/${f.name}` : f.name;
+       const s = await getNewFilesRecursive(subPath, depth + 1);
+       return s.map(sf => depth === 0 ? {...sf, displayName: `${f.name} / ${sf.displayName || sf.name}`} : sf);
    }));
    sub.forEach(g => all = [...all, ...g]);
    return all;
@@ -1247,13 +1273,6 @@ function setupFormHandler() {
 
 // Pokliči takoj, ker je script type="module" naložen na koncu body
 setupFormHandler();
-
-// Fiksni časovni žig zadnje posodobitve (Build Date) – posodobi se ob vsaki spremembi kode na trenutni datum in uro.
-const BUILD_DATE_STRING = "4.2.2026 09:30";
-(function setBuildDate() {
-  const el = getElement("buildDate");
-  if (el) el.textContent = BUILD_DATE_STRING;
-})();
 
 if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid')); 
 if (btnList) btnList.addEventListener('click', () => setViewMode('list'));
