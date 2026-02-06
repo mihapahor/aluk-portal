@@ -17,8 +17,9 @@ const customSortOrder = [
 ];
 const relevantExtensions = ['pdf', 'xls', 'xlsx', 'csv', 'doc', 'docx', 'dwg', 'dxf', 'zip', 'rar', '7z'];
 const folderIcons = {
-  "tehničn": "🛠️", "katalog": "🛠️", "galerij": "📷", "foto": "📷", "referenc": "📷",
-  "certifikat": "🎖️", "izjav": "🎖️", "vgradni": "📐", "prerezi": "📐", "navodil": "ℹ️", "obdelav": "ℹ️"
+  "tehničn": "🛠️", "tehnicn": "🛠️", "katalog": "🛠️", "galerij": "📷", "foto": "📷", "referenc": "📷",
+  "certifikat": "🎖️", "izjav": "🎖️", "vgradni": "📐", "prerezi": "📐", "navodil": "ℹ️", "obdelav": "ℹ️",
+  "brosur": "ℹ️", "montaz": "🔧", "splosn": "📂", "pisarnisk": "📂", "dvizn": "🔧"
 };
 const fileIcons = {
   "pdf": "📕", "xls": "📊", "xlsx": "📊", "csv": "📊", "doc": "📝", "docx": "📝",
@@ -159,7 +160,15 @@ function getBaseName(fn) { const i = fn.lastIndexOf('.'); return i === -1 ? fn :
 const nameTranslations = {
   "Catalogo Tecnico": "Tehnični katalog",
   "Maniglie": "Kljuke",
-  "Manuale di lavorazioni e assemblaggio": "Delavniški katalog"
+  "Manuale di lavorazioni e assemblaggio": "Delavniški katalog",
+  "Tehnicni katalogi": "Tehnični katalogi",
+  "Tehnicni": "Tehnični",
+  "Brosure": "Brošure",
+  "Brosura": "Brošura",
+  "Montaza": "Montaža",
+  "Splosno": "Splošno",
+  "Dvizno": "Dvižno",
+  "Pisarniski": "Pisarniški"
 };
 
 function formatDisplayName(name) {
@@ -395,7 +404,7 @@ async function processDataAndRender(data, rId) {
 function updateBreadcrumbs(path) {
   const p = path ? path.split('/') : [];
   let h = `<span class="breadcrumb-item" onclick="navigateTo('')">Domov</span>`, b = "";
-  p.forEach((pt, i) => { b += (i > 0 ? "/" : "") + pt; h += ` <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${b}')">${decodeURIComponent(pt)}</span>`; });
+  p.forEach((pt, i) => { b += (i > 0 ? "/" : "") + pt; const label = formatDisplayName(decodeURIComponent(pt)); h += ` <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${b}')">${escapeHtml(label)}</span>`; });
   breadcrumbsEl.innerHTML = h;
 }
 
