@@ -845,6 +845,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 }
 
 .search-section { 
+  margin-top: 20px;
   margin-bottom: 20px; 
 }
 
