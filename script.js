@@ -1,9 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.94.1";
 
-console.log("SCRIPT LOADED SUCCESSFULLY");
-window.onerror = function (msg, url, line) { console.log("ERROR: " + msg + " at " + line); };
-console.log("--- DEBUG START ---");
-
 const SUPABASE_URL = "https://ugwchsznxsuxbxdvigsu.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnd2Noc3pueHN1eGJ4ZHZpZ3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTY0NzEsImV4cCI6MjA4NDY5MjQ3MX0.iFzB--KryoBedjIJnybL55-xfQFIBxWnKq9RqwxuyK4";
 const ADMIN_EMAIL = "miha@aluk.si";
@@ -40,9 +36,7 @@ function escapeHtml(str) {
 
 // --- VARNOSTNA FUNKCIJA ZA DOM DOSTOP (definirana na vrhu!) ---
 function getElement(id) {
-  const el = document.getElementById(id);
-  if (!el) console.warn(`Element z ID "${id}" ni najden.`);
-  return el;
+  return document.getElementById(id) || null;
 }
 
 /** Kratko obvestilo "Prenašanje..." ob kliku na datoteko za prenos (DWG, Excel). */
@@ -123,14 +117,10 @@ async function pathExists(path) {
       limit: 1000
     });
     
-    if (error) {
-      console.warn(`Napaka pri preverjanju poti "${path}":`, error);
-      return false;
-    }
+    if (error) return false;
     
     return data && data.some(item => !item.metadata && item.name === folderName);
   } catch (e) {
-    console.warn(`Napaka pri preverjanju poti "${path}":`, e);
     return false;
   }
 }
@@ -143,11 +133,7 @@ async function cleanInvalidFavorites() {
   const validFavorites = [];
   for (const path of favorites) {
     const exists = await pathExists(path);
-    if (exists) {
-      validFavorites.push(path);
-    } else {
-      console.log(`Odstranjujem neobstoječo priljubljeno: ${path}`);
-    }
+    if (exists) validFavorites.push(path);
   }
   
   if (validFavorites.length !== favorites.length) {
@@ -328,10 +314,15 @@ async function loadContent(path) {
     updateBannerAsync(path);
   }
   if (folderCache[path]) await processDataAndRender(folderCache[path], thisId); else { mainContent.innerHTML = ""; skeletonLoader.style.display = "grid"; }
-  const { data, error } = await supabase.storage.from('Catalogs').list(path, { sortBy: { column: 'name', order: 'asc' }, limit: 1000 });
-  skeletonLoader.style.display = "none";
-  if (error) { statusEl.textContent = "Napaka pri branju."; return; }
-  if (thisId === currentRenderId) { folderCache[path] = data; await processDataAndRender(data, thisId); }
+  try {
+    const { data, error } = await supabase.storage.from('Catalogs').list(path, { sortBy: { column: 'name', order: 'asc' }, limit: 1000 });
+    skeletonLoader.style.display = "none";
+    if (error) { if (statusEl) statusEl.textContent = "Napaka pri branju."; return; }
+    if (thisId === currentRenderId) { folderCache[path] = data; await processDataAndRender(data, thisId); }
+  } catch (e) {
+    skeletonLoader.style.display = "none";
+    if (statusEl) statusEl.textContent = "Napaka pri povezavi.";
+  }
 }
 
 async function updateBannerAsync(path) {
@@ -414,8 +405,14 @@ async function renderItems(items, rId) {
      if (fa && fb) { const ia = getCustomSortIndex(a.name), ib = getCustomSortIndex(b.name); if (ia !== ib) return ia - ib; }
      return a.name.localeCompare(b.name);
   });
-  for (const item of sorted) { if (rId !== currentRenderId) return; await createItemElement(item, cont); }
+  const fragment = document.createDocumentFragment();
+  for (const item of sorted) {
+    if (rId !== currentRenderId) return;
+    const el = await createItemElement(item, null);
+    fragment.appendChild(el);
+  }
   if (rId === currentRenderId) {
+    cont.appendChild(fragment);
     mainContent.innerHTML = "";
     mainContent.appendChild(cont);
   }
@@ -442,7 +439,7 @@ async function createItemElement(item, cont) {
     } else if (isRelevantFile(item.name) && item.created_at && new Date(item.created_at) > new Date(Date.now() - 30*24*3600*1000)) {
         badges = `<span class="new-badge" style="display:inline-block">NOVO</span>`;
     }
-    const favBtnHtml = isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>` : '';
+    const favBtnHtml = isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${escapeHtml(item.name)}')">★</button>` : '';
     
     const base = getBaseName(item.name).toLowerCase();
     const ext = item.name.split('.').pop().toLowerCase();
@@ -478,7 +475,7 @@ async function createItemElement(item, cont) {
     const previewExtraClass = isDownloadType ? ' file-preview-download' : '';
     const downloadOverlay = isDownloadType ? '<span class="download-overlay-icon" aria-hidden="true">⬇</span>' : '';
     const previewHtml = `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}${previewExtraClass}">${icon}${downloadOverlay}</div>`;
-    const infoHtml = `<div class="item-info"><strong>${formatDisplayName(item.name)}</strong><small>${fileSize}</small>${dateInfo}</div>`;
+    const infoHtml = `<div class="item-info"><strong>${escapeHtml(formatDisplayName(item.name))}</strong><small>${fileSize}</small>${dateInfo}</div>`;
     if (viewMode === 'list') {
       div.innerHTML = badges + previewHtml + infoHtml + favBtnHtml;
     } else {
@@ -497,16 +494,14 @@ async function createItemElement(item, cont) {
         openPdfViewer(item.name, full);
       }
     };
-    cont.appendChild(div);
+    if (cont) cont.appendChild(div);
+    return div;
 }
 
 // --- GLOBALNI PRILJUBLJENI ---
 async function renderGlobalFavorites() {
   const container = getElement("globalFavContainer");
-  if (!container) {
-    console.warn("globalFavContainer ni najden, preskakujem renderGlobalFavorites");
-    return;
-  }
+  if (!container) return;
   
   favorites = loadFavorites(); 
   if (favorites.length === 0) { 
@@ -530,7 +525,7 @@ async function renderGlobalFavorites() {
       }
       
       div.innerHTML = `<div class="item-preview folder-bg" style="height:100px; position:relative;"><div class="big-icon" style="font-size:40px;">${getIconForName(name)}</div>${badges}</div>
-                       <div class="item-info" style="padding:10px;"><strong style="font-size:13px;">${name}</strong></div>
+                       <div class="item-info" style="padding:10px;"><strong style="font-size:13px;">${escapeHtml(name)}</strong></div>
                        <button class="fav-btn active" style="top:5px; left:5px;">★</button>`;
       div.onclick = () => navigateTo(p);
       const favBtn = div.querySelector('.fav-btn');
@@ -590,7 +585,7 @@ function updateSidebarFavorites() {
     item.className = 'sidebar-fav-item';
     item.innerHTML = `
       <span class="fav-icon">★</span>
-      <span class="fav-name" title="${path}">${icon} ${name}</span>
+      <span class="fav-name" title="${escapeHtml(path)}">${icon} ${escapeHtml(name)}</span>
       <span class="fav-remove" title="Odstrani iz priljubljenih">✕</span>
     `;
     
@@ -675,20 +670,12 @@ async function loadSearchData() {
         }
         isDataLoaded = true;
     } catch (e) {
-        console.error("Napaka pri nalaganju šifranta (CSV)", e);
+        /* šifrant ni naložen – iskanje po katalogih še vedno deluje */
     }
 }
 
 // Debounce za iskanje (optimizacija)
 let searchTimeout = null;
-
-console.log("🔎 searchInput element:", searchInput);
-
-if (searchInput) {
-  console.log("✓ searchInput najden, registriram event listener za iskanje");
-} else {
-  console.error("✗ searchInput NI NAJDEN! Iskanje ne bo delovalo.");
-}
 
 // Funkcija za kopiranje v odložišče (GitHub-style: ikona → kljukica, zelena, 2s nazaj)
 window.copyToClipboard = function(text, button) {
@@ -700,9 +687,7 @@ window.copyToClipboard = function(text, button) {
             button.innerHTML = originalHTML;
             button.classList.remove("copied-success");
         }, 2000);
-    }).catch(err => {
-        console.error("Napaka pri kopiranju:", err);
-    });
+    }).catch(() => {});
 };
 
 if (searchInput) {
@@ -746,8 +731,6 @@ if (searchInput) {
   });
   
   searchInput.addEventListener("input", async (e) => {
-    console.log("⌨️ Input event triggered, vrednost:", e.target.value);
-    
     // Prikaži/skrij križec
     if (clearSearchBtn) {
       clearSearchBtn.style.display = e.target.value.trim() ? "flex" : "none";
@@ -787,7 +770,6 @@ if (searchInput) {
     }
     
     searchTimeout = setTimeout(async () => {
-        console.log("🔍 Začenjam iskanje za:", val);
         const lowerVal = val.toLowerCase();
         
         if (!isDataLoaded) await loadSearchData();
@@ -908,11 +890,7 @@ if (searchInput) {
             mapsCol.appendChild(mapsList);
         }
 
-        // Preveri, če je to še vedno aktualno iskanje
-        if (thisRenderId !== currentRenderId) {
-            console.log("⚠️ Iskanje zastarelo, preskoči prikaz");
-            return;
-        }
+        if (thisRenderId !== currentRenderId) return;
         
         // Dodaj stolpce v wrapper: najprej datoteke, nato rezultati iz šifranta
         if (allMatches.length > 0) resultsWrapper.appendChild(mapsCol);
@@ -960,9 +938,7 @@ if (searchInput) {
                 matches: allMatches.length,
                 timestamp: Date.now()
             }));
-        } catch(e) {
-            console.warn("Napaka pri shranjevanju rezultatov:", e);
-        }
+        } catch (e) { /* sessionStorage full or disabled */ }
         
         if (!found) { 
             if (statusEl) {
@@ -986,8 +962,6 @@ if (searchInput) {
         }
     }, 300);
   });
-} else {
-  console.error("❌ KRITIČNA NAPAKA: searchInput element ni najden!");
 }
 
 // --- OSTALO ---
@@ -1021,7 +995,6 @@ async function handleUrlFile(storagePath) {
       window.open(data.signedUrl, '_blank');
     }
   } catch (e) {
-    console.warn('handleUrlFile:', e);
     try {
       const { data } = await supabase.storage.from('Catalogs').createSignedUrl(storagePath, 3600);
       if (data?.signedUrl) window.open(data.signedUrl, '_blank');
@@ -1046,7 +1019,6 @@ window.openPdfViewer = async function(fn, path) {
         a.click();
         URL.revokeObjectURL(blobUrl);
       } catch (e) {
-        console.warn('Download failed, opening in new tab:', e);
         window.open(data.signedUrl, '_blank');
       }
     }
@@ -1055,10 +1027,16 @@ window.openPdfViewer = async function(fn, path) {
   const url = "#view=" + fn;
   window.history.pushState({ type: 'viewer', file: fn }, "", url);
   pdfModal.style.display = 'flex';
-  viewerFileName.textContent = fn;
+  if (viewerFileName) viewerFileName.textContent = fn;
   const p = path || (currentPath ? `${currentPath}/${fn}` : fn);
-  const { data } = await supabase.storage.from('Catalogs').createSignedUrl(p, 3600);
-  if (data) pdfFrame.src = data.signedUrl;
+  try {
+    const { data } = await supabase.storage.from('Catalogs').createSignedUrl(p, 3600);
+    if (data?.signedUrl) pdfFrame.src = data.signedUrl;
+    else if (statusEl) statusEl.textContent = "Datoteke ni mogoče naložiti.";
+  } catch (e) {
+    pdfModal.style.display = 'none';
+    if (statusEl) statusEl.textContent = "Napaka pri odpiranju datoteke.";
+  }
 }
 window.closePdfViewer = function() { 
   pdfModal.style.display = 'none'; 
@@ -1146,10 +1124,8 @@ function doRequestAccess() {
       name: name || null,
       company: company || null,
       created_at: new Date().toISOString()
-    }).then(({ error }) => { if (error) console.warn("Supabase access_requests insert:", error.message); });
-  } catch (e) {
-    console.warn("Supabase access_requests ni na voljo:", e);
-  }
+    }).then(() => {});
+  } catch (e) { /* access_requests table optional */ }
   const subject = "Prošnja za dostop do AluK Portala";
   const body = `Pozdravljeni,
 
@@ -1177,9 +1153,7 @@ function setupFormHandler() {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      console.log("Form handler triggered");
       const emailInput = document.getElementById("loginEmail");
-      console.log("Login button actually clicked!", emailInput ? emailInput.value : "(no email input)");
       const requestSection = document.getElementById("requestSection");
       const isRequestVisible = requestSection && requestSection.style.display !== "none";
       if (isRequestVisible) {
@@ -1354,9 +1328,8 @@ async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 8
            }
        }
    } catch (e) {
-       console.warn("Napaka pri iskanju v mapi:", path, e);
+       return results;
    }
-   
    return results;
 }
 
@@ -1414,9 +1387,6 @@ document.addEventListener('visibilitychange', () => {
 
   // 1) Listener TAKOJ na začetku – preden karkoli awaitamo, da ne zamudimo INITIAL_SESSION / SIGNED_IN (pomembno za mobilne brskalnike)
   supabase.auth.onAuthStateChange((event, session) => {
-    if (typeof console !== "undefined" && console.log) {
-      console.log("[Auth]", event, session ? "session" : "no session");
-    }
     if (event === "INITIAL_SESSION" && session) {
       replaceStatePreserveHash();
       if (!isAppVisible()) showApp(session.user.email);
@@ -1482,10 +1452,7 @@ document.addEventListener('visibilitychange', () => {
       }
       const timeoutMs = 5000;
       const timeoutId = setTimeout(() => {
-        if (!isAppVisible()) {
-          if (typeof console !== "undefined" && console.log) console.log("[Auth] Timeout – prikaz gumba Poskusite znova");
-          showRetryAndClearHash();
-        }
+        if (!isAppVisible()) showRetryAndClearHash();
       }, timeoutMs);
       supabase.auth.onAuthStateChange((event, s) => {
         if (event === "SIGNED_IN" && s) clearTimeout(timeoutId);
