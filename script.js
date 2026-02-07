@@ -287,6 +287,7 @@ window.navigateTo = function(path) {
 }
 function getPathFromUrl() { const h = window.location.hash; if (!h || h.length <= 1 || h.startsWith("#view=")) return ""; return decodeURIComponent(h.slice(1)); }
 window.addEventListener('popstate', () => { pdfModal.style.display = 'none'; pdfFrame.src = ""; const p = getPathFromUrl(); currentPath = p; loadContent(p); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pdfModal && pdfModal.style.display === 'flex') closePdfViewer(); });
 
 // --- REKURZIVNO ISKANJE (Banner) – šteje vse NOVE datoteke v trenutni mapi in vseh podmapah ---
 const MAX_DEPTH_NEW_FILES = 25; // dovolj globoko za vse podmape, prepreči neskončno rekurzijo
