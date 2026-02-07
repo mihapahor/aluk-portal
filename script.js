@@ -1195,10 +1195,16 @@ function setupFormHandler() {
       btn.disabled = true;
       btn.textContent = "Pošiljam...";
       if (msgEl) { msgEl.textContent = ""; msgEl.className = ""; }
+      // Get the full URL (e.g., https://mihapahor.github.io/aluk-portal/)
+      // We strip query params (?) and hashes (#) but KEEP the path (/aluk-portal/)
+      let redirectUrl = window.location.origin + window.location.pathname;
+      if (!redirectUrl.endsWith("/")) {
+        redirectUrl += "/";
+      }
       try {
         const { error } = await supabase.auth.signInWithOtp({
           email: e,
-          options: { emailRedirectTo: window.location.origin }
+          options: { emailRedirectTo: redirectUrl }
         });
         if (error) {
           const isSignupsNotAllowed = (error.message || "").toLowerCase().includes("signups not allowed");
