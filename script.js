@@ -1031,7 +1031,7 @@ window.openPdfViewer = async function(fn, path) {
   const p = path || (currentPath ? `${currentPath}/${fn}` : fn);
   try {
     const { data } = await supabase.storage.from('Catalogs').createSignedUrl(p, 3600);
-    if (data?.signedUrl) pdfFrame.src = data.signedUrl;
+    if (data?.signedUrl) pdfFrame.src = data.signedUrl + "#page=1&view=Fit";
     else if (statusEl) statusEl.textContent = "Datoteke ni mogoče naložiti.";
   } catch (e) {
     pdfModal.style.display = 'none';
@@ -1040,7 +1040,7 @@ window.openPdfViewer = async function(fn, path) {
 }
 window.closePdfViewer = function() { 
   pdfModal.style.display = 'none'; 
-  pdfFrame.src = ""; 
+  pdfFrame.src = ""; /* clear immediately to avoid browser caching scroll/zoom for next open */
   const p = currentPath; 
   window.history.replaceState({ path: p }, "", "#" + p); 
   loadContent(p); 
