@@ -148,13 +148,21 @@ function getCustomSortIndex(name) {
   return partial === -1 ? 999 : partial;
 }
 
-/** Vrne prioriteto za sortiranje (1 = najvišja): Tehnični katalogi → Vgradni detajli/prerezi → Izjave o lastnostih → ostalo. */
-function getFolderFilePriority(name) {
-  const n = (name || "").toLowerCase();
-  if (n.includes("tehnični katalogi") || n.includes("tehnicni katalogi")) return 1;
-  if (n.includes("vgradni detajli") || n.includes("prerezi")) return 2;
-  if (n.includes("izjave o lastnostih")) return 3;
-  return 4;
+/** Vrne prioriteto za sortiranje (manjše = prej): 1 Tehnični katalogi, 2 Vgradni detajli/prerezi, 3 Izjave o lastnostih, 4 ostale mape, 5 PDF, 6 Excel, 7 ostale datoteke. */
+function getFolderFilePriority(item) {
+  const name = (item && item.name) || "";
+  const n = name.toLowerCase();
+  const isFolder = item && !item.metadata;
+  const ext = name.split(".").pop().toLowerCase();
+  if (isFolder) {
+    if (n.includes("tehnični katalogi") || n.includes("tehnicni katalogi")) return 1;
+    if (n.includes("vgradni detajli") || n.includes("prerezi")) return 2;
+    if (n.includes("izjave o lastnostih")) return 3;
+    return 4;
+  }
+  if (ext === "pdf") return 5;
+  if (ext === "xls" || ext === "xlsx") return 6;
+  return 7;
 }
 
 function formatDate(iso) { if (!iso) return ""; return new Date(iso).toLocaleDateString('sl-SI'); }
@@ -398,10 +406,9 @@ async function renderItems(items, rId) {
   const favs = [], norms = [];
   items.forEach(i => { const p = normalizePath(currentPath ? `${currentPath}/${i.name}` : i.name); (!i.metadata && favorites.includes(p)) ? favs.push(i) : norms.push(i); });
   const sorted = [...favs, ...norms].sort((a, b) => {
-     const pa = getFolderFilePriority(a.name), pb = getFolderFilePriority(b.name);
+     const pa = getFolderFilePriority(a), pb = getFolderFilePriority(b);
      if (pa !== pb) return pa - pb;
      const fa = !a.metadata, fb = !b.metadata;
-     if (fa && !fb) return -1; if (!fa && fb) return 1;
      if (fa && fb) { const ia = getCustomSortIndex(a.name), ib = getCustomSortIndex(b.name); if (ia !== ib) return ia - ib; }
      return a.name.localeCompare(b.name);
   });
