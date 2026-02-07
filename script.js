@@ -335,21 +335,26 @@ async function loadContent(path) {
 }
 
 async function updateBannerAsync(path) {
-    updatesList.innerHTML = ""; 
+    // En sken na sejo: ob nadaljnji navigaciji ohranimo že naložen banner (brez ponovnega getNewFilesRecursive)
+    if (sessionStorage.getItem("aluk_updates_loaded") === "true") {
+      return; // Banner je že bil naložen v tej seji; ohrani vsebino, ne kliči getNewFilesRecursive
+    }
+
+    updatesList.innerHTML = "";
     updatesBanner.style.display = "none";
     updatesBanner.classList.remove("is-expanded");
-    updatesBanner.classList.remove("is-open"); // Accordion privzeto zaprt
-    
+    updatesBanner.classList.remove("is-open");
+
     const newFiles = await getNewFilesRecursive(path, 0);
     if (newFiles.length === 0) return;
-    
+
     newFiles.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(newFiles[0].created_at)}`;
     if (updatesBadge) {
       updatesBadge.textContent = newFiles.length;
       updatesBadge.style.display = newFiles.length > 0 ? "inline-flex" : "none";
     }
-    
+
     const fragment = document.createDocumentFragment();
     newFiles.forEach(f => {
       const li = document.createElement("li");
@@ -364,6 +369,7 @@ async function updateBannerAsync(path) {
     });
     updatesList.appendChild(fragment);
     updatesBanner.style.display = "block";
+    sessionStorage.setItem("aluk_updates_loaded", "true");
 }
 window.openFileFromBanner = function(path) { openPdfViewer(path.split('/').pop(), path); }
 
