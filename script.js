@@ -65,7 +65,6 @@ const updatesAccordionBody = getElement("updatesAccordionBody");
 const updatesBadge = getElement("updatesBadge");
 const updatesList = getElement("updatesList");
 const lastUpdateDateEl = getElement("lastUpdateDate");
-const showMoreUpdatesBtn = getElement("showMoreUpdates");
 const pdfModal = getElement("pdfModal");
 const pdfFrame = getElement("pdfFrame");
 const viewerFileName = getElement("viewerFileName");
@@ -272,13 +271,15 @@ window.navigateTo = function(path) {
 function getPathFromUrl() { const h = window.location.hash; if (!h || h.length <= 1 || h.startsWith("#view=")) return ""; return decodeURIComponent(h.slice(1)); }
 window.addEventListener('popstate', () => { pdfModal.style.display = 'none'; pdfFrame.src = ""; const p = getPathFromUrl(); currentPath = p; loadContent(p); });
 
-// --- REKURZIVNO ISKANJE (Banner) ---
+// --- REKURZIVNO ISKANJE (Banner) – šteje vse NOVE datoteke v trenutni mapi in vseh podmapah ---
+const MAX_DEPTH_NEW_FILES = 25; // dovolj globoko za vse podmape, prepreči neskončno rekurzijo
 async function getNewFilesRecursive(path, depth = 0) {
-   if (depth > 2) return [];
+   if (depth > MAX_DEPTH_NEW_FILES) return [];
    const d30 = new Date(); d30.setDate(d30.getDate() - 30);
-   const { data } = await supabase.storage.from('Catalogs').list(path, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } });
+   const { data } = await supabase.storage.from('Catalogs').list(path, { limit: 1000, sortBy: { column: 'created_at', order: 'desc' } });
    if (!data) return [];
    let all = [];
+   // Štejemo samo datoteke (i.metadata), ne map; samo relevantne in nove (zadnjih 30 dni)
    const files = data.filter(i => i.metadata);
    all = [...all, ...files.filter(f => isRelevantFile(f.name) && new Date(f.created_at) > d30).map(f => ({...f, displayName: f.name, fullPath: path ? `${path}/${f.name}` : f.name}))];
    const folders = data.filter(i => !i.metadata && i.name !== ".emptyFolderPlaceholder");
@@ -313,7 +314,6 @@ async function loadContent(path) {
 
 async function updateBannerAsync(path) {
     updatesList.innerHTML = ""; 
-    showMoreUpdatesBtn.style.display = "none"; 
     updatesBanner.style.display = "none";
     updatesBanner.classList.remove("is-expanded");
     updatesBanner.classList.remove("is-open"); // Accordion privzeto zaprt
@@ -328,82 +328,20 @@ async function updateBannerAsync(path) {
       updatesBadge.style.display = newFiles.length > 0 ? "inline-flex" : "none";
     }
     
-    // Ustvari vse elemente v DocumentFragment za optimizacijo
     const fragment = document.createDocumentFragment();
-    
-    // Funkcija za prikaz posodobitev z flexbox poravnavo
-    const createItem = (f, isHidden = false) => {
+    newFiles.forEach(f => {
       const li = document.createElement("li");
-      if (isHidden) {
-        li.className = "update-item-hidden";
-      }
-      
       const nameSpan = document.createElement("span");
       nameSpan.innerHTML = `<strong>${f.displayName||f.name}</strong>`;
       nameSpan.onclick = () => openFileFromBanner(f.fullPath);
-      
       const dateSpan = document.createElement("span");
       dateSpan.textContent = formatDate(f.created_at);
-      
       li.appendChild(nameSpan);
       li.appendChild(dateSpan);
-      return li;
-    };
-    
-    // Ustvari prvih 3 elemente (vidni)
-    const initialItems = newFiles.slice(0, 3);
-    initialItems.forEach(f => {
-      fragment.appendChild(createItem(f, false));
+      fragment.appendChild(li);
     });
-    
-    // Ustvari preostale elemente (skriti)
-    const remainingItems = newFiles.slice(3);
-    remainingItems.forEach(f => {
-      fragment.appendChild(createItem(f, true));
-    });
-    
-    // Vstavi vse elemente naenkrat v DOM
     updatesList.appendChild(fragment);
-    
-    // Prikaži banner
     updatesBanner.style.display = "block";
-    
-    // Če so dodatni elementi, prikaži gumb za toggle
-    if (remainingItems.length > 0) {
-      showMoreUpdatesBtn.style.display = "block";
-      showMoreUpdatesBtn.textContent = "▼ Pokaži več posodobitev";
-      
-      // Uporabi closure za shranjevanje stanja
-      let isExpanded = false;
-      
-      showMoreUpdatesBtn.onclick = () => {
-        const allItems = updatesList.querySelectorAll("li");
-        
-        if (isExpanded) {
-          // Skrij dodatne elemente (vse razen prvih 3)
-          allItems.forEach((item, index) => {
-            if (index >= 3) {
-              item.classList.add("update-item-hidden");
-            }
-          });
-          updatesBanner.classList.remove("is-expanded");
-          showMoreUpdatesBtn.textContent = "▼ Pokaži več posodobitev";
-          isExpanded = false;
-          // Pomakni se na vrh bannerja
-          updatesBanner.scrollIntoView({ behavior: "smooth", block: "start" });
-        } else {
-          // Prikaži dodatne elemente
-          allItems.forEach((item, index) => {
-            if (index >= 3) {
-              item.classList.remove("update-item-hidden");
-            }
-          });
-          updatesBanner.classList.add("is-expanded");
-          showMoreUpdatesBtn.textContent = "▲ Pokaži manj posodobitev";
-          isExpanded = true;
-        }
-      };
-    }
 }
 window.openFileFromBanner = function(path) { openPdfViewer(path.split('/').pop(), path); }
 
