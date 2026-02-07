@@ -229,21 +229,22 @@ function showLogin() {
 }
 
 async function showApp(email) {
+  const alreadyVisible = appCard && appCard.style.display === "flex";
   window.scrollTo(0, 0);
-  if (authForm) authForm.style.display = "none"; 
+  if (authForm) authForm.style.display = "none";
   if (appCard) {
-    appCard.style.display = "flex"; 
+    appCard.style.display = "flex";
     appCard.style.flexDirection = "column";
   }
   const logoutBtn = getElement("logout");
   if (logoutBtn) logoutBtn.style.display = "block";
-  
+
   const userLine = getElement("userLine");
   if (userLine) {
-    try { 
-      const s = localStorage.getItem('aluk_user_info'); 
-      if (s) { 
-        const d = JSON.parse(s); 
+    try {
+      const s = localStorage.getItem('aluk_user_info');
+      if (s) {
+        const d = JSON.parse(s);
         if (d.name) {
           userLine.textContent = `👤 Dobrodošli, ${d.name}.`;
         } else {
@@ -256,14 +257,16 @@ async function showApp(email) {
       userLine.textContent = `👤 ${email}`;
     }
   }
-  
+
   // Očisti neobstoječe priljubljene ob zagonu (asinhrono, da ne blokira)
   cleanInvalidFavorites().then(() => {
     setViewMode(viewMode);
     renderGlobalFavorites();
-    updateSidebarFavorites(); // Posodobi sidebar priljubljene
+    updateSidebarFavorites();
   });
-  
+
+  // Pri že prikazanem portalu ne resetiraj poti in ne kličem loadContent (prepreči skok na Domov ob preklapljanju zaviho)
+  if (alreadyVisible) return;
   const path = getPathFromUrl();
   currentPath = path;
   loadContent(path);
@@ -285,6 +288,7 @@ window.navigateTo = function(path) {
   window.history.pushState({ path }, "", "#" + path); 
   loadContent(path); 
 }
+/** Navigacija vedno iz URL hasha – npr. #Okenski sistemi → currentPath ostane ob preklapljanju zaviho. */
 function getPathFromUrl() { const h = window.location.hash; if (!h || h.length <= 1 || h.startsWith("#view=")) return ""; return decodeURIComponent(h.slice(1)); }
 window.addEventListener('popstate', () => { pdfModal.style.display = 'none'; pdfFrame.src = ""; const p = getPathFromUrl(); currentPath = p; loadContent(p); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pdfModal && pdfModal.style.display === 'flex') closePdfViewer(); });
@@ -1372,18 +1376,11 @@ window.addEventListener('pageshow', (e) => {
   }
 });
 
-// Obnovi rezultate ob vračanju fokusa na stran
+// Obnovi rezultate ob vračanju fokusa samo, če je iskanje aktivno in je vnos neprazen
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
-    const savedQuery = sessionStorage.getItem('aluk_search_query');
-    if (savedQuery && searchInput && mainContent && mainContent.innerHTML.trim() === "") {
-      searchInput.value = savedQuery;
-      isSearchActive = true; // Aktiviraj iskanje
-      if (clearSearchBtn) clearSearchBtn.style.display = "flex";
-      // Ponovno izvedi iskanje
-      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-  }
+  if (document.hidden) return;
+  if (!isSearchActive || !searchInput || !searchInput.value.trim()) return;
+  searchInput.dispatchEvent(new Event('input', { bubbles: true }));
 });
 
 // --- INICIALIZACIJA (zanesljivo za mobilne magic linke) ---
@@ -1404,28 +1401,39 @@ document.addEventListener('visibilitychange', () => {
   const search = window.location.search || "";
   const hasAuthInUrl = hash.includes("access_token=") || search.includes("code=");
 
+  // Pomagalo: ali je portal že prikazan (da ne kličemo showApp in ne resetiramo na Domov)
+  function isAppVisible() {
+    const ac = getElement("appCard");
+    return ac && ac.style.display === "flex";
+  }
+  // URL ob auth dogodkih ohranimo hash (npr. #Okenski sistemi), da navigacija ostane tam
+  function replaceStatePreserveHash() {
+    const url = window.location.pathname + window.location.search + (window.location.hash || "");
+    window.history.replaceState({}, document.title, url);
+  }
+
   // 1) Listener TAKOJ na začetku – preden karkoli awaitamo, da ne zamudimo INITIAL_SESSION / SIGNED_IN (pomembno za mobilne brskalnike)
   supabase.auth.onAuthStateChange((event, session) => {
     if (typeof console !== "undefined" && console.log) {
       console.log("[Auth]", event, session ? "session" : "no session");
     }
     if (event === "INITIAL_SESSION" && session) {
-      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-      showApp(session.user.email);
+      replaceStatePreserveHash();
+      if (!isAppVisible()) showApp(session.user.email);
       return;
     }
     if (event === "SIGNED_IN" && session) {
-      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-      showApp(session.user.email);
+      replaceStatePreserveHash();
+      if (!isAppVisible()) showApp(session.user.email);
       return;
     }
     if (event === "SIGNED_OUT") {
-      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      replaceStatePreserveHash();
       showLogin();
       return;
     }
     if (event === "TOKEN_REFRESHED" && session && session.user) {
-      showApp(session.user.email);
+      if (!isAppVisible()) showApp(session.user.email);
     }
   });
 
@@ -1455,16 +1463,11 @@ document.addEventListener('visibilitychange', () => {
     checkUser();
   }
 
-  function isAppVisible() {
-    const appCard = getElement("appCard");
-    return appCard && appCard.style.display === "flex";
-  }
-
   async function runSessionCheck() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-      showApp(session.user.email);
+      replaceStatePreserveHash();
+      if (!isAppVisible()) showApp(session.user.email);
       return true;
     }
     return false;
