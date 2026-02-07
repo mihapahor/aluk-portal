@@ -994,7 +994,37 @@ async function handleUrlFile(storagePath) {
   }
 }
 
-window.openPdfViewer = async function(fn, path) { const url = "#view=" + fn; window.history.pushState({ type: 'viewer', file: fn }, "", url); pdfModal.style.display = 'flex'; viewerFileName.textContent = fn; const p = path || (currentPath ? `${currentPath}/${fn}` : fn); const { data } = await supabase.storage.from('Catalogs').createSignedUrl(p, 3600); if(data) pdfFrame.src = data.signedUrl; }
+window.openPdfViewer = async function(fn, path) {
+  const ext = (fn.split('.').pop() || '').toLowerCase();
+  const forceDownload = ['xlsx', 'xls', 'dwg', 'dxf'].includes(ext);
+  if (forceDownload) {
+    const p = path || (currentPath ? `${currentPath}/${fn}` : fn);
+    const { data } = await supabase.storage.from('Catalogs').createSignedUrl(p, 3600);
+    if (data?.signedUrl) {
+      try {
+        const res = await fetch(data.signedUrl);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fn;
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+      } catch (e) {
+        console.warn('Download failed, opening in new tab:', e);
+        window.open(data.signedUrl, '_blank');
+      }
+    }
+    return;
+  }
+  const url = "#view=" + fn;
+  window.history.pushState({ type: 'viewer', file: fn }, "", url);
+  pdfModal.style.display = 'flex';
+  viewerFileName.textContent = fn;
+  const p = path || (currentPath ? `${currentPath}/${fn}` : fn);
+  const { data } = await supabase.storage.from('Catalogs').createSignedUrl(p, 3600);
+  if (data) pdfFrame.src = data.signedUrl;
+}
 window.closePdfViewer = function() { 
   pdfModal.style.display = 'none'; 
   pdfFrame.src = ""; 
@@ -1317,9 +1347,14 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // --- INICIALIZACIJA (zanesljivo za mobilne magic linke) ---
-(function clearAuthHash() {
+(function handleAuthErrorInUrl() {
   const h = window.location.hash || "";
-  if (h.includes("error=") || h.includes("error_description=")) {
+  if (h.includes("error=") && h.includes("error_description=")) {
+    const msgEl = getElement("authMsg");
+    if (msgEl) {
+      msgEl.textContent = "Povezava za prijavo ni več veljavna ali je že bila uporabljena. Prosimo, zahtevajte novo povezavo.";
+      msgEl.className = "error-msg";
+    }
     window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
   }
 })();
