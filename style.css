@@ -317,8 +317,12 @@ label {
   display: block; 
   margin-bottom: 8px; 
   font-weight: 500; 
-  font-size: 14px; 
-  color: var(--text-primary); 
+  font-size: 14px;
+}
+.optional-label {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-secondary, #64748b);
 }
 
 input { 
@@ -636,6 +640,21 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .item-preview img { width: 100%; height: 100%; object-fit: cover; }
 .item-preview.folder-bg { background-color: #fff7ed; color: #f97316; }
 .item-preview.file-bg { background-color: #f1f5f9; color: #64748b; }
+/* Datoteke za prenos (DWG, Excel): ikona prenosa na predogledu in kazalec */
+.item-preview.file-preview-download { position: relative; }
+.download-overlay-icon {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: var(--primary, #0d9488);
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 14px;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.file-download-type { cursor: pointer; }
 .item-info strong { 
   display: block; 
   color: var(--text-primary); 
@@ -878,6 +897,26 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .btn-viewer { background: #333; color: white; border: 1px solid #555; padding: 8px 16px; border-radius: 6px; cursor: pointer; text-decoration: none; font-size: 14px; margin-left: 10px; }
 .btn-viewer:hover { background: #555; }
 .btn-viewer.primary { background: var(--primary); border-color: var(--primary); }
+
+/* Obvestilo ob prenosu datoteke (DWG, Excel) */
+.download-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--primary, #0d9488);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 1500;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.download-toast.visible { opacity: 1; }
 
 .footer { 
   text-align: center; 

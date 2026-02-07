@@ -45,6 +45,23 @@ function getElement(id) {
   return el;
 }
 
+/** Kratko obvestilo "Prenašanje..." ob kliku na datoteko za prenos (DWG, Excel). */
+function showDownloadNotification() {
+  let toast = document.getElementById("downloadToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "downloadToast";
+    toast.className = "download-toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = "Prenašanje...";
+  toast.classList.add("visible");
+  clearTimeout(toast._hideTimer);
+  toast._hideTimer = setTimeout(() => {
+    toast.classList.remove("visible");
+  }, 2000);
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'aluk-portal-auth' }
 });
@@ -452,16 +469,29 @@ async function createItemElement(item, cont) {
     // Za datoteke: prikaži datum takoj pod velikostjo
     const fileSize = isFolder ? 'Mapa' : (item.metadata.size/1024/1024).toFixed(2)+' MB';
     const dateInfo = !isFolder && item.created_at ? `<span class="item-date">Datum posodobitve: ${formatDate(item.created_at)}</span>` : '';
-    
-    const previewHtml = `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}">${icon}</div>`;
+    const isDownloadType = !isFolder && !isLinkFile && ['dwg', 'dxf', 'xlsx', 'xls'].includes(ext);
+    const previewExtraClass = isDownloadType ? ' file-preview-download' : '';
+    const downloadOverlay = isDownloadType ? '<span class="download-overlay-icon" aria-hidden="true">⬇</span>' : '';
+    const previewHtml = `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}${previewExtraClass}">${icon}${downloadOverlay}</div>`;
     const infoHtml = `<div class="item-info"><strong>${formatDisplayName(item.name)}</strong><small>${fileSize}</small>${dateInfo}</div>`;
     if (viewMode === 'list') {
       div.innerHTML = badges + previewHtml + infoHtml + favBtnHtml;
     } else {
       div.innerHTML = favBtnHtml + badges + previewHtml + infoHtml;
     }
-    
-    div.onclick = () => isFolder ? navigateTo(full) : (isLinkFile ? handleUrlFile(full) : openPdfViewer(item.name, full));
+    if (isPdf) div.setAttribute('title', 'Odpri predogled');
+    else if (isDownloadType) {
+      div.setAttribute('title', 'Prenesi datoteko (Direct Download)');
+      div.classList.add('file-download-type');
+    }
+    div.onclick = () => {
+      if (isFolder) navigateTo(full);
+      else if (isLinkFile) handleUrlFile(full);
+      else {
+        if (isDownloadType) showDownloadNotification();
+        openPdfViewer(item.name, full);
+      }
+    };
     cont.appendChild(div);
 }
 
@@ -1077,9 +1107,9 @@ function setupAuthTabs() {
 }
 
 // --- PERSISTENCA POLJ (localStorage) ---
-const AUTH_KEYS = { loginEmail: "aluk_loginEmail", reqName: "aluk_reqName", reqCompany: "aluk_reqCompany", reqEmail: "aluk_reqEmail" };
+const AUTH_KEYS = { loginName: "aluk_loginName", loginEmail: "aluk_loginEmail", reqName: "aluk_reqName", reqCompany: "aluk_reqCompany", reqEmail: "aluk_reqEmail" };
 function setupAuthPersistence() {
-  ["loginEmail", "reqName", "reqCompany", "reqEmail"].forEach((id) => {
+  ["loginName", "loginEmail", "reqName", "reqCompany", "reqEmail"].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
     const key = AUTH_KEYS[id];
@@ -1171,6 +1201,15 @@ function setupFormHandler() {
       let redirectUrl = window.location.origin + window.location.pathname;
       if (!redirectUrl.endsWith("/")) {
         redirectUrl += "/";
+      }
+      const nameInput = document.getElementById("loginName");
+      const fullName = (nameInput && nameInput.value && nameInput.value.trim()) ? nameInput.value.trim() : "";
+      if (fullName) {
+        try {
+          const existing = localStorage.getItem("aluk_user_info");
+          const data = existing ? { ...JSON.parse(existing), name: fullName } : { name: fullName };
+          localStorage.setItem("aluk_user_info", JSON.stringify(data));
+        } catch (err) {}
       }
       try {
         const { error } = await supabase.auth.signInWithOtp({
