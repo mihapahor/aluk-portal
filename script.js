@@ -1313,56 +1313,73 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// --- INICIALIZACIJA ---
-(async () => { 
-  // Preveri, če je uporabnik prišel iz email povezave (magic link)
-  const hasMagicLink = window.location.search.includes("code=") || window.location.hash.includes("access_token=");
-  
-  if (hasMagicLink) {
-    // Počakaj, da Supabase obdela magic link in shrani session
-    // Supabase avtomatsko obdela URL parametre, vendar moramo počakati
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Poskusi dobiti session - Supabase bi ga moral že shraniti
-    let session = null;
-    for (let i = 0; i < 5; i++) {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      if (currentSession) {
-        session = currentSession;
-        break;
-      }
-      // Počakaj malo in poskusi znova
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-    
-    // Očisti URL parametre
-    window.history.replaceState({}, document.title, window.location.pathname);
-    
-    if (session) {
-      // Session je uspešno shranjen, prikaži aplikacijo
-      showApp(session.user.email);
-    } else {
-      // Če session ni shranjen, preveri normalno
-      checkUser();
-    }
-  } else {
-    // Normalna inicializacija
-    checkUser();
+// --- INICIALIZACIJA (zanesljivo za mobilne magic linke) ---
+(function clearAuthHash() {
+  const h = window.location.hash || "";
+  if (h.includes("error=") || h.includes("error_description=")) {
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
   }
-  
-  // Poslušaj spremembe avtentikacije (za prihodnje spremembe)
-  supabase.auth.onAuthStateChange((e, s) => { 
-    if (e === 'SIGNED_IN' && s) {
-      // Uporabnik se je prijavil - prikaži aplikacijo
-      showApp(s.user.email);
-    } else if (e === 'SIGNED_OUT') {
-      // Uporabnik se je odjavil - prikaži login
+})();
+
+(async () => { 
+  const hash = window.location.hash || "";
+  const search = window.location.search || "";
+  const hasAuthInUrl = hash.includes("access_token=") || search.includes("code=");
+
+  // 1) Takoj ob zagonu: če je v URL-ju token, prikaži "Prijavljanje..." (še preden Supabase obdela hash)
+  if (hasAuthInUrl && msgEl) {
+    msgEl.textContent = "Prijavljanje...";
+    msgEl.className = "";
+    msgEl.style.color = "var(--text-primary)";
+    const sendBtn = document.getElementById("sendLink");
+    const emailInput = document.getElementById("loginEmail");
+    if (sendBtn) sendBtn.style.display = "none";
+    if (emailInput) emailInput.style.display = "none";
+  }
+
+  // 2) Listener za stanje avtentikacije – registriramo GA preden karkoli awaitamo (pomembno za mobilne magic linke)
+  supabase.auth.onAuthStateChange((event, session) => { 
+    if (event === "SIGNED_IN" && session) {
+      const cleanUrl = window.location.pathname + window.location.search;
+      window.history.replaceState({}, document.title, cleanUrl);
+      showApp(session.user.email);
+    } else if (event === "SIGNED_OUT") {
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
       showLogin();
-    } else if (e === 'TOKEN_REFRESHED' && s) {
-      // Token je bil osvežen - ohrani uporabnika prijavljenega
-      if (s.user) showApp(s.user.email);
+    } else if (event === "TOKEN_REFRESHED" && session && session.user) {
+      showApp(session.user.email);
     }
   });
+
+  // 3) Enkratno preverjanje session (za obiskovalce, ki so že prijavljeni)
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+    showApp(session.user.email);
+    return;
+  }
+
+  if (hasAuthInUrl) {
+    // Čakamo na onAuthStateChange('SIGNED_IN'). Po timeoutu očistimo hash in prikažemo login (omogoči ponovni poskus)
+    const timeoutMs = 8000;
+    const timeoutId = setTimeout(() => {
+      if (!getElement("appCard") || getElement("appCard").style.display !== "flex") {
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        if (msgEl) { msgEl.textContent = ""; msgEl.className = ""; }
+        const sendBtn = document.getElementById("sendLink");
+        const emailInput = document.getElementById("loginEmail");
+        if (sendBtn) sendBtn.style.display = "";
+        if (emailInput) emailInput.style.display = "";
+        checkUser();
+      }
+    }, timeoutMs);
+    supabase.auth.onAuthStateChange((event, s) => {
+      if (event === "SIGNED_IN" && s) clearTimeout(timeoutId);
+    });
+    return;
+  }
+
+  checkUser();
 })();
 
 // Ensure any loading overlay is hidden so the page is interactive
