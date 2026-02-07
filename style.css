@@ -597,6 +597,18 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   display: block;
   margin: 0 auto;
 }
+/* PDF ikona: prikaz v celoti (object-fit: contain), povečana za 10% (51→56px) */
+.file-container.grid-view .item-preview .icon-img[src*="PDF_file_icon"],
+.file-container.grid-view .item-preview .icon-img[src*="256px-PDF"] {
+  width: 56px !important;
+  height: 56px !important;
+  object-fit: contain !important;
+}
+/* Excel ikona 10% manjša (64px → 58px) */
+.file-container.grid-view .item-preview .icon-img[src*="excel_icon"] {
+  width: 58px !important;
+  height: 58px !important;
+}
 /* DWG ikona 2× + 50% večja (128px → 192px) */
 .file-container.grid-view .item-preview .icon-img[src="dwg-file.png"] {
   width: 192px !important;
@@ -604,12 +616,22 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 }
 
 .file-container.list-view { display: flex; flex-direction: column; gap: 10px; }
-.file-container.list-view .item { display: flex; flex-direction: row; align-items: center; padding: 15px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: #fff; transition: all 0.1s; position: relative; }
+.file-container.list-view .item { display: flex; flex-direction: row; align-items: center; padding: 13px 15px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: #fff; transition: all 0.1s; position: relative; }
 .file-container.list-view .item:hover { border-color: var(--primary); background: #fcfcfc; }
 .file-container.list-view .item-preview { width: 50px; height: 50px; border-radius: 6px; margin-right: 15px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; border: none; }
 .file-container.list-view .item-info { text-align: left; flex-grow: 1; padding: 0; }
 .file-container.list-view .item-preview img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
 .file-container.list-view .icon-img { width: 32px; height: 32px; }
+.file-container.list-view .item-preview .icon-img[src*="PDF_file_icon"],
+.file-container.list-view .item-preview .icon-img[src*="256px-PDF"] {
+  width: 29px;
+  height: 29px;
+  object-fit: contain !important;
+}
+.file-container.list-view .item-preview .icon-img[src*="excel_icon"] {
+  width: 29px;
+  height: 29px;
+}
 
 .item-preview img { width: 100%; height: 100%; object-fit: cover; }
 .item-preview.folder-bg { background-color: #fff7ed; color: #f97316; }
@@ -702,7 +724,19 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .fav-btn { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9); border: 1px solid #ddd; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 20; color: #ccc; font-size: 18px; transition: all 0.2s; }
 .fav-btn:hover { transform: scale(1.1); color: var(--fav-color); border-color: var(--fav-color); }
 .fav-btn.active { color: var(--fav-color); border-color: var(--fav-color); background: #fffbeb; }
-.file-container.list-view .fav-btn { position: static; margin-right: 15px; background: transparent; border: none; width: auto; height: auto; }
+.file-container.list-view .fav-btn {
+  position: static;
+  margin-left: auto;
+  flex-shrink: 0;
+  margin-right: 0;
+  background: transparent;
+  border: none;
+  width: auto;
+  height: auto;
+}
+.file-container.list-view .item-preview {
+  flex-shrink: 0;
+}
 
 .skeleton-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top:20px; }
 @media (max-width: 768px) { .skeleton-container { grid-template-columns: 1fr; } }

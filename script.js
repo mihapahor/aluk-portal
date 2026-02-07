@@ -410,8 +410,6 @@ async function createItemElement(item, cont) {
     
     // Značka NOVO: natanko en element na .item (brez podvajanja)
     if (isFolder) {
-        const isFav = favorites.includes(clean);
-        div.innerHTML += `<button class="fav-btn ${isFav?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>`;
         badges = `<span class="new-badge" style="display:none">NOVO</span>`;
         getNewFilesRecursive(full, 0).then(n => {
             if (n.length > 0) {
@@ -422,6 +420,7 @@ async function createItemElement(item, cont) {
     } else if (isRelevantFile(item.name) && item.created_at && new Date(item.created_at) > new Date(Date.now() - 30*24*3600*1000)) {
         badges = `<span class="new-badge" style="display:inline-block">NOVO</span>`;
     }
+    const favBtnHtml = isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>` : '';
     
     const base = getBaseName(item.name).toLowerCase();
     const ext = item.name.split('.').pop().toLowerCase();
@@ -431,8 +430,9 @@ async function createItemElement(item, cont) {
     if (!isFolder && !isLinkFile && (item.name.toLowerCase().endsWith('xlsx') || item.name.toLowerCase().endsWith('xls'))) icon = `<img src="excel_icon.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📊</div>'">`;
     if (!isFolder && !isLinkFile && item.name.toLowerCase().endsWith('pdf')) icon = `<img src="256px-PDF_file_icon.svg.png" class="icon-img" onerror="this.outerHTML='<div class=\\'big-icon\\'>📕</div>'">`;
     
-    // Cache za slike – če PDF ima predogled (npr. jpg v mapi), ga prikaži; sicer ostane ikona zgoraj
-    if (imageMap[base]) {
+    // Cache za slike – če PDF ima predogled (npr. jpg v mapi), ga prikaži v grid view; v list view vedno ikona PDF
+    const isPdf = !isFolder && item.name.toLowerCase().endsWith('pdf');
+    if (imageMap[base] && !(viewMode === 'list' && isPdf)) {
       const imagePath = currentPath ? `${currentPath}/${imageMap[base].name}` : imageMap[base].name;
       const cacheKey = imagePath;
       
@@ -453,10 +453,13 @@ async function createItemElement(item, cont) {
     const fileSize = isFolder ? 'Mapa' : (item.metadata.size/1024/1024).toFixed(2)+' MB';
     const dateInfo = !isFolder && item.created_at ? `<span class="item-date">Datum posodobitve: ${formatDate(item.created_at)}</span>` : '';
     
-    div.innerHTML = (isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>` : '') + 
-                    badges + 
-                    `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}">${icon}</div>` +
-                    `<div class="item-info"><strong>${formatDisplayName(item.name)}</strong><small>${fileSize}</small>${dateInfo}</div>`;
+    const previewHtml = `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}">${icon}</div>`;
+    const infoHtml = `<div class="item-info"><strong>${formatDisplayName(item.name)}</strong><small>${fileSize}</small>${dateInfo}</div>`;
+    if (viewMode === 'list') {
+      div.innerHTML = badges + previewHtml + infoHtml + favBtnHtml;
+    } else {
+      div.innerHTML = favBtnHtml + badges + previewHtml + infoHtml;
+    }
     
     div.onclick = () => isFolder ? navigateTo(full) : (isLinkFile ? handleUrlFile(full) : openPdfViewer(item.name, full));
     cont.appendChild(div);
