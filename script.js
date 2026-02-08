@@ -1,8 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.94.1";
 
-console.log("SCRIPT LOADED SUCCESSFULLY");
-window.onerror = function (msg, url, line) { console.log("ERROR: " + msg + " at " + line); };
-console.log("--- DEBUG START ---");
+window.globalFileList = [];
 
 const SUPABASE_URL = "https://ugwchsznxsuxbxdvigsu.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnd2Noc3pueHN1eGJ4ZHZpZ3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTY0NzEsImV4cCI6MjA4NDY5MjQ3MX0.iFzB--KryoBedjIJnybL55-xfQFIBxWnKq9RqwxuyK4";
@@ -100,10 +98,6 @@ let folderCache = {};
 let currentRenderId = 0;
 let imageUrlCache = {}; // Cache za signed URLs slik
 let isSearchActive = false; // Flag za preverjanje, če je aktivno iskanje 
-
-// --- ISKANJE (Cache) ---
-let articleDatabase = [];
-let isDataLoaded = false;
 
 // --- POMOŽNE FUNKCIJE ---
 function normalizePath(path) { if (!path) return ""; try { return decodeURIComponent(path).trim(); } catch (e) { return path.trim(); } }
@@ -647,48 +641,53 @@ function updateSidebarFavorites() {
   }
 }
 
-// --- ISKANJE (VSE: Šifrant + PDF Index) ---
-// loadSifrant: naloži CSV (vrstice \n, stolpci ;), samo Šifra + Opis, rezultate prikaže v "Rezultati iz šifranta"
-function cleanCsvCell(str) {
-    if (str == null) return '';
-    return String(str)
-        .replace(/^["'\s]+|["'\s]+$/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+// --- ISKANJE (Deep PDF Search + Tehnična dokumentacija) ---
+/** Agresivna normalizacija: lowercase, odstrani .pdf, samo črke in številke (brez presledkov, podčrtajev, %20). */
+function cleanName(name) {
+  const s = (name == null ? "" : String(name)).toLowerCase().replace(/\.pdf$/i, "").replace(/[^a-z0-9]/g, "");
+  return s;
 }
-async function loadSearchData() {
-    if (isDataLoaded) return;
-    try {
-        const sifrantPath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1) + 'sifrant.csv?v=' + Date.now();
-        const artRes = await fetch(sifrantPath);
-        if (!artRes.ok) return;
-        const buf = await artRes.arrayBuffer();
-        const text = new TextDecoder('utf-8').decode(buf);
-        const lines = text.split('\n').filter((line) => line.trim());
-        articleDatabase = [];
-        for (let i = 0; i < lines.length; i++) {
-            if (i === 0) continue; // preskoči glavo (Št.;Opis;;;)
-            const parts = lines[i].split(';');
-            const sifra = cleanCsvCell(parts[0]);
-            const opis = cleanCsvCell(parts[1]);
-            if (sifra || opis) articleDatabase.push({ sifra, opis });
-        }
-        isDataLoaded = true;
-    } catch (e) {
-        console.error("Napaka pri nalaganju šifranta (CSV)", e);
-    }
+
+/**
+ * Vrne polno pot do datoteke po imenu. Primerja z window.globalFileList po cleanName (agresivna normalizacija).
+ * @param {string} filename - ime iz DB (npr. "Catalogo Tecnico__C67K.pdf")
+ * @returns {string|null} fullPath ali null
+ */
+function findPathForFilename(filename) {
+  const dbClean = cleanName(filename);
+  if (!dbClean) return null;
+  const list = window.globalFileList;
+  if (!list || !list.length) return null;
+  for (const f of list) {
+    if (!f.metadata) continue; // samo datoteke (mapa nima .metadata)
+    const storageClean = cleanName(f.name);
+    if (dbClean === storageClean) return f.fullPath;
+  }
+  // Diagnostika: prikaži podobna imena iz Storage (samo datoteke)
+  const hint = dbClean.slice(0, 8);
+  const similar = list
+    .filter((f) => f.metadata && (cleanName(f.name).includes(hint) || hint.includes(cleanName(f.name).slice(0, 8))))
+    .slice(0, 8)
+    .map((f) => ({ raw: f.name, clean: cleanName(f.name) }));
+  console.warn("❌ Failed to match:", dbClean, "| DB filename:", filename, "| Similar in Storage:", similar);
+  return null;
+}
+
+/** Naloži vse datoteke iz Storage v window.globalFileList (za iskanje po catalog_index). */
+async function preloadFiles() {
+  console.log("⏳ Starting file preload...");
+  try {
+    const files = await searchAllFilesRecursive("", "", 0, 8, 20000);
+    window.globalFileList = Array.isArray(files) ? files : [];
+    console.log("✅ Files loaded:", window.globalFileList.length);
+  } catch (e) {
+    window.globalFileList = [];
+    console.warn("Preload failed:", e);
+  }
 }
 
 // Debounce za iskanje (optimizacija)
 let searchTimeout = null;
-
-console.log("🔎 searchInput element:", searchInput);
-
-if (searchInput) {
-  console.log("✓ searchInput najden, registriram event listener za iskanje");
-} else {
-  console.error("✗ searchInput NI NAJDEN! Iskanje ne bo delovalo.");
-}
 
 // Funkcija za kopiranje v odložišče (GitHub-style: ikona → kljukica, zelena, 2s nazaj)
 window.copyToClipboard = function(text, button) {
@@ -787,85 +786,122 @@ if (searchInput) {
     }
     
     searchTimeout = setTimeout(async () => {
-        console.log("🔍 Začenjam iskanje za:", val);
         const lowerVal = val.toLowerCase();
-        
-        if (!isDataLoaded) await loadSearchData();
 
         // Povečaj renderID, da preprečimo podvajanje
-        currentRenderId++; 
+        currentRenderId++;
         const thisRenderId = currentRenderId;
-        
+
         // POČISTI prejšnje rezultate
         if (mainContent) mainContent.innerHTML = "";
-        
+
         // Skrij sekcijo "TEHNIČNA DOKUMENTACIJA" ko iščeš
         const contentTitleEl = getElement("contentTitle");
         const contentTitleDesc = getElement("contentTitleDesc");
         if (contentTitleEl) contentTitleEl.style.display = "none";
         if (contentTitleDesc) contentTitleDesc.style.display = "none";
-        
+
         // Prikaži loading indikator
         if (statusEl) {
-            statusEl.innerHTML = '<span class="loading-indicator">Iščem po vseh mapah<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></span>';
+            statusEl.innerHTML = '<span class="loading-indicator">Iščem<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></span>';
             statusEl.style.color = "var(--loading-color)";
             statusEl.style.fontWeight = "500";
         }
-        
-        const resCont = document.createElement("div"); 
+
+        const resCont = document.createElement("div");
         resCont.className = "file-container list-view";
         let found = false;
 
-        // 1. Iskanje po ŠIFRANTU
-        const arts = articleDatabase.filter(a => 
-            a.sifra.toLowerCase().includes(lowerVal) || 
-            a.opis.toLowerCase().includes(lowerVal)
-        ).slice(0, 50);
-        
-        // Ustvari container za rezultate (layout v style.css)
+        // Naloži globalni seznam datotek (za razreševanje pdf_filename → full path) in rezultate iskanja vzporedno
+        const [indexResult, allFiles, allMatches] = await Promise.all([
+            supabase.from("catalog_index").select("pdf_filename, page_number, page_title").ilike("code", "%" + val + "%").limit(50),
+            searchAllFilesRecursive("", "", 0, 8, 20000),
+            searchAllFilesRecursive("", val, 0, 8, 100)
+        ]);
+        window.globalFileList = allFiles || [];
+
+        // 1. Deep PDF Search (Supabase catalog_index) – združeno po pdf_filename, vsaka stran z page_title
+        let groupedByPdf = {};
+        try {
+            const { data: indexRows, error } = indexResult;
+            if (!error && indexRows && indexRows.length > 0) {
+                for (const row of indexRows) {
+                    const fn = row.pdf_filename;
+                    const page = row.page_number != null ? Number(row.page_number) : 1;
+                    const title = (row.page_title != null && String(row.page_title).trim()) ? String(row.page_title).trim() : "";
+                    if (!fn) continue;
+                    if (!groupedByPdf[fn]) groupedByPdf[fn] = [];
+                    const exists = groupedByPdf[fn].some((e) => e.page === page);
+                    if (!exists) groupedByPdf[fn].push({ page, title });
+                }
+                for (const fn of Object.keys(groupedByPdf)) groupedByPdf[fn].sort((a, b) => a.page - b.page);
+            }
+        } catch (e) { /* catalog_index optional */ }
+
         const resultsWrapper = document.createElement("div");
         resultsWrapper.className = "search-results-grid";
-        
-        const sifrantCol = document.createElement("div");
+
+        const deepPdfCol = document.createElement("div");
         const mapsCol = document.createElement("div");
-        
-        // Poravnaj začetek rezultatov - uporabi min-height za naslove in opise
-        sifrantCol.style.paddingTop = "0";
+        deepPdfCol.style.paddingTop = "0";
         mapsCol.style.paddingTop = "0";
-        
+
         const LIMIT = 10;
-        let sifrantList = null;
+        let deepPdfList = null;
         let mapsList = null;
-        const buildArtCard = (a) => {
-            const artDiv = document.createElement("div");
-            artDiv.className = "item search-item-card";
-            artDiv.style.cursor = "default";
-            const copyText = `${a.sifra} - ${a.opis}`;
-            const safeCopyAttr = copyText.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            artDiv.innerHTML = `
-                <div class="item-preview file-bg">🏷️</div>
+        const deepPdfEntries = Object.entries(groupedByPdf);
+
+        const buildDeepPdfCard = (filename, pageEntries) => {
+            const fullPath = findPathForFilename(filename);
+            if (!fullPath) console.warn("[Search] Kartica brez poti (gumbi onemogočeni):", filename);
+            const div = document.createElement("div");
+            div.className = "item search-item-card";
+            div.style.cursor = "default";
+            const iconHtml = `<img src="256px-PDF_file_icon.svg.png" class="icon-img" onerror="this.outerHTML='<span class=\\'big-icon\\'>📕</span>'">`;
+            const wrap = document.createElement("div");
+            wrap.className = "search-page-buttons-wrap";
+            pageEntries.forEach(({ page, title }) => {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "search-page-btn";
+                btn.innerHTML = "[Stran " + page + "]" + (title ? " <b>" + escapeHtml(title) + "</b>" : "");
+                if (fullPath) {
+                    btn.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof window.openPdfViewer === "function") {
+                            window.openPdfViewer(filename, fullPath, page);
+                        } else if (statusEl) statusEl.textContent = "Datoteke ni mogoče odpreti.";
+                    });
+                } else {
+                    btn.disabled = true;
+                    btn.title = "Datoteke ni mogoče najti v katalogu.";
+                    btn.style.opacity = "0.6";
+                }
+                wrap.appendChild(btn);
+            });
+            div.innerHTML = `
+                <div class="item-preview file-bg">${iconHtml}</div>
                 <div class="item-info">
-                    <strong style="color:var(--result-article-heading);">${escapeHtml(a.sifra)}</strong>
-                    <small style="color:var(--result-article-text);">${escapeHtml(a.opis)}</small>
+                    <strong style="color:var(--result-doc-text);">${escapeHtml(filename)}</strong>
                 </div>
-                <button class="copy-btn" onclick="copyToClipboard('${safeCopyAttr}', this)" style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; width:36px; height:36px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;" title="Kopiraj šifro in opis"><img src="copy.png" class="copy-icon-custom"></button>
             `;
-            return artDiv;
+            div.querySelector(".item-info").appendChild(wrap);
+            return div;
         };
 
-        if (arts.length > 0) {
+        if (deepPdfEntries.length > 0) {
             found = true;
-            sifrantCol.innerHTML = `<div class="search-section-header"><h3 style="color:var(--result-article-heading);">📋 Rezultati iz šifranta (${arts.length})</h3><p>Iskanje šifre artikla vrne opis artikla iz šifranta.</p></div>`;
-            sifrantList = document.createElement("div");
-            sifrantList.className = "search-results-list";
-            const sifrantVisible = arts.slice(0, LIMIT);
-            sifrantVisible.forEach(a => sifrantList.appendChild(buildArtCard(a)));
-            sifrantCol.appendChild(sifrantList);
+            const totalPages = deepPdfEntries.reduce((sum, [, entries]) => sum + entries.length, 0);
+            deepPdfCol.innerHTML = `<div class="search-section-header"><h3 style="color:var(--result-doc-heading);">📕 Iskanje v PDF katalogih (${deepPdfEntries.length} katalogov, ${totalPages} strani)</h3><p>Klik na številko strani odpre katalog na tej strani.</p></div>`;
+            deepPdfList = document.createElement("div");
+            deepPdfList.className = "search-results-list";
+            const deepVisible = deepPdfEntries.slice(0, LIMIT);
+            deepVisible.forEach(([fn, pages]) => deepPdfList.appendChild(buildDeepPdfCard(fn, pages)));
+            deepPdfCol.appendChild(deepPdfList);
         }
 
-        // 2. REKURZIVNO ISKANJE PO VSEH MAPAH (optimizirano)
-        const allMatches = await searchAllFilesRecursive("", val, 0, 8, 100);
-        
+        // 2. Tehnična dokumentacija (allMatches že naložen zgoraj)
         const buildMapCard = (item) => {
             const div = document.createElement("div");
             div.className = "item search-item-card";
@@ -908,25 +944,18 @@ if (searchInput) {
             mapsCol.appendChild(mapsList);
         }
 
-        // Preveri, če je to še vedno aktualno iskanje
-        if (thisRenderId !== currentRenderId) {
-            console.log("⚠️ Iskanje zastarelo, preskoči prikaz");
-            return;
-        }
-        
-        // Dodaj stolpce v wrapper: najprej datoteke, nato rezultati iz šifranta
+        if (thisRenderId !== currentRenderId) return;
+
+        if (deepPdfEntries.length > 0) resultsWrapper.appendChild(deepPdfCol);
         if (allMatches.length > 0) resultsWrapper.appendChild(mapsCol);
-        if (arts.length > 0) resultsWrapper.appendChild(sifrantCol);
-        
-        if (arts.length === 0 || allMatches.length === 0) {
+
+        if (deepPdfEntries.length === 0 || allMatches.length === 0) {
             resultsWrapper.classList.add("search-results-single-col");
         }
-        
-        // Dodaj wrapper v resCont
-        if (arts.length > 0 || allMatches.length > 0) {
+
+        if (deepPdfEntries.length > 0 || allMatches.length > 0) {
             resCont.appendChild(resultsWrapper);
-            // En sam skupni gumb "Pokaži več" pod obema stolpcema
-            if (arts.length > LIMIT || allMatches.length > LIMIT) {
+            if (deepPdfEntries.length > LIMIT || allMatches.length > LIMIT) {
                 const showMoreWrap = document.createElement("div");
                 showMoreWrap.className = "search-results-show-more-wrap";
                 const showMoreBtn = document.createElement("button");
@@ -935,13 +964,13 @@ if (searchInput) {
                 showMoreBtn.textContent = "Pokaži več";
                 showMoreBtn.addEventListener("click", function () {
                     if (this.dataset.expanded === "true") {
-                        if (sifrantList) while (sifrantList.children.length > LIMIT) sifrantList.removeChild(sifrantList.lastChild);
+                        if (deepPdfList) while (deepPdfList.children.length > LIMIT) deepPdfList.removeChild(deepPdfList.lastChild);
                         if (mapsList) while (mapsList.children.length > LIMIT) mapsList.removeChild(mapsList.lastChild);
                         this.textContent = "Pokaži več";
                         this.dataset.expanded = "false";
                         resultsWrapper.scrollIntoView({ behavior: "smooth", block: "start" });
                     } else {
-                        if (sifrantList && arts.length > LIMIT) arts.slice(LIMIT).forEach(a => sifrantList.appendChild(buildArtCard(a)));
+                        if (deepPdfList && deepPdfEntries.length > LIMIT) deepPdfEntries.slice(LIMIT).forEach(([fn, pages]) => deepPdfList.appendChild(buildDeepPdfCard(fn, pages)));
                         if (mapsList && allMatches.length > LIMIT) allMatches.slice(LIMIT).forEach(item => mapsList.appendChild(buildMapCard(item)));
                         this.textContent = "Pokaži manj";
                         this.dataset.expanded = "true";
@@ -951,43 +980,39 @@ if (searchInput) {
                 resCont.appendChild(showMoreWrap);
             }
         }
-        
-        // Shrani rezultate v sessionStorage
+
         try {
-            sessionStorage.setItem('aluk_search_query', val);
-            sessionStorage.setItem('aluk_search_results', JSON.stringify({
-                arts: arts.length,
+            sessionStorage.setItem("aluk_search_query", val);
+            sessionStorage.setItem("aluk_search_results", JSON.stringify({
+                deepPdf: deepPdfEntries.length,
                 matches: allMatches.length,
                 timestamp: Date.now()
             }));
-        } catch(e) {
-            console.warn("Napaka pri shranjevanju rezultatov:", e);
-        }
-        
-        if (!found) { 
+        } catch (e) { /* sessionStorage full or disabled */ }
+
+        if (!found) {
             if (statusEl) {
                 statusEl.textContent = "Ni zadetkov.";
                 statusEl.style.color = "var(--text-secondary)";
                 statusEl.style.fontWeight = "400";
             }
             if (mainContent) {
-                mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);"><h3 style="color:var(--text-primary);">Ni zadetkov za "${escapeHtml(val)}"</h3></div>`;
+                mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);"><h3 style="color:var(--text-primary);">Ni zadetkov za \"${escapeHtml(val)}\"</h3></div>`;
             }
-        } else { 
+        } else {
+            const totalPages = deepPdfEntries.reduce((sum, [, entries]) => sum + entries.length, 0);
             if (statusEl) {
-                statusEl.textContent = `Najdeno: ${allMatches.length} datotek/map, ${arts.length} artiklov`;
+                statusEl.textContent = `Najdeno: ${deepPdfEntries.length} katalogov (${totalPages} strani), ${allMatches.length} datotek/map`;
                 statusEl.style.color = "var(--success)";
                 statusEl.style.fontWeight = "500";
             }
             if (mainContent) {
-                mainContent.innerHTML = ""; // Počisti ponovno za vsak slučaj
-                mainContent.appendChild(resCont); 
+                mainContent.innerHTML = "";
+                mainContent.appendChild(resCont);
             }
         }
     }, 300);
   });
-} else {
-  console.error("❌ KRITIČNA NAPAKA: searchInput element ni najden!");
 }
 
 // --- OSTALO ---
@@ -1029,7 +1054,8 @@ async function handleUrlFile(storagePath) {
   }
 }
 
-window.openPdfViewer = async function(fn, path) {
+window.openPdfViewer = async function(fn, path, page) {
+  console.log("[openPdfViewer] Klic:", { fn, path, page });
   const ext = (fn.split('.').pop() || '').toLowerCase();
   const forceDownload = ['xlsx', 'xls', 'dwg', 'dxf'].includes(ext);
   if (forceDownload) {
@@ -1046,19 +1072,45 @@ window.openPdfViewer = async function(fn, path) {
         a.click();
         URL.revokeObjectURL(blobUrl);
       } catch (e) {
-        console.warn('Download failed, opening in new tab:', e);
         window.open(data.signedUrl, '_blank');
       }
     }
     return;
   }
+  const pageNum = page != null && page > 0 ? Math.floor(Number(page)) : 1;
   const url = "#view=" + fn;
   window.history.pushState({ type: 'viewer', file: fn }, "", url);
   pdfModal.style.display = 'flex';
-  viewerFileName.textContent = fn;
+  if (viewerFileName) viewerFileName.textContent = fn;
   const p = path || (currentPath ? `${currentPath}/${fn}` : fn);
-  const { data } = await supabase.storage.from('Catalogs').createSignedUrl(p, 3600);
-  if (data) pdfFrame.src = data.signedUrl;
+  console.log("[openPdfViewer] Pot za signed URL:", p);
+  if (!pdfFrame) {
+    console.error("[openPdfViewer] pdfFrame element ni najden (id=pdfFrame)");
+    pdfModal.style.display = "none";
+    if (statusEl) statusEl.textContent = "Napaka: predogled ni na voljo.";
+    return;
+  }
+  try {
+    const { data, error } = await supabase.storage.from("Catalogs").createSignedUrl(p, 3600);
+    if (error) {
+      console.error("[openPdfViewer] createSignedUrl napaka:", error.message, "path:", p);
+      pdfModal.style.display = "none";
+      if (statusEl) statusEl.textContent = "Datoteke ni mogoče naložiti: " + (error.message || "neznana napaka");
+      return;
+    }
+    if (data?.signedUrl) {
+      pdfFrame.src = data.signedUrl + "#page=" + pageNum + "&view=Fit";
+      console.log("[openPdfViewer] iframe.src nastavljen, stran", pageNum);
+    } else {
+      console.warn("[openPdfViewer] createSignedUrl vrnil brez signedUrl");
+      pdfModal.style.display = "none";
+      if (statusEl) statusEl.textContent = "Datoteke ni mogoče naložiti.";
+    }
+  } catch (e) {
+    console.error("[openPdfViewer] Izjema:", e);
+    pdfModal.style.display = "none";
+    if (statusEl) statusEl.textContent = "Napaka pri odpiranju datoteke.";
+  }
 }
 window.closePdfViewer = function() { 
   pdfModal.style.display = 'none'; 
@@ -1503,3 +1555,22 @@ document.addEventListener('visibilitychange', () => {
   const loader = document.getElementById("loader");
   if (loader) loader.style.display = "none";
 })();
+
+// Preload file list on DOM ready and add debug button
+document.addEventListener("DOMContentLoaded", () => {
+  preloadFiles();
+  const headerActions = document.querySelector(".fixed-header .header-content div:last-child");
+  if (headerActions) {
+    const debugBtn = document.createElement("button");
+    debugBtn.type = "button";
+    debugBtn.className = "ghost";
+    debugBtn.textContent = "Debug file list";
+    debugBtn.style.fontSize = "12px";
+    debugBtn.style.marginLeft = "8px";
+    debugBtn.addEventListener("click", () => {
+      console.log("window.globalFileList", window.globalFileList);
+      console.log("length:", (window.globalFileList && window.globalFileList.length) || 0);
+    });
+    headerActions.appendChild(debugBtn);
+  }
+});

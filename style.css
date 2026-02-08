@@ -1143,6 +1143,36 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   font-size: 12px;
 }
 
+.search-page-buttons-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.search-page-btn {
+  background: #f0f0f0;
+  border: 1px solid var(--border, #ddd);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-primary, #333);
+  text-align: left;
+  width: 100%;
+  line-height: 1.35;
+}
+
+.search-page-btn b {
+  font-weight: 600;
+  color: var(--text-primary, #333);
+}
+
+.search-page-btn:hover {
+  background: var(--bg-secondary, #e8e8e8);
+  border-color: var(--primary, #0066cc);
+}
+
 .search-item-card .copy-btn,
 .search-item-card .item-arrow {
   flex-shrink: 0;
