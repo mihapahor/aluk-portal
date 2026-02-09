@@ -197,7 +197,8 @@ const nameTranslations = {
 
 function formatDisplayName(name) {
   if (!name || typeof name !== "string") return name;
-  let s = name.replace(/_/g, " ");
+  let s = name.replace(/_compressed/gi, "").replace(/\s*compressed\s*/gi, " ").trim();
+  s = s.replace(/_/g, " ");
   for (const [from, to] of Object.entries(nameTranslations)) {
     const re = new RegExp(from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
     s = s.replace(re, to);
@@ -524,7 +525,7 @@ async function renderGlobalFavorites() {
       }
       
       div.innerHTML = `<div class="item-preview folder-bg" style="height:100px; position:relative;"><div class="big-icon" style="font-size:40px;">${getIconForName(name)}</div>${badges}</div>
-                       <div class="item-info" style="padding:10px;"><strong style="font-size:13px;">${name}</strong></div>
+                       <div class="item-info" style="padding:10px;"><strong style="font-size:13px;">${escapeHtml(formatDisplayName(name))}</strong></div>
                        <button class="fav-btn active" style="top:5px; left:5px;">★</button>`;
       div.onclick = () => navigateTo(p);
       const favBtn = div.querySelector('.fav-btn');
@@ -584,7 +585,7 @@ function updateSidebarFavorites() {
     item.className = 'sidebar-fav-item';
     item.innerHTML = `
       <span class="fav-icon">★</span>
-      <span class="fav-name" title="${path}">${icon} ${name}</span>
+      <span class="fav-name" title="${escapeHtml(path)}">${icon} ${escapeHtml(formatDisplayName(name))}</span>
       <span class="fav-remove" title="Odstrani iz priljubljenih">✕</span>
     `;
     
@@ -604,7 +605,7 @@ function updateSidebarFavorites() {
         // Prikaži sporočilo uporabniku
         if (statusEl) {
           const originalText = statusEl.textContent;
-          statusEl.textContent = `⚠️ Mapa "${name}" je bila preimenovana ali premaknjena. Odstranjena iz priljubljenih.`;
+          statusEl.textContent = `⚠️ Mapa "${formatDisplayName(name)}" je bila preimenovana ali premaknjena. Odstranjena iz priljubljenih.`;
           statusEl.style.color = 'var(--error)';
           setTimeout(() => {
             statusEl.textContent = originalText;
@@ -644,7 +645,11 @@ function updateSidebarFavorites() {
 // --- ISKANJE (Deep PDF Search + Tehnična dokumentacija) ---
 /** Agresivna normalizacija: lowercase, odstrani .pdf, samo črke in številke (brez presledkov, podčrtajev, %20). */
 function cleanName(name) {
-  const s = (name == null ? "" : String(name)).toLowerCase().replace(/\.pdf$/i, "").replace(/[^a-z0-9]/g, "");
+  const s = (name == null ? "" : String(name))
+    .toLowerCase()
+    .replace(/_compressed/gi, "")
+    .replace(/\.pdf$/i, "")
+    .replace(/[^a-z0-9]/g, "");
   return s;
 }
 
@@ -883,7 +888,7 @@ if (searchInput) {
             div.innerHTML = `
                 <div class="item-preview file-bg">${iconHtml}</div>
                 <div class="item-info">
-                    <strong style="color:var(--result-doc-text);">${escapeHtml(filename)}</strong>
+                    <strong style="color:var(--result-doc-text);">${escapeHtml(formatDisplayName(filename))}</strong>
                 </div>
             `;
             div.querySelector(".item-info").appendChild(wrap);
@@ -908,7 +913,7 @@ if (searchInput) {
             const isFolder = !item.metadata;
             const pathParts = item.fullPath.split('/');
             const fileName = pathParts[pathParts.length - 1];
-            const folderPath = pathParts.slice(0, -1).join(' / ');
+            const folderPath = pathParts.slice(0, -1).map(formatDisplayName).join(' / ');
             const isLinkFile = !isFolder && isUrlLinkFile(fileName);
             div.onclick = () => {
                 if (isFolder) navigateTo(item.fullPath);
@@ -926,7 +931,7 @@ if (searchInput) {
             div.innerHTML = `
                 <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}">${displayIcon}</div>
                 <div class="item-info">
-                    <strong style="color:var(--result-doc-text);">${escapeHtml(fileName)}</strong>
+                    <strong style="color:var(--result-doc-text);">${escapeHtml(formatDisplayName(fileName))}</strong>
                     <small>${escapeHtml(folderPath || 'Koren')}</small>
                 </div>
                 <div class="item-arrow" style="color:var(--text-secondary); font-size:18px; flex-shrink:0; margin-left:10px;">→</div>
@@ -1081,7 +1086,7 @@ window.openPdfViewer = async function(fn, path, page) {
   const url = "#view=" + fn;
   window.history.pushState({ type: 'viewer', file: fn }, "", url);
   pdfModal.style.display = 'flex';
-  if (viewerFileName) viewerFileName.textContent = fn;
+  if (viewerFileName) viewerFileName.textContent = formatDisplayName(fn);
   const p = path || (currentPath ? `${currentPath}/${fn}` : fn);
   console.log("[openPdfViewer] Pot za signed URL:", p);
   if (!pdfFrame) {
@@ -1556,21 +1561,6 @@ document.addEventListener('visibilitychange', () => {
   if (loader) loader.style.display = "none";
 })();
 
-// Preload file list on DOM ready and add debug button
 document.addEventListener("DOMContentLoaded", () => {
   preloadFiles();
-  const headerActions = document.querySelector(".fixed-header .header-content div:last-child");
-  if (headerActions) {
-    const debugBtn = document.createElement("button");
-    debugBtn.type = "button";
-    debugBtn.className = "ghost";
-    debugBtn.textContent = "Debug file list";
-    debugBtn.style.fontSize = "12px";
-    debugBtn.style.marginLeft = "8px";
-    debugBtn.addEventListener("click", () => {
-      console.log("window.globalFileList", window.globalFileList);
-      console.log("length:", (window.globalFileList && window.globalFileList.length) || 0);
-    });
-    headerActions.appendChild(debugBtn);
-  }
 });
