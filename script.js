@@ -817,13 +817,16 @@ if (searchInput) {
         resCont.className = "file-container list-view";
         let found = false;
 
-        // Naloži globalni seznam datotek (za razreševanje pdf_filename → full path) in rezultate iskanja vzporedno
+        // Uporabi vnaprej naložen globalFileList (preloadFiles ob zagonu); brez ponovnega nalaganja 20k datotek ob vsakem iskanju
+        const fileListPromise = (window.globalFileList && window.globalFileList.length > 0)
+            ? Promise.resolve(window.globalFileList)
+            : preloadFiles().then(() => window.globalFileList || []);
         const [indexResult, allFiles, allMatches] = await Promise.all([
             supabase.from("catalog_index").select("pdf_filename, page_number, page_title").ilike("code", "%" + val + "%").limit(50),
-            searchAllFilesRecursive("", "", 0, 8, 20000),
+            fileListPromise,
             searchAllFilesRecursive("", val, 0, 8, 100)
         ]);
-        window.globalFileList = allFiles || [];
+        if (allFiles && allFiles.length > 0) window.globalFileList = allFiles;
 
         // 1. Deep PDF Search (Supabase catalog_index) – združeno po pdf_filename, vsaka stran z page_title
         let groupedByPdf = {};
@@ -869,7 +872,7 @@ if (searchInput) {
                 const btn = document.createElement("button");
                 btn.type = "button";
                 btn.className = "search-page-btn";
-                btn.innerHTML = "[Stran " + page + "]" + (title ? " <b>" + escapeHtml(title) + "</b>" : "");
+                btn.innerHTML = "<b>[Stran " + page + "]</b>" + (title ? ' <span class="search-page-btn-title">' + escapeHtml(title) + "</span>" : "");
                 if (fullPath) {
                     btn.addEventListener("click", (e) => {
                         e.preventDefault();
@@ -1433,12 +1436,7 @@ window.addEventListener('pageshow', (e) => {
   }
 });
 
-// Obnovi rezultate ob vračanju fokusa samo, če je iskanje aktivno in je vnos neprazen
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) return;
-  if (!isSearchActive || !searchInput || !searchInput.value.trim()) return;
-  searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-});
+// Rezultati iskanja ostanejo pri preklopu zavihka; osvežijo se šele, ko uporabnik spremeni ali izbriše vsebino iskalnega polja.
 
 // --- INICIALIZACIJA (zanesljivo za mobilne magic linke) ---
 (function handleAuthErrorInUrl() {

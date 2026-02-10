@@ -1168,6 +1168,10 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   color: var(--text-primary, #333);
 }
 
+.search-page-btn-title {
+  font-weight: normal;
+}
+
 .search-page-btn:hover {
   background: var(--bg-secondary, #e8e8e8);
   border-color: var(--primary, #0066cc);
