@@ -247,9 +247,13 @@ body {
 
 .search-input-wrap {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-
 .search-input-wrap input {
+  flex: 1;
+  min-width: 0;
   margin-bottom: 0;
   padding-right: 40px;
 }
@@ -494,10 +498,200 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   margin-top: 0; 
 }
 
+#searchResultsWrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 30px;
+  width: 100%;
+}
+
+#searchResultsWrapper #mainContent,
+#searchResultsWrapper #catalogResultsSection {
+  flex: 1;
+  min-width: 300px;
+  box-sizing: border-box;
+}
+
+/* Ko je le vsebina katalogov (ni zadetkov iz map), naj zavzame celotno širino */
+#searchResultsWrapper #mainContent[style*="display: none"] + #catalogResultsSection,
+#searchResultsWrapper #mainContent[style*="display:none"] + #catalogResultsSection {
+  flex: 1 1 100%;
+  max-width: 100%;
+}
+
 #mainContent {
   width: 100% !important;
   min-height: max(80vh, 600px);
   box-sizing: border-box;
+}
+
+.search-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--aluk-black-25);
+  border-top-color: var(--aluk-red);
+  border-radius: 50%;
+  animation: search-spin 0.8s linear infinite;
+}
+@keyframes search-spin {
+  to { transform: rotate(360deg); }
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+/* Catalog section title above cards */
+.catalog-results-title {
+  margin: 0 0 12px;
+  color: var(--result-doc-heading);
+}
+
+.catalog-section-header {
+  min-height: 110px;
+  margin-bottom: 0;
+}
+
+.catalog-section-header p {
+  margin-bottom: 15px;
+}
+
+/* Search results headers in current two-column wrapper */
+#searchResultsWrapper .search-section-header {
+  min-height: 110px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+#searchResultsWrapper .search-section-header h3 {
+  margin: 0 0 12px;
+}
+
+#searchResultsWrapper .search-section-header p {
+  margin: 0;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+/* Catalog Card Container */
+.catalog-card {
+  background: white;
+  border: 1px solid var(--aluk-black-25);
+  border-radius: 8px;
+  overflow: hidden; /* Keeps content inside rounded corners */
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  margin-bottom: 0; /* Let grid handle gaps */
+}
+
+.catalog-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+/* Card Header (Filename) */
+.catalog-card-header {
+  background-color: var(--aluk-black-10);
+  padding: 12px 15px;
+  font-weight: 700;
+  color: var(--aluk-black);
+  border-bottom: 1px solid var(--aluk-black-25);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* List Container inside Card */
+.match-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* Individual Result Row - Full Width, Stacked */
+.match-item {
+  display: flex;
+  align-items: center; /* Vertically center badge and text */
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--aluk-black-10);
+  text-decoration: none;
+  transition: background-color 0.1s;
+  gap: 12px;
+}
+
+.match-item:last-child {
+  border-bottom: none;
+}
+
+.match-item:hover {
+  background-color: #fff5f5; /* Very light red tint on hover */
+}
+
+/* The Red Button Badge (Fixed Width) */
+.page-badge {
+  background-color: var(--aluk-black); /* Dark by default */
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 65px; /* Ensure alignment */
+  text-align: center;
+  flex-shrink: 0; /* Prevent shrinking */
+  transition: background-color 0.2s;
+}
+
+.match-item:hover .page-badge {
+  background-color: var(--aluk-red); /* Turns RED on hover */
+}
+
+/* The Title Text (Black, Readable) */
+.match-title {
+  color: var(--aluk-black); /* STRICTLY BLACK text */
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* Limit to 2 lines if very long */
+  -webkit-box-orient: vertical;
+}
+
+.page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--aluk-black-10);
+  color: var(--aluk-black);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  margin-right: 5px;
+  margin-bottom: 5px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.page-btn:hover {
+  background-color: var(--aluk-red);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(226, 0, 26, 0.3);
 }
 
 .file-container {
@@ -1035,7 +1229,14 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .search-results-grid .search-results-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+}
+
+/* Real spacing for documentation result cards in current layout */
+#searchResultsWrapper .search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 /* Skupni gumb Pokaži več / Pokaži manj – pod obema stolpcema, centriran */
@@ -1043,6 +1244,10 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   text-align: center;
   margin-top: 24px;
   margin-bottom: 16px;
+}
+.search-results-show-more-wrap.shared-search-more {
+  flex: 1 1 100%;
+  width: 100%;
 }
 .search-results-show-more-wrap .show-more-results-btn {
   display: inline-block;

@@ -118,6 +118,7 @@
           <div class="search-box">
             <div class="search-input-wrap">
               <input id="search" type="text" placeholder="🔍 Išči po vseh mapah in šifrantu artiklov..." />
+              <span id="searchSpinner" class="search-spinner" style="display:none;" aria-hidden="true"></span>
               <button id="clearSearch" type="button" class="clear-search-btn" style="display:none;" title="Izbriši iskanje">✕</button>
             </div>
           </div>
@@ -157,7 +158,10 @@
         <span id="status" class="content-status"></span>
       </div>
       <p id="contentTitleDesc" class="content-desc">Kliknite na mapo za vstop ali na datoteko za predogled. Datoteke z oznako <span class="new-badge inline-badge">NOVO</span> so bile dodane v zadnjih 30 dneh.</p>
-      <div id="mainContent"></div>
+      <div id="searchResultsWrapper">
+        <div id="mainContent"></div>
+        <div id="catalogResultsSection" style="display:none;"></div>
+      </div>
 
       </div>
       

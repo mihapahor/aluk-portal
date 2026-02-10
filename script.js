@@ -68,6 +68,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 const authForm = getElement("authForm");
 const appCard = getElement("appCard");
 const mainContent = getElement("mainContent");
+const searchResultsWrapper = getElement("searchResultsWrapper");
+const catalogResultsSection = getElement("catalogResultsSection");
+const searchSpinner = getElement("searchSpinner");
 const skeletonLoader = getElement("skeletonLoader");
 const statusEl = getElement("status");
 const searchInput = getElement("search");
@@ -98,6 +101,27 @@ let folderCache = {};
 let currentRenderId = 0;
 let imageUrlCache = {}; // Cache za signed URLs slik
 let isSearchActive = false; // Flag za preverjanje, če je aktivno iskanje 
+
+function clearSharedSearchMoreButton() {
+  if (!searchResultsWrapper) return;
+  searchResultsWrapper
+    .querySelectorAll(".search-results-show-more-wrap.shared-search-more")
+    .forEach((el) => el.remove());
+}
+
+function getDynamicSearchInitialLimit({ hasMapResults, hasCatalogResults }) {
+  const vh = window.innerHeight || 900;
+  const onlyCatalog = hasCatalogResults && !hasMapResults;
+  const headerReserve = onlyCatalog ? 300 : 360;
+  const usableHeight = Math.max(300, vh - headerReserve);
+  const estimatedRowHeight = 44;
+  const rowsOnScreen = Math.max(6, Math.floor(usableHeight / estimatedRowHeight));
+
+  let count = onlyCatalog ? rowsOnScreen * 2 : rowsOnScreen;
+  count += onlyCatalog ? 8 : 4;
+
+  return Math.max(10, Math.min(count, 40));
+}
 
 // --- POMOŽNE FUNKCIJE ---
 function normalizePath(path) { if (!path) return ""; try { return decodeURIComponent(path).trim(); } catch (e) { return path.trim(); } }
@@ -275,17 +299,35 @@ document.getElementById("logout").addEventListener("click", async () => {
 // --- NAVIGACIJA ---
 window.navigateTo = function(path) {
   window.scrollTo(0, 0);
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+  }
+  clearSharedSearchMoreButton();
+  currentRenderId++; // invalidiraj pending search renderje
   currentPath = path; 
   searchInput.value = ""; 
   isSearchActive = false; // Deaktiviraj iskanje ob navigaciji
   sessionStorage.removeItem('aluk_search_query');
   sessionStorage.removeItem('aluk_search_results');
+  if (catalogResultsSection) {
+    catalogResultsSection.style.display = "none";
+    catalogResultsSection.innerHTML = "";
+  }
   window.history.pushState({ path }, "", "#" + path); 
   loadContent(path); 
 }
 /** Navigacija vedno iz URL hasha – npr. #Okenski sistemi → currentPath ostane ob preklapljanju zaviho. */
 function getPathFromUrl() { const h = window.location.hash; if (!h || h.length <= 1 || h.startsWith("#view=")) return ""; return decodeURIComponent(h.slice(1)); }
-window.addEventListener('popstate', () => { pdfModal.style.display = 'none'; pdfFrame.src = ""; const p = getPathFromUrl(); currentPath = p; loadContent(p); });
+window.addEventListener('popstate', () => {
+  pdfModal.style.display = 'none';
+  pdfFrame.src = "";
+  const p = getPathFromUrl();
+  currentPath = p;
+  const hasActiveSearch = !!(isSearchActive && searchInput && searchInput.value.trim());
+  if (hasActiveSearch) return;
+  loadContent(p);
+});
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pdfModal && pdfModal.style.display === 'flex') closePdfViewer(); });
 
 // --- REKURZIVNO ISKANJE (Banner) – šteje vse NOVE datoteke v trenutni mapi in vseh podmapah ---
@@ -691,6 +733,55 @@ async function preloadFiles() {
   }
 }
 
+/**
+ * Iskanje v Supabase catalog_index. Združi po pdf_filename, vrne skupno število zadetkov.
+ * @param {string} query - iskalni niz
+ * @returns {Promise<{ groupedByPdf: Object, catalogTotalCount: number }>}
+ */
+async function searchSupabaseCatalog(query) {
+  const out = { groupedByPdf: {}, catalogTotalCount: 0 };
+  if (!query || String(query).trim().length < 2) return out;
+  try {
+    const trimmed = String(query).trim();
+    const pageSize = 1000;
+    let from = 0;
+    let indexRows = [];
+
+    while (true) {
+      const to = from + pageSize - 1;
+      const { data, error } = await supabase
+        .from("catalog_index")
+        .select("pdf_filename, page_number, page_title")
+        .ilike("code", "%" + trimmed + "%")
+        .range(from, to);
+      if (error) return out;
+      const batch = Array.isArray(data) ? data : [];
+      if (batch.length === 0) break;
+      indexRows = indexRows.concat(batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
+
+    if (indexRows.length === 0) return out;
+    const groupedByPdf = {};
+    for (const row of indexRows) {
+      const fn = row.pdf_filename;
+      const page = row.page_number != null ? Number(row.page_number) : 1;
+      const title = (row.page_title != null && String(row.page_title).trim()) ? String(row.page_title).trim() : "";
+      if (!fn) continue;
+      if (!groupedByPdf[fn]) groupedByPdf[fn] = [];
+      const exists = groupedByPdf[fn].some((e) => e.page === page && e.title === title);
+      if (!exists) groupedByPdf[fn].push({ page, title });
+    }
+    for (const fn of Object.keys(groupedByPdf)) groupedByPdf[fn].sort((a, b) => a.page - b.page);
+    const catalogTotalCount = Object.values(groupedByPdf).reduce((sum, items) => sum + items.length, 0);
+    return { groupedByPdf, catalogTotalCount };
+  } catch (e) {
+    console.warn("searchSupabaseCatalog error:", e);
+    return out;
+  }
+}
+
 // Debounce za iskanje (optimizacija)
 let searchTimeout = null;
 
@@ -718,11 +809,21 @@ if (searchInput) {
     });
     
     clearSearchBtn.addEventListener("click", () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+        searchTimeout = null;
+      }
+      clearSharedSearchMoreButton();
+      currentRenderId++; // invalidiraj vse pending search rendeje
       searchInput.value = "";
       clearSearchBtn.style.display = "none";
       isSearchActive = false; // Deaktiviraj iskanje
       sessionStorage.removeItem('aluk_search_query');
       sessionStorage.removeItem('aluk_search_results');
+      if (catalogResultsSection) {
+        catalogResultsSection.style.display = "none";
+        catalogResultsSection.innerHTML = "";
+      }
       
       // Prikaži posodobitve nazaj
       if (updatesBanner) {
@@ -750,8 +851,6 @@ if (searchInput) {
   });
   
   searchInput.addEventListener("input", async (e) => {
-    console.log("⌨️ Input event triggered, vrednost:", e.target.value);
-    
     // Prikaži/skrij križec
     if (clearSearchBtn) {
       clearSearchBtn.style.display = e.target.value.trim() ? "flex" : "none";
@@ -762,25 +861,29 @@ if (searchInput) {
     
     const val = e.target.value.trim();
     
-    if (!val) { 
-      // Počisti sessionStorage
+    if (!val) {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+        searchTimeout = null;
+      }
+      clearSharedSearchMoreButton();
+      currentRenderId++; // invalidiraj search, ki je še v teku
       sessionStorage.removeItem('aluk_search_query');
       sessionStorage.removeItem('aluk_search_results');
-      isSearchActive = false; // Deaktiviraj iskanje
-      
-      // Prikaži nazaj sekcijo "TEHNIČNA DOKUMENTACIJA"
+      isSearchActive = false;
+      if (mainContent) mainContent.style.display = "";
+      if (catalogResultsSection) {
+        catalogResultsSection.style.display = "none";
+        catalogResultsSection.innerHTML = "";
+      }
       const contentTitleEl = getElement("contentTitle");
       const contentTitleDesc = getElement("contentTitleDesc");
       if (contentTitleEl) contentTitleEl.style.display = "";
       if (contentTitleDesc) contentTitleDesc.style.display = "";
-      
-      // Prikaži posodobitve, če so bile skrite
-      if (updatesBanner) {
-        updatesBanner.style.display = "";
-      }
-      
-      if (currentItems.length > 0) renderItems(currentItems, currentRenderId); 
-      return; 
+      if (updatesBanner) updatesBanner.style.display = "";
+      if (searchSpinner) searchSpinner.style.display = "none";
+      if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
+      return;
     }
     
     isSearchActive = true; // Aktiviraj iskanje
@@ -791,234 +894,239 @@ if (searchInput) {
     }
     
     searchTimeout = setTimeout(async () => {
-        const lowerVal = val.toLowerCase();
-
-        // Povečaj renderID, da preprečimo podvajanje
         currentRenderId++;
         const thisRenderId = currentRenderId;
 
-        // POČISTI prejšnje rezultate
-        if (mainContent) mainContent.innerHTML = "";
-
-        // Skrij sekcijo "TEHNIČNA DOKUMENTACIJA" ko iščeš
         const contentTitleEl = getElement("contentTitle");
         const contentTitleDesc = getElement("contentTitleDesc");
         if (contentTitleEl) contentTitleEl.style.display = "none";
         if (contentTitleDesc) contentTitleDesc.style.display = "none";
 
-        // Prikaži loading indikator
+        if (searchSpinner) searchSpinner.style.display = "inline-block";
         if (statusEl) {
             statusEl.innerHTML = '<span class="loading-indicator">Iščem<span class="loading-dots"><span>.</span><span>.</span><span>.</span></span></span>';
             statusEl.style.color = "var(--loading-color)";
             statusEl.style.fontWeight = "500";
         }
 
-        const resCont = document.createElement("div");
-        resCont.className = "file-container list-view";
-        let found = false;
-
-        // Uporabi vnaprej naložen globalFileList (preloadFiles ob zagonu); brez ponovnega nalaganja 20k datotek ob vsakem iskanju
         const fileListPromise = (window.globalFileList && window.globalFileList.length > 0)
             ? Promise.resolve(window.globalFileList)
             : preloadFiles().then(() => window.globalFileList || []);
-        const [indexResult, allFiles, allMatches] = await Promise.all([
-            supabase.from("catalog_index").select("pdf_filename, page_number, page_title").ilike("code", "%" + val + "%").limit(50),
+        const catalogPromise = val.length >= 3 ? searchSupabaseCatalog(val) : Promise.resolve({ groupedByPdf: {}, catalogTotalCount: 0 });
+        const [allFiles, allMatches, catalogResult] = await Promise.all([
             fileListPromise,
-            searchAllFilesRecursive("", val, 0, 8, 100)
+            searchAllFilesRecursive("", val, 0, 8, 20000),
+            catalogPromise
         ]);
         if (allFiles && allFiles.length > 0) window.globalFileList = allFiles;
 
-        // 1. Deep PDF Search (Supabase catalog_index) – združeno po pdf_filename, vsaka stran z page_title
-        let groupedByPdf = {};
-        try {
-            const { data: indexRows, error } = indexResult;
-            if (!error && indexRows && indexRows.length > 0) {
-                for (const row of indexRows) {
-                    const fn = row.pdf_filename;
-                    const page = row.page_number != null ? Number(row.page_number) : 1;
-                    const title = (row.page_title != null && String(row.page_title).trim()) ? String(row.page_title).trim() : "";
-                    if (!fn) continue;
-                    if (!groupedByPdf[fn]) groupedByPdf[fn] = [];
-                    const exists = groupedByPdf[fn].some((e) => e.page === page);
-                    if (!exists) groupedByPdf[fn].push({ page, title });
-                }
-                for (const fn of Object.keys(groupedByPdf)) groupedByPdf[fn].sort((a, b) => a.page - b.page);
+        if (thisRenderId !== currentRenderId) {
+          if (searchSpinner) searchSpinner.style.display = "none";
+          return;
+        }
+        clearSharedSearchMoreButton();
+
+        const fileCount = allMatches.length;
+        const { groupedByPdf, catalogTotalCount } = catalogResult;
+
+        if (searchSpinner) searchSpinner.style.display = "none";
+
+        const hasCatalogResults = val.length >= 3 && catalogTotalCount > 0;
+        const hasMapResults = fileCount > 0;
+        const initialLimit = getDynamicSearchInitialLimit({ hasMapResults, hasCatalogResults });
+        const catalogNeedsMore = hasCatalogResults && catalogTotalCount > initialLimit;
+        const mapsNeedsMore = hasMapResults && fileCount > initialLimit;
+        let isExpanded = false;
+
+        if (mainContent) mainContent.style.display = "";
+
+        let catalogGrid = null;
+        const catalogEntries = Object.entries(groupedByPdf);
+        const renderCatalogResults = (expanded) => {
+          if (!catalogGrid) return;
+          catalogGrid.innerHTML = "";
+          const maxItems = expanded ? Number.MAX_SAFE_INTEGER : initialLimit;
+          let shown = 0;
+          for (const [filename, pageEntries] of catalogEntries) {
+            const visibleEntries = [];
+            for (const entry of pageEntries) {
+              if (shown >= maxItems) break;
+              visibleEntries.push(entry);
+              shown++;
             }
-        } catch (e) { /* catalog_index optional */ }
+            if (!visibleEntries.length) continue;
 
-        const resultsWrapper = document.createElement("div");
-        resultsWrapper.className = "search-results-grid";
-
-        const deepPdfCol = document.createElement("div");
-        const mapsCol = document.createElement("div");
-        deepPdfCol.style.paddingTop = "0";
-        mapsCol.style.paddingTop = "0";
-
-        const LIMIT = 10;
-        let deepPdfList = null;
-        let mapsList = null;
-        const deepPdfEntries = Object.entries(groupedByPdf);
-
-        const buildDeepPdfCard = (filename, pageEntries) => {
             const fullPath = findPathForFilename(filename);
-            if (!fullPath) console.warn("[Search] Kartica brez poti (gumbi onemogočeni):", filename);
-            const div = document.createElement("div");
-            div.className = "item search-item-card";
-            div.style.cursor = "default";
-            const iconHtml = `<img src="256px-PDF_file_icon.svg.png" class="icon-img" onerror="this.outerHTML='<span class=\\'big-icon\\'>📕</span>'">`;
-            const wrap = document.createElement("div");
-            wrap.className = "search-page-buttons-wrap";
-            pageEntries.forEach(({ page, title }) => {
-                const btn = document.createElement("button");
-                btn.type = "button";
-                btn.className = "search-page-btn";
-                btn.innerHTML = "<b>[Stran " + page + "]</b>" + (title ? ' <span class="search-page-btn-title">' + escapeHtml(title) + "</span>" : "");
-                if (fullPath) {
-                    btn.addEventListener("click", (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (typeof window.openPdfViewer === "function") {
-                            window.openPdfViewer(filename, fullPath, page);
-                        } else if (statusEl) statusEl.textContent = "Datoteke ni mogoče odpreti.";
-                    });
-                } else {
-                    btn.disabled = true;
-                    btn.title = "Datoteke ni mogoče najti v katalogu.";
-                    btn.style.opacity = "0.6";
-                }
-                wrap.appendChild(btn);
-            });
-            div.innerHTML = `
-                <div class="item-preview file-bg">${iconHtml}</div>
-                <div class="item-info">
-                    <strong style="color:var(--result-doc-text);">${escapeHtml(formatDisplayName(filename))}</strong>
-                </div>
+            const card = document.createElement("div");
+            card.className = "catalog-card";
+            const header = document.createElement("div");
+            header.className = "catalog-card-header";
+            header.innerHTML = `
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+              <span>${formatDisplayName(filename)}</span>
             `;
-            div.querySelector(".item-info").appendChild(wrap);
-            return div;
-        };
-
-        if (deepPdfEntries.length > 0) {
-            found = true;
-            const totalPages = deepPdfEntries.reduce((sum, [, entries]) => sum + entries.length, 0);
-            deepPdfCol.innerHTML = `<div class="search-section-header"><h3 style="color:var(--result-doc-heading);">📕 Iskanje v PDF katalogih (${deepPdfEntries.length} katalogov, ${totalPages} strani)</h3><p>Klik na številko strani odpre katalog na tej strani.</p></div>`;
-            deepPdfList = document.createElement("div");
-            deepPdfList.className = "search-results-list";
-            const deepVisible = deepPdfEntries.slice(0, LIMIT);
-            deepVisible.forEach(([fn, pages]) => deepPdfList.appendChild(buildDeepPdfCard(fn, pages)));
-            deepPdfCol.appendChild(deepPdfList);
-        }
-
-        // 2. Tehnična dokumentacija (allMatches že naložen zgoraj)
-        const buildMapCard = (item) => {
-            const div = document.createElement("div");
-            div.className = "item search-item-card";
-            const isFolder = !item.metadata;
-            const pathParts = item.fullPath.split('/');
-            const fileName = pathParts[pathParts.length - 1];
-            const folderPath = pathParts.slice(0, -1).map(formatDisplayName).join(' / ');
-            const isLinkFile = !isFolder && isUrlLinkFile(fileName);
-            div.onclick = () => {
-                if (isFolder) navigateTo(item.fullPath);
-                else if (isLinkFile) handleUrlFile(item.fullPath);
-                else openPdfViewer(fileName, item.fullPath);
-            };
-            const baseName = getBaseName(fileName).toLowerCase();
-            let displayIcon = isFolder ? getIconForName(baseName) : "📄";
-            const ext = fileName.split('.').pop().toLowerCase();
-            if (!isFolder && isLinkFile) displayIcon = "🔗";
-            else if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
-            if (!isFolder && !isLinkFile && (ext === 'dwg' || ext === 'dxf')) displayIcon = "📐";
-            if (!isFolder && !isLinkFile && (ext === 'xlsx' || ext === 'xls')) displayIcon = `<img src="excel_icon.png" class="icon-img" onerror="this.outerHTML='<span class=\\'big-icon\\'>📊</span>'">`;
-            if (!isFolder && !isLinkFile && ext === 'pdf') displayIcon = `<img src="256px-PDF_file_icon.svg.png" class="icon-img" onerror="this.outerHTML='<span class=\\'big-icon\\'>📕</span>'">`;
-            div.innerHTML = `
-                <div class="item-preview ${isFolder ? 'folder-bg' : 'file-bg'}">${displayIcon}</div>
-                <div class="item-info">
-                    <strong style="color:var(--result-doc-text);">${escapeHtml(formatDisplayName(fileName))}</strong>
-                    <small>${escapeHtml(folderPath || 'Koren')}</small>
-                </div>
-                <div class="item-arrow" style="color:var(--text-secondary); font-size:18px; flex-shrink:0; margin-left:10px;">→</div>
-            `;
-            return div;
-        };
-
-        if (allMatches.length > 0) {
-            found = true;
-            mapsCol.innerHTML = `<div class="search-section-header"><h3 style="color:var(--result-doc-heading);">📁 Tehnična dokumentacija (${allMatches.length})</h3><p>Iskanje katalogov prikaže vse kataloge, ki se ujemajo in so na voljo na tem portalu.</p></div>`;
-            mapsList = document.createElement("div");
-            mapsList.className = "search-results-list";
-            const mapsVisible = allMatches.slice(0, LIMIT);
-            mapsVisible.forEach(item => mapsList.appendChild(buildMapCard(item)));
-            mapsCol.appendChild(mapsList);
-        }
-
-        if (thisRenderId !== currentRenderId) return;
-
-        if (deepPdfEntries.length > 0) resultsWrapper.appendChild(deepPdfCol);
-        if (allMatches.length > 0) resultsWrapper.appendChild(mapsCol);
-
-        if (deepPdfEntries.length === 0 || allMatches.length === 0) {
-            resultsWrapper.classList.add("search-results-single-col");
-        }
-
-        if (deepPdfEntries.length > 0 || allMatches.length > 0) {
-            resCont.appendChild(resultsWrapper);
-            if (deepPdfEntries.length > LIMIT || allMatches.length > LIMIT) {
-                const showMoreWrap = document.createElement("div");
-                showMoreWrap.className = "search-results-show-more-wrap";
-                const showMoreBtn = document.createElement("button");
-                showMoreBtn.type = "button";
-                showMoreBtn.className = "show-more-results-btn";
-                showMoreBtn.textContent = "Pokaži več";
-                showMoreBtn.addEventListener("click", function () {
-                    if (this.dataset.expanded === "true") {
-                        if (deepPdfList) while (deepPdfList.children.length > LIMIT) deepPdfList.removeChild(deepPdfList.lastChild);
-                        if (mapsList) while (mapsList.children.length > LIMIT) mapsList.removeChild(mapsList.lastChild);
-                        this.textContent = "Pokaži več";
-                        this.dataset.expanded = "false";
-                        resultsWrapper.scrollIntoView({ behavior: "smooth", block: "start" });
-                    } else {
-                        if (deepPdfList && deepPdfEntries.length > LIMIT) deepPdfEntries.slice(LIMIT).forEach(([fn, pages]) => deepPdfList.appendChild(buildDeepPdfCard(fn, pages)));
-                        if (mapsList && allMatches.length > LIMIT) allMatches.slice(LIMIT).forEach(item => mapsList.appendChild(buildMapCard(item)));
-                        this.textContent = "Pokaži manj";
-                        this.dataset.expanded = "true";
-                    }
+            card.appendChild(header);
+            const list = document.createElement("div");
+            list.className = "match-list";
+            visibleEntries.forEach(({ page, title }) => {
+              const link = document.createElement("a");
+              link.className = "match-item";
+              link.href = `${fullPath || filename}#page=${page}`;
+              link.target = "_blank";
+              if (fullPath && typeof window.openPdfViewer === "function") {
+                link.addEventListener("click", (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.openPdfViewer(filename, fullPath, page);
                 });
-                showMoreWrap.appendChild(showMoreBtn);
-                resCont.appendChild(showMoreWrap);
+              }
+              const titleText = title ? title : `Stran ${page}`;
+              link.innerHTML = `
+                <span class="page-badge">Str. ${page}</span>
+                <span class="match-title">${titleText}</span>
+              `;
+              list.appendChild(link);
+            });
+            card.appendChild(list);
+            catalogGrid.appendChild(card);
+            if (shown >= maxItems) break;
+          }
+        };
+
+        if (catalogResultsSection) {
+          if (!hasCatalogResults) {
+            catalogResultsSection.style.display = "none";
+          } else {
+            catalogResultsSection.style.display = "block";
+            if (!hasMapResults && mainContent) {
+              mainContent.style.display = "none";
             }
+            catalogResultsSection.innerHTML = "";
+            const catalogHeader = document.createElement("div");
+            catalogHeader.className = "search-section-header catalog-section-header";
+            const h3 = document.createElement("h3");
+            h3.className = "catalog-results-title";
+            h3.style.color = "var(--result-doc-heading)";
+            h3.textContent = "📚 Vsebina katalogov (" + catalogTotalCount + ")";
+            const p = document.createElement("p");
+            p.textContent = "Strani in naslovi, ki se ujemajo z iskanjem.";
+            p.style.fontSize = "13px";
+            p.style.color = "var(--text-primary)";
+            catalogHeader.appendChild(h3);
+            catalogHeader.appendChild(p);
+            catalogResultsSection.appendChild(catalogHeader);
+            catalogGrid = document.createElement("div");
+            catalogGrid.className = "catalog-grid";
+            catalogResultsSection.appendChild(catalogGrid);
+            renderCatalogResults(false);
+          }
+        }
+
+        const resCont = document.createElement("div");
+        resCont.className = "file-container list-view";
+        const mapsCol = document.createElement("div");
+        mapsCol.style.paddingTop = "0";
+        let mapsList = null;
+
+        const buildMapCard = (item) => {
+          const div = document.createElement("div");
+          div.className = "item search-item-card";
+          const isFolder = !item.metadata;
+          const pathParts = item.fullPath.split("/");
+          const fileName = pathParts[pathParts.length - 1];
+          const folderPath = pathParts.slice(0, -1).map(formatDisplayName).join(" / ");
+          const isLinkFile = !isFolder && isUrlLinkFile(fileName);
+          div.onclick = () => {
+            if (isFolder) navigateTo(item.fullPath);
+            else if (isLinkFile) handleUrlFile(item.fullPath);
+            else openPdfViewer(fileName, item.fullPath);
+          };
+          const baseName = getBaseName(fileName).toLowerCase();
+          let displayIcon = isFolder ? getIconForName(baseName) : "📄";
+          const ext = fileName.split(".").pop().toLowerCase();
+          if (!isFolder && isLinkFile) displayIcon = "🔗";
+          else if (!isFolder && fileIcons[ext]) displayIcon = fileIcons[ext];
+          if (!isFolder && !isLinkFile && (ext === "dwg" || ext === "dxf")) displayIcon = "📐";
+          if (!isFolder && !isLinkFile && (ext === "xlsx" || ext === "xls")) displayIcon = `<img src="excel_icon.png" class="icon-img" onerror="this.outerHTML='<span class=\\'big-icon\\'>📊</span>'">`;
+          if (!isFolder && !isLinkFile && ext === "pdf") displayIcon = `<img src="256px-PDF_file_icon.svg.png" class="icon-img" onerror="this.outerHTML='<span class=\\'big-icon\\'>📕</span>'">`;
+          div.innerHTML = `
+            <div class="item-preview ${isFolder ? "folder-bg" : "file-bg"}">${displayIcon}</div>
+            <div class="item-info">
+              <strong style="color:var(--result-doc-text);">${escapeHtml(formatDisplayName(fileName))}</strong>
+              <small>${escapeHtml(folderPath || "Koren")}</small>
+            </div>
+            <div class="item-arrow" style="color:var(--text-secondary); font-size:18px; flex-shrink:0; margin-left:10px;">→</div>
+          `;
+          return div;
+        };
+
+        const renderMapResults = (expanded) => {
+          if (!mapsList) return;
+          mapsList.innerHTML = "";
+          const items = expanded ? allMatches : allMatches.slice(0, initialLimit);
+          items.forEach((item) => mapsList.appendChild(buildMapCard(item)));
+        };
+
+        if (hasMapResults) {
+          mapsCol.innerHTML = `<div class="search-section-header"><h3 style="color:var(--result-doc-heading);">📁 Tehnična dokumentacija (${fileCount})</h3><p style="font-size:13px; color:var(--text-primary);">Datoteke in mape, ki se ujemajo z iskanjem.</p></div>`;
+          mapsList = document.createElement("div");
+          mapsList.className = "search-results-list";
+          renderMapResults(false);
+          mapsCol.appendChild(mapsList);
+          resCont.appendChild(mapsCol);
+        }
+
+        const hasSharedColumns = hasMapResults && hasCatalogResults;
+        const shouldShowMore = mapsNeedsMore || catalogNeedsMore;
+        if (shouldShowMore) {
+          const showMoreWrap = document.createElement("div");
+          showMoreWrap.className = "search-results-show-more-wrap" + (hasSharedColumns ? " shared-search-more" : "");
+          const showMoreBtn = document.createElement("button");
+          showMoreBtn.type = "button";
+          showMoreBtn.className = "show-more-results-btn";
+          showMoreBtn.textContent = "Pokaži več";
+          showMoreBtn.addEventListener("click", function () {
+            isExpanded = !isExpanded;
+            this.textContent = isExpanded ? "Pokaži manj" : "Pokaži več";
+            if (mapsNeedsMore) renderMapResults(isExpanded);
+            if (catalogNeedsMore) renderCatalogResults(isExpanded);
+          });
+          showMoreWrap.appendChild(showMoreBtn);
+          if (hasSharedColumns && searchResultsWrapper) {
+            searchResultsWrapper.appendChild(showMoreWrap);
+          } else if (hasMapResults) {
+            resCont.appendChild(showMoreWrap);
+          } else if (hasCatalogResults && catalogResultsSection) {
+            catalogResultsSection.appendChild(showMoreWrap);
+          }
+        }
+
+        const found = fileCount > 0 || catalogTotalCount > 0;
+        if (mainContent) {
+          mainContent.innerHTML = "";
+          if (fileCount > 0) {
+            mainContent.appendChild(resCont);
+          } else if (catalogTotalCount === 0) {
+            mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);"><h3 style="color:var(--text-primary);">Ni zadetkov za \"${escapeHtml(val)}\"</h3></div>`;
+          }
+        }
+
+        if (statusEl) {
+          if (!found) {
+            statusEl.textContent = "Ni zadetkov.";
+            statusEl.style.color = "var(--text-secondary)";
+            statusEl.style.fontWeight = "400";
+          } else {
+            statusEl.textContent = (fileCount > 0 ? fileCount + " datotek/map" : "") + (fileCount > 0 && catalogTotalCount > 0 ? ", " : "") + (catalogTotalCount > 0 ? catalogTotalCount + " zadetkov v katalogih" : "");
+            statusEl.style.color = "var(--success)";
+            statusEl.style.fontWeight = "500";
+          }
         }
 
         try {
-            sessionStorage.setItem("aluk_search_query", val);
-            sessionStorage.setItem("aluk_search_results", JSON.stringify({
-                deepPdf: deepPdfEntries.length,
-                matches: allMatches.length,
-                timestamp: Date.now()
-            }));
-        } catch (e) { /* sessionStorage full or disabled */ }
-
-        if (!found) {
-            if (statusEl) {
-                statusEl.textContent = "Ni zadetkov.";
-                statusEl.style.color = "var(--text-secondary)";
-                statusEl.style.fontWeight = "400";
-            }
-            if (mainContent) {
-                mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);"><h3 style="color:var(--text-primary);">Ni zadetkov za \"${escapeHtml(val)}\"</h3></div>`;
-            }
-        } else {
-            const totalPages = deepPdfEntries.reduce((sum, [, entries]) => sum + entries.length, 0);
-            if (statusEl) {
-                statusEl.textContent = `Najdeno: ${deepPdfEntries.length} katalogov (${totalPages} strani), ${allMatches.length} datotek/map`;
-                statusEl.style.color = "var(--success)";
-                statusEl.style.fontWeight = "500";
-            }
-            if (mainContent) {
-                mainContent.innerHTML = "";
-                mainContent.appendChild(resCont);
-            }
-        }
+          sessionStorage.setItem("aluk_search_query", val);
+          sessionStorage.setItem("aluk_search_results", JSON.stringify({ fileCount, catalogTotalCount: catalogTotalCount || 0, timestamp: Date.now() }));
+        } catch (e) {}
     }, 300);
   });
 }
@@ -1125,7 +1233,9 @@ window.closePdfViewer = function() {
   pdfFrame.src = ""; 
   const p = currentPath; 
   window.history.replaceState({ path: p }, "", "#" + p); 
-  loadContent(p); 
+  const hasActiveSearch = !!(isSearchActive && searchInput && searchInput.value.trim());
+  if (hasActiveSearch) return;
+  // Brez ponovnega nalaganja; obdrži točno isti seznam pod modalom.
 }
 
 function setViewMode(mode) {
@@ -1359,15 +1469,23 @@ async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 8
    let results = [];
    
    try {
-       const { data, error } = await supabase.storage.from('Catalogs').list(path, { 
-           limit: 500, // Zmanjšano za hitrejše iskanje
-           sortBy: { column: 'name', order: 'asc' } 
-       });
+       const pageSize = 1000;
+       let offset = 0;
+       const items = [];
+
+       while (items.length < maxResults) {
+           const { data, error } = await supabase.storage.from('Catalogs').list(path, { 
+               limit: pageSize,
+               offset,
+               sortBy: { column: 'name', order: 'asc' } 
+           });
+           if (error || !data || data.length === 0) break;
+           items.push(...data.filter(item => item.name !== ".emptyFolderPlaceholder"));
+           if (data.length < pageSize) break;
+           offset += pageSize;
+       }
        
-       if (error || !data || data.length === 0) return [];
-       
-       // Filtriraj datoteke in mape
-       const items = data.filter(item => item.name !== ".emptyFolderPlaceholder");
+       if (items.length === 0) return [];
        
        // Najprej preveri direktna ujemanja (hitreje)
        for (const item of items) {
