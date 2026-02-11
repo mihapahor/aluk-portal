@@ -101,6 +101,7 @@ let folderCache = {};
 let currentRenderId = 0;
 let imageUrlCache = {}; // Cache za signed URLs slik
 let isSearchActive = false; // Flag za preverjanje, če je aktivno iskanje 
+let preloadFilesPromise = null;
 
 function clearSharedSearchMoreButton() {
   if (!searchResultsWrapper) return;
@@ -289,6 +290,8 @@ async function showApp(email) {
   const path = getPathFromUrl();
   currentPath = path;
   loadContent(path);
+  // Prednalaganje indeksa za hitrejše prvo iskanje (ne blokira UI).
+  ensureGlobalFileListLoaded().catch((e) => console.warn("Background preload failed:", e));
 }
 
 document.getElementById("logout").addEventListener("click", async () => { 
@@ -733,6 +736,39 @@ async function preloadFiles() {
   }
 }
 
+async function ensureGlobalFileListLoaded() {
+  if (Array.isArray(window.globalFileList) && window.globalFileList.length > 0) {
+    return window.globalFileList;
+  }
+  if (!preloadFilesPromise) {
+    preloadFilesPromise = preloadFiles().finally(() => {
+      preloadFilesPromise = null;
+    });
+  }
+  await preloadFilesPromise;
+  return Array.isArray(window.globalFileList) ? window.globalFileList : [];
+}
+
+function filterLocalSearchResults(allItems, searchTerm, maxResults = 20000) {
+  if (!Array.isArray(allItems) || !allItems.length || !searchTerm) return [];
+  const lowerSearchTerm = String(searchTerm).toLowerCase();
+  const out = [];
+
+  for (const item of allItems) {
+    if (out.length >= maxResults) break;
+    const isFolder = !item.metadata;
+    const itemName = (item.name || "").toLowerCase();
+    if (!itemName.includes(lowerSearchTerm)) continue;
+    if (!isFolder) {
+      const ext = (item.name || "").split(".").pop().toLowerCase();
+      if (!["pdf", "dwg", "xlsx"].includes(ext)) continue;
+    }
+    out.push(item);
+  }
+
+  return out;
+}
+
 /**
  * Iskanje v Supabase catalog_index. Združi po pdf_filename, vrne skupno število zadetkov.
  * @param {string} query - iskalni niz
@@ -909,16 +945,14 @@ if (searchInput) {
             statusEl.style.fontWeight = "500";
         }
 
-        const fileListPromise = (window.globalFileList && window.globalFileList.length > 0)
-            ? Promise.resolve(window.globalFileList)
-            : preloadFiles().then(() => window.globalFileList || []);
+        const fileListPromise = ensureGlobalFileListLoaded();
         const catalogPromise = val.length >= 3 ? searchSupabaseCatalog(val) : Promise.resolve({ groupedByPdf: {}, catalogTotalCount: 0 });
-        const [allFiles, allMatches, catalogResult] = await Promise.all([
+        const [allFiles, catalogResult] = await Promise.all([
             fileListPromise,
-            searchAllFilesRecursive("", val, 0, 8, 20000),
             catalogPromise
         ]);
         if (allFiles && allFiles.length > 0) window.globalFileList = allFiles;
+        const allMatches = filterLocalSearchResults(allFiles, val, 20000);
 
         if (thisRenderId !== currentRenderId) {
           if (searchSpinner) searchSpinner.style.display = "none";
