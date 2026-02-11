@@ -17,7 +17,7 @@ const relevantExtensions = ['pdf', 'xls', 'xlsx', 'csv', 'doc', 'docx', 'dwg', '
 const folderIcons = {
   "tehničn": "🛠️", "tehnicn": "🛠️", "katalog": "🛠️", "galerij": "📷", "foto": "📷", "referenc": "📷",
   "certifikat": "🎖️", "izjav": "🎖️", "vgradni": "📐", "prerezi": "📐", "navodil": "ℹ️", "obdelav": "ℹ️",
-  "brosur": "ℹ️", "montaz": "🔧", "splosn": "📂", "pisarnisk": "📂", "dvizn": "🔧"
+  "brosur": "ℹ️", "montaz": "🔧", "splosn": "📂", "pisarnisk": "📂", "dvizn": "📂"
 };
 const fileIcons = {
   "pdf": "📕", "xls": "📊", "xlsx": "📊", "csv": "📊", "doc": "📝", "docx": "📝",
@@ -102,6 +102,149 @@ let currentRenderId = 0;
 let imageUrlCache = {}; // Cache za signed URLs slik
 let isSearchActive = false; // Flag za preverjanje, če je aktivno iskanje 
 let preloadFilesPromise = null;
+const UPDATES_CACHE_KEY = "aluk_updates_cache";
+const UPDATES_SINCE_KEY = "aluk_updates_since";
+const UPDATES_RESET_VERSION_KEY = "aluk_updates_reset_version";
+const UPDATES_RESET_VERSION = "2026-02-11";
+let updatesRequestId = 0;
+
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function ensureUpdatesCounterResetFromToday() {
+  try {
+    const appliedVersion = localStorage.getItem(UPDATES_RESET_VERSION_KEY);
+    if (appliedVersion === UPDATES_RESET_VERSION) return;
+    localStorage.setItem(UPDATES_SINCE_KEY, startOfToday().toISOString());
+    localStorage.setItem(UPDATES_RESET_VERSION_KEY, UPDATES_RESET_VERSION);
+    sessionStorage.removeItem(UPDATES_CACHE_KEY);
+  } catch (e) {}
+}
+
+function getUpdatesSinceDate() {
+  try {
+    const raw = localStorage.getItem(UPDATES_SINCE_KEY);
+    if (raw) {
+      const parsed = new Date(raw);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+  } catch (e) {}
+  const today = startOfToday();
+  try {
+    localStorage.setItem(UPDATES_SINCE_KEY, today.toISOString());
+  } catch (e) {}
+  return today;
+}
+
+ensureUpdatesCounterResetFromToday();
+
+function isAfterUpdatesSince(iso) {
+  if (!iso) return false;
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return false;
+  return dt >= getUpdatesSinceDate();
+}
+
+function folderHasUpdatesByCurrentPathCache(folderPath) {
+  const updatesInCurrentPath = getUpdatesCacheForPath(currentPath);
+  if (!updatesInCurrentPath || !updatesInCurrentPath.length) return false;
+  const folderPrefix = normalizePath(folderPath) + "/";
+  return updatesInCurrentPath.some((f) => {
+    const fp = normalizePath(f.fullPath || "");
+    return fp.startsWith(folderPrefix);
+  });
+}
+
+function getUpdatesCacheMap() {
+  try {
+    const raw = sessionStorage.getItem(UPDATES_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function getUpdatesCacheForPath(path) {
+  const key = normalizePath(path || "");
+  const cache = getUpdatesCacheMap();
+  const entry = cache[key];
+  const sinceIso = getUpdatesSinceDate().toISOString();
+  if (!entry || !Array.isArray(entry.items)) return null;
+  if (entry.since !== sinceIso) return null;
+  return entry.items;
+}
+
+function setUpdatesCacheForPath(path, items) {
+  const key = normalizePath(path || "");
+  const cache = getUpdatesCacheMap();
+  cache[key] = { ts: Date.now(), since: getUpdatesSinceDate().toISOString(), items };
+  try {
+    sessionStorage.setItem(UPDATES_CACHE_KEY, JSON.stringify(cache));
+  } catch (e) {}
+}
+
+function normalizeUpdateItems(path, items) {
+  return (items || []).map((f) => ({
+    name: f.name || "",
+    displayName: f.displayName || f.name || "",
+    fullPath: f.fullPath || (path ? `${path}/${f.name}` : f.name),
+    created_at: f.created_at || null
+  }));
+}
+
+function renderUpdatesBanner(items, { loading = false } = {}) {
+  if (!updatesBanner || !updatesList) return;
+
+  updatesBanner.style.display = "block";
+  updatesBanner.classList.remove("is-expanded");
+  updatesBanner.classList.remove("is-open");
+  updatesList.innerHTML = "";
+
+  if (loading) {
+    if (lastUpdateDateEl) lastUpdateDateEl.textContent = "Nalaganje posodobitev...";
+    if (updatesBadge) updatesBadge.style.display = "none";
+    const li = document.createElement("li");
+    li.innerHTML = `<span><strong>Pridobivam posodobitve...</strong></span><span></span>`;
+    updatesList.appendChild(li);
+    return;
+  }
+
+  const sorted = [...(items || [])].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+  if (sorted.length === 0) {
+    if (lastUpdateDateEl) lastUpdateDateEl.textContent = "Ni novih datotek od danes.";
+    if (updatesBadge) updatesBadge.style.display = "none";
+    const li = document.createElement("li");
+    li.innerHTML = `<span><strong>Ni novih posodobitev.</strong></span><span></span>`;
+    updatesList.appendChild(li);
+    return;
+  }
+
+  if (lastUpdateDateEl) lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(sorted[0].created_at)}`;
+  if (updatesBadge) {
+    updatesBadge.textContent = sorted.length;
+    updatesBadge.style.display = sorted.length > 0 ? "inline-flex" : "none";
+  }
+
+  const fragment = document.createDocumentFragment();
+  sorted.forEach((f) => {
+    const li = document.createElement("li");
+    const nameSpan = document.createElement("span");
+    nameSpan.innerHTML = `<strong>${escapeHtml(f.displayName || f.name || "")}</strong>`;
+    if (f.fullPath) nameSpan.onclick = () => openFileFromBanner(f.fullPath);
+    const dateSpan = document.createElement("span");
+    dateSpan.textContent = formatDate(f.created_at);
+    li.appendChild(nameSpan);
+    li.appendChild(dateSpan);
+    fragment.appendChild(li);
+  });
+  updatesList.appendChild(fragment);
+}
 
 function clearSharedSearchMoreButton() {
   if (!searchResultsWrapper) return;
@@ -181,13 +324,25 @@ function getCustomSortIndex(name) {
   return partial === -1 ? 999 : partial;
 }
 
-/** Vrne prioriteto za sortiranje (1 = najvišja): Tehnični katalogi → Vgradni detajli/prerezi → Izjave o lastnostih → ostalo. */
-function getFolderFilePriority(name) {
-  const n = (name || "").toLowerCase();
-  if (n.includes("tehnični katalogi") || n.includes("tehnicni katalogi")) return 1;
-  if (n.includes("vgradni detajli") || n.includes("prerezi")) return 2;
-  if (n.includes("izjave o lastnostih")) return 3;
-  return 4;
+/** Prioriteta razvrščanja znotraj podmap:
+ * 1 Tehnični katalogi, 2 Vgradni detajli/prerezi, 3 Izjave o lastnostih,
+ * 4 ostale mape, 5 PDF, 6 Excel, 7 ostale datoteke.
+ */
+function getSubfolderSortPriority(item) {
+  const isFolder = !item.metadata;
+  const name = (item.name || "").toLowerCase();
+
+  if (isFolder) {
+    if (name.includes("tehnični katalogi") || name.includes("tehnicni katalogi")) return 1;
+    if (name.includes("vgradni detajli") || name.includes("prerezi")) return 2;
+    if (name.includes("izjave o lastnostih")) return 3;
+    return 4;
+  }
+
+  const ext = (item.name.split(".").pop() || "").toLowerCase();
+  if (ext === "pdf") return 5;
+  if (ext === "xls" || ext === "xlsx") return 6;
+  return 7;
 }
 
 function formatDate(iso) { if (!iso) return ""; return new Date(iso).toLocaleDateString('sl-SI'); }
@@ -301,7 +456,6 @@ document.getElementById("logout").addEventListener("click", async () => {
 
 // --- NAVIGACIJA ---
 window.navigateTo = function(path) {
-  window.scrollTo(0, 0);
   if (searchTimeout) {
     clearTimeout(searchTimeout);
     searchTimeout = null;
@@ -313,9 +467,21 @@ window.navigateTo = function(path) {
   isSearchActive = false; // Deaktiviraj iskanje ob navigaciji
   sessionStorage.removeItem('aluk_search_query');
   sessionStorage.removeItem('aluk_search_results');
+  if (mainContent) mainContent.style.display = "";
   if (catalogResultsSection) {
     catalogResultsSection.style.display = "none";
     catalogResultsSection.innerHTML = "";
+  }
+  updateBreadcrumbs(path);
+  const hasCachedTarget = !!folderCache[path];
+  if (!hasCachedTarget) {
+    if (mainContent) mainContent.innerHTML = "";
+    if (skeletonLoader) skeletonLoader.style.display = "grid";
+    if (statusEl) {
+      statusEl.textContent = "Nalagam mapo...";
+      statusEl.style.color = "var(--text-secondary)";
+      statusEl.style.fontWeight = "500";
+    }
   }
   window.history.pushState({ path }, "", "#" + path); 
   loadContent(path); 
@@ -337,13 +503,13 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pdfModal &
 const MAX_DEPTH_NEW_FILES = 25; // dovolj globoko za vse podmape, prepreči neskončno rekurzijo
 async function getNewFilesRecursive(path, depth = 0) {
    if (depth > MAX_DEPTH_NEW_FILES) return [];
-   const d30 = new Date(); d30.setDate(d30.getDate() - 30);
+   const updatesSince = getUpdatesSinceDate();
    const { data } = await supabase.storage.from('Catalogs').list(path, { limit: 1000, sortBy: { column: 'created_at', order: 'desc' } });
    if (!data) return [];
    let all = [];
-   // Štejemo samo datoteke (i.metadata), ne map; samo relevantne in nove (zadnjih 30 dni)
+   // Štejemo samo datoteke (i.metadata), ne map; samo relevantne in nove od reset datuma.
    const files = data.filter(i => i.metadata);
-   all = [...all, ...files.filter(f => isRelevantFile(f.name) && new Date(f.created_at) > d30).map(f => ({...f, displayName: f.name, fullPath: path ? `${path}/${f.name}` : f.name}))];
+   all = [...all, ...files.filter(f => isRelevantFile(f.name) && isAfterUpdatesSince(f.created_at)).map(f => ({...f, displayName: f.name, fullPath: path ? `${path}/${f.name}` : f.name}))];
    const folders = data.filter(i => !i.metadata && i.name !== ".emptyFolderPlaceholder");
    const sub = await Promise.all(folders.map(async f => {
        const s = await getNewFilesRecursive(path ? `${path}/${f.name}` : f.name, depth + 1);
@@ -353,9 +519,24 @@ async function getNewFilesRecursive(path, depth = 0) {
    return all;
 }
 
+function buildFolderSignature(data) {
+  if (!Array.isArray(data)) return "[]";
+  const entries = data
+    .filter((i) => i && i.name !== ".emptyFolderPlaceholder")
+    .map((i) => {
+      const isFile = !!i.metadata;
+      const size = isFile && i.metadata && typeof i.metadata.size === "number" ? i.metadata.size : 0;
+      const createdAt = i.created_at || "";
+      return `${isFile ? "f" : "d"}|${i.name}|${size}|${createdAt}`;
+    })
+    .sort();
+  return JSON.stringify(entries);
+}
+
 // --- NALAGANJE VSEBINE ---
 async function loadContent(path) {
   statusEl.textContent = ""; updateBreadcrumbs(path); currentRenderId++; const thisId = currentRenderId;
+  if (mainContent) mainContent.style.display = "";
   
   // Prikaži sekcijo "TEHNIČNA DOKUMENTACIJA" ko naložiš normalno vsebino
   const contentTitleEl = getElement("contentTitle");
@@ -367,43 +548,82 @@ async function loadContent(path) {
   if (!isSearchActive) {
     updateBannerAsync(path);
   }
-  if (folderCache[path]) await processDataAndRender(folderCache[path], thisId); else { mainContent.innerHTML = ""; skeletonLoader.style.display = "grid"; }
+
+  const cachedFolderData = folderCache[path];
+  if (cachedFolderData) {
+    await processDataAndRender(cachedFolderData, thisId);
+    skeletonLoader.style.display = "none";
+  } else {
+    const hasVisibleContent = !!(mainContent && mainContent.childElementCount > 0);
+    if (!hasVisibleContent) {
+      if (mainContent) mainContent.innerHTML = "";
+      skeletonLoader.style.display = "grid";
+    } else {
+      skeletonLoader.style.display = "none";
+      statusEl.textContent = "Nalagam...";
+    }
+  }
+
   const { data, error } = await supabase.storage.from('Catalogs').list(path, { sortBy: { column: 'name', order: 'asc' }, limit: 1000 });
   skeletonLoader.style.display = "none";
   if (error) { statusEl.textContent = "Napaka pri branju."; return; }
-  if (thisId === currentRenderId) { folderCache[path] = data; await processDataAndRender(data, thisId); }
+  if (thisId !== currentRenderId) return;
+
+  const cachedSig = cachedFolderData ? buildFolderSignature(cachedFolderData) : null;
+  const freshSig = buildFolderSignature(data);
+  folderCache[path] = data;
+
+  if (!cachedFolderData || cachedSig !== freshSig) {
+    await processDataAndRender(data, thisId);
+  }
 }
 
 async function updateBannerAsync(path) {
-    updatesList.innerHTML = ""; 
-    updatesBanner.style.display = "none";
-    updatesBanner.classList.remove("is-expanded");
-    updatesBanner.classList.remove("is-open"); // Accordion privzeto zaprt
-    
-    const newFiles = await getNewFilesRecursive(path, 0);
-    if (newFiles.length === 0) return;
-    
-    newFiles.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(newFiles[0].created_at)}`;
-    if (updatesBadge) {
-      updatesBadge.textContent = newFiles.length;
-      updatesBadge.style.display = newFiles.length > 0 ? "inline-flex" : "none";
+    const requestId = ++updatesRequestId;
+    const normalizedPath = normalizePath(path || "");
+    const cachedItems = getUpdatesCacheForPath(normalizedPath);
+    const updatesSince = getUpdatesSinceDate();
+
+    if (cachedItems) {
+      renderUpdatesBanner(cachedItems);
+    } else {
+      renderUpdatesBanner([], { loading: true });
     }
-    
-    const fragment = document.createDocumentFragment();
-    newFiles.forEach(f => {
-      const li = document.createElement("li");
-      const nameSpan = document.createElement("span");
-      nameSpan.innerHTML = `<strong>${f.displayName||f.name}</strong>`;
-      nameSpan.onclick = () => openFileFromBanner(f.fullPath);
-      const dateSpan = document.createElement("span");
-      dateSpan.textContent = formatDate(f.created_at);
-      li.appendChild(nameSpan);
-      li.appendChild(dateSpan);
-      fragment.appendChild(li);
-    });
-    updatesList.appendChild(fragment);
-    updatesBanner.style.display = "block";
+
+    try {
+      const freshItems = normalizeUpdateItems(
+        normalizedPath,
+        await getNewFilesRecursive(normalizedPath, 0)
+      ).filter((f) => {
+        const dt = new Date(f.created_at || 0);
+        return !Number.isNaN(dt.getTime()) && dt >= updatesSince;
+      });
+      setUpdatesCacheForPath(normalizedPath, freshItems);
+
+      if (requestId !== updatesRequestId) return;
+
+      if (!cachedItems) {
+        renderUpdatesBanner(freshItems);
+      } else {
+        const cachedSig = JSON.stringify(cachedItems);
+        const freshSig = JSON.stringify(freshItems);
+        if (cachedSig !== freshSig) {
+          renderUpdatesBanner(freshItems);
+        }
+      }
+
+      if (normalizedPath === normalizePath(currentPath || "") && !isSearchActive && currentItems.length > 0) {
+        renderItems(currentItems, currentRenderId);
+      }
+    } catch (e) {
+      if (requestId !== updatesRequestId) return;
+      if (!cachedItems) {
+        renderUpdatesBanner([]);
+      }
+      if (normalizedPath === normalizePath(currentPath || "") && !isSearchActive && currentItems.length > 0) {
+        renderItems(currentItems, currentRenderId);
+      }
+    }
 }
 window.openFileFromBanner = function(path) { openPdfViewer(path.split('/').pop(), path); }
 
@@ -447,12 +667,21 @@ async function renderItems(items, rId) {
   const favs = [], norms = [];
   items.forEach(i => { const p = normalizePath(currentPath ? `${currentPath}/${i.name}` : i.name); (!i.metadata && favorites.includes(p)) ? favs.push(i) : norms.push(i); });
   const sorted = [...favs, ...norms].sort((a, b) => {
-     const pa = getFolderFilePriority(a.name), pb = getFolderFilePriority(b.name);
-     if (pa !== pb) return pa - pb;
+     const inSubfolder = !!(currentPath && currentPath.trim());
+     if (inSubfolder) {
+       const pa = getSubfolderSortPriority(a);
+       const pb = getSubfolderSortPriority(b);
+       if (pa !== pb) return pa - pb;
+       return a.name.localeCompare(b.name, "sl", { sensitivity: "base", numeric: true });
+     }
+
      const fa = !a.metadata, fb = !b.metadata;
      if (fa && !fb) return -1; if (!fa && fb) return 1;
-     if (fa && fb) { const ia = getCustomSortIndex(a.name), ib = getCustomSortIndex(b.name); if (ia !== ib) return ia - ib; }
-     return a.name.localeCompare(b.name);
+     if (fa && fb) {
+       const ia = getCustomSortIndex(a.name), ib = getCustomSortIndex(b.name);
+       if (ia !== ib) return ia - ib;
+     }
+     return a.name.localeCompare(b.name, "sl", { sensitivity: "base", numeric: true });
   });
   for (const item of sorted) { if (rId !== currentRenderId) return; await createItemElement(item, cont); }
   if (rId === currentRenderId) {
@@ -473,13 +702,12 @@ async function createItemElement(item, cont) {
     // Značka NOVO: natanko en element na .item (brez podvajanja)
     if (isFolder) {
         badges = `<span class="new-badge" style="display:none">NOVO</span>`;
-        getNewFilesRecursive(full, 0).then(n => {
-            if (n.length > 0) {
-                const b = div.querySelector('.new-badge');
-                if (b) b.style.display = 'inline-block';
-            }
-        });
-    } else if (isRelevantFile(item.name) && item.created_at && new Date(item.created_at) > new Date(Date.now() - 30*24*3600*1000)) {
+        const hasUpdatesInFolder = folderHasUpdatesByCurrentPathCache(full);
+        if (hasUpdatesInFolder) {
+          const b = div.querySelector('.new-badge');
+          if (b) b.style.display = 'inline-block';
+        }
+    } else if (isRelevantFile(item.name) && isAfterUpdatesSince(item.created_at)) {
         badges = `<span class="new-badge" style="display:inline-block">NOVO</span>`;
     }
     const favBtnHtml = isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>` : '';
@@ -856,6 +1084,7 @@ if (searchInput) {
       isSearchActive = false; // Deaktiviraj iskanje
       sessionStorage.removeItem('aluk_search_query');
       sessionStorage.removeItem('aluk_search_results');
+      if (mainContent) mainContent.style.display = "";
       if (catalogResultsSection) {
         catalogResultsSection.style.display = "none";
         catalogResultsSection.innerHTML = "";
@@ -866,7 +1095,7 @@ if (searchInput) {
         updatesBanner.style.display = "";
       }
       
-      if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
+      loadContent(currentPath);
     });
   }
   
@@ -918,7 +1147,7 @@ if (searchInput) {
       if (contentTitleDesc) contentTitleDesc.style.display = "";
       if (updatesBanner) updatesBanner.style.display = "";
       if (searchSpinner) searchSpinner.style.display = "none";
-      if (currentItems.length > 0) renderItems(currentItems, currentRenderId);
+      loadContent(currentPath);
       return;
     }
     
@@ -930,6 +1159,11 @@ if (searchInput) {
     }
     
     searchTimeout = setTimeout(async () => {
+        const liveVal = searchInput ? searchInput.value.trim() : "";
+        if (!isSearchActive || !liveVal || liveVal !== val) {
+          return;
+        }
+
         currentRenderId++;
         const thisRenderId = currentRenderId;
 
@@ -946,13 +1180,19 @@ if (searchInput) {
         }
 
         const fileListPromise = ensureGlobalFileListLoaded();
-        const catalogPromise = val.length >= 3 ? searchSupabaseCatalog(val) : Promise.resolve({ groupedByPdf: {}, catalogTotalCount: 0 });
+        const catalogPromise = liveVal.length >= 3 ? searchSupabaseCatalog(liveVal) : Promise.resolve({ groupedByPdf: {}, catalogTotalCount: 0 });
         const [allFiles, catalogResult] = await Promise.all([
             fileListPromise,
             catalogPromise
         ]);
         if (allFiles && allFiles.length > 0) window.globalFileList = allFiles;
-        const allMatches = filterLocalSearchResults(allFiles, val, 20000);
+        const allMatches = filterLocalSearchResults(allFiles, liveVal, 20000);
+
+        const stillLiveVal = searchInput ? searchInput.value.trim() : "";
+        if (!isSearchActive || !stillLiveVal || stillLiveVal !== liveVal) {
+          if (searchSpinner) searchSpinner.style.display = "none";
+          return;
+        }
 
         if (thisRenderId !== currentRenderId) {
           if (searchSpinner) searchSpinner.style.display = "none";
@@ -965,7 +1205,7 @@ if (searchInput) {
 
         if (searchSpinner) searchSpinner.style.display = "none";
 
-        const hasCatalogResults = val.length >= 3 && catalogTotalCount > 0;
+        const hasCatalogResults = liveVal.length >= 3 && catalogTotalCount > 0;
         const hasMapResults = fileCount > 0;
         const initialLimit = getDynamicSearchInitialLimit({ hasMapResults, hasCatalogResults });
         const catalogNeedsMore = hasCatalogResults && catalogTotalCount > initialLimit;
@@ -1141,7 +1381,7 @@ if (searchInput) {
           if (fileCount > 0) {
             mainContent.appendChild(resCont);
           } else if (catalogTotalCount === 0) {
-            mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);"><h3 style="color:var(--text-primary);">Ni zadetkov za \"${escapeHtml(val)}\"</h3></div>`;
+            mainContent.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);"><h3 style="color:var(--text-primary);">Ni zadetkov za \"${escapeHtml(liveVal)}\"</h3></div>`;
           }
         }
 
@@ -1158,7 +1398,7 @@ if (searchInput) {
         }
 
         try {
-          sessionStorage.setItem("aluk_search_query", val);
+          sessionStorage.setItem("aluk_search_query", liveVal);
           sessionStorage.setItem("aluk_search_results", JSON.stringify({ fileCount, catalogTotalCount: catalogTotalCount || 0, timestamp: Date.now() }));
         } catch (e) {}
     }, 300);
