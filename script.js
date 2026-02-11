@@ -106,7 +106,13 @@ const UPDATES_CACHE_KEY = "aluk_updates_cache";
 const UPDATES_SINCE_KEY = "aluk_updates_since";
 const UPDATES_RESET_VERSION_KEY = "aluk_updates_reset_version";
 const UPDATES_RESET_VERSION = "2026-02-11";
+const NEW_FILES_CACHE_TTL_MS = 60 * 1000;
+const PATH_EXISTS_CACHE_TTL_MS = 30 * 1000;
 let updatesRequestId = 0;
+const newFilesCache = new Map();
+const newFilesInFlight = new Map();
+const pathExistsCache = new Map();
+const pathExistsInFlight = new Map();
 
 function startOfToday() {
   const d = new Date();
@@ -121,6 +127,8 @@ function ensureUpdatesCounterResetFromToday() {
     localStorage.setItem(UPDATES_SINCE_KEY, startOfToday().toISOString());
     localStorage.setItem(UPDATES_RESET_VERSION_KEY, UPDATES_RESET_VERSION);
     sessionStorage.removeItem(UPDATES_CACHE_KEY);
+    newFilesCache.clear();
+    newFilesInFlight.clear();
   } catch (e) {}
 }
 
@@ -146,6 +154,17 @@ function isAfterUpdatesSince(iso) {
   const dt = new Date(iso);
   if (Number.isNaN(dt.getTime())) return false;
   return dt >= getUpdatesSinceDate();
+}
+
+function escapeJsSingleQuotedString(str) {
+  return String(str == null ? "" : str)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'");
+}
+
+function openExternalUrl(url) {
+  const w = window.open(url, "_blank", "noopener,noreferrer");
+  if (w) w.opener = null;
 }
 
 function folderHasUpdatesByCurrentPathCache(folderPath) {
@@ -274,6 +293,17 @@ function saveFavorites(favs) { localStorage.setItem('aluk_favorites', JSON.strin
 
 // Preveri, če pot obstaja v Supabase Storage
 async function pathExists(path) {
+  const key = normalizePath(path || "");
+  const now = Date.now();
+  const cached = pathExistsCache.get(key);
+  if (cached && (now - cached.ts) < PATH_EXISTS_CACHE_TTL_MS) {
+    return cached.value;
+  }
+  if (pathExistsInFlight.has(key)) {
+    return pathExistsInFlight.get(key);
+  }
+
+  const request = (async () => {
   try {
     const parts = path.split('/').filter(p => p);
     if (parts.length === 0) return true; // Root vedno obstaja
@@ -287,14 +317,24 @@ async function pathExists(path) {
     
     if (error) {
       console.warn(`Napaka pri preverjanju poti "${path}":`, error);
+      pathExistsCache.set(key, { ts: Date.now(), value: false });
       return false;
     }
     
-    return data && data.some(item => !item.metadata && item.name === folderName);
+    const exists = !!(data && data.some(item => !item.metadata && item.name === folderName));
+    pathExistsCache.set(key, { ts: Date.now(), value: exists });
+    return exists;
   } catch (e) {
     console.warn(`Napaka pri preverjanju poti "${path}":`, e);
+    pathExistsCache.set(key, { ts: Date.now(), value: false });
     return false;
   }
+  })().finally(() => {
+    pathExistsInFlight.delete(key);
+  });
+
+  pathExistsInFlight.set(key, request);
+  return request;
 }
 
 // Očisti neobstoječe priljubljene
@@ -307,8 +347,6 @@ async function cleanInvalidFavorites() {
     const exists = await pathExists(path);
     if (exists) {
       validFavorites.push(path);
-    } else {
-      console.log(`Odstranjujem neobstoječo priljubljeno: ${path}`);
     }
   }
   
@@ -324,24 +362,34 @@ function getCustomSortIndex(name) {
   return partial === -1 ? 999 : partial;
 }
 
+function normalizeSortName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Prioriteta razvrščanja znotraj podmap:
  * 1 Tehnični katalogi, 2 Vgradni detajli/prerezi, 3 Izjave o lastnostih,
  * 4 ostale mape, 5 PDF, 6 Excel, 7 ostale datoteke.
  */
 function getSubfolderSortPriority(item) {
   const isFolder = !item.metadata;
-  const name = (item.name || "").toLowerCase();
+  const name = normalizeSortName(item.name);
 
   if (isFolder) {
-    if (name.includes("tehnični katalogi") || name.includes("tehnicni katalogi")) return 1;
+    if (name.includes("tehnicni katalog")) return 1;
     if (name.includes("vgradni detajli") || name.includes("prerezi")) return 2;
-    if (name.includes("izjave o lastnostih")) return 3;
+    if (name.includes("izjave o lastnostih") || name.includes("izjava o lastnostih")) return 3;
     return 4;
   }
 
   const ext = (item.name.split(".").pop() || "").toLowerCase();
   if (ext === "pdf") return 5;
-  if (ext === "xls" || ext === "xlsx") return 6;
+  if (ext === "xls" || ext === "xlsx" || ext === "xlsm" || ext === "xlsb") return 6;
   return 7;
 }
 
@@ -503,20 +551,53 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pdfModal &
 const MAX_DEPTH_NEW_FILES = 25; // dovolj globoko za vse podmape, prepreči neskončno rekurzijo
 async function getNewFilesRecursive(path, depth = 0) {
    if (depth > MAX_DEPTH_NEW_FILES) return [];
-   const updatesSince = getUpdatesSinceDate();
-   const { data } = await supabase.storage.from('Catalogs').list(path, { limit: 1000, sortBy: { column: 'created_at', order: 'desc' } });
-   if (!data) return [];
-   let all = [];
-   // Štejemo samo datoteke (i.metadata), ne map; samo relevantne in nove od reset datuma.
-   const files = data.filter(i => i.metadata);
-   all = [...all, ...files.filter(f => isRelevantFile(f.name) && isAfterUpdatesSince(f.created_at)).map(f => ({...f, displayName: f.name, fullPath: path ? `${path}/${f.name}` : f.name}))];
-   const folders = data.filter(i => !i.metadata && i.name !== ".emptyFolderPlaceholder");
-   const sub = await Promise.all(folders.map(async f => {
-       const s = await getNewFilesRecursive(path ? `${path}/${f.name}` : f.name, depth + 1);
-       return s.map(sf => depth === 0 ? {...sf, displayName: `${f.name} / ${sf.name}`} : sf);
-   }));
-   sub.forEach(g => all = [...all, ...g]);
-   return all;
+   const normalizedPath = normalizePath(path || "");
+   const sinceIso = getUpdatesSinceDate().toISOString();
+   const cacheKey = `${sinceIso}|${normalizedPath}|${depth}`;
+   const now = Date.now();
+   const cached = newFilesCache.get(cacheKey);
+   if (cached && (now - cached.ts) < NEW_FILES_CACHE_TTL_MS) {
+     return cached.items;
+   }
+   if (newFilesInFlight.has(cacheKey)) {
+     return newFilesInFlight.get(cacheKey);
+   }
+
+   const request = (async () => {
+     const { data } = await supabase.storage.from('Catalogs').list(normalizedPath, { limit: 1000, sortBy: { column: 'created_at', order: 'desc' } });
+     if (!data) return [];
+     let all = [];
+     // Štejemo samo datoteke (i.metadata), ne map; samo relevantne in nove od reset datuma.
+     const files = data.filter(i => i.metadata);
+     all = [
+       ...all,
+       ...files
+         .filter(f => isRelevantFile(f.name) && isAfterUpdatesSince(f.created_at))
+         .map(f => ({ ...f, displayName: f.name, fullPath: normalizedPath ? `${normalizedPath}/${f.name}` : f.name }))
+     ];
+     const folders = data.filter(i => !i.metadata && i.name !== ".emptyFolderPlaceholder");
+     const sub = await Promise.all(folders.map(async f => {
+         const childPath = normalizedPath ? `${normalizedPath}/${f.name}` : f.name;
+         const s = await getNewFilesRecursive(childPath, depth + 1);
+         return s.map(sf => depth === 0 ? { ...sf, displayName: `${f.name} / ${sf.name}` } : sf);
+     }));
+     sub.forEach(g => all = [...all, ...g]);
+     return all;
+   })()
+     .then((items) => {
+       newFilesCache.set(cacheKey, { ts: Date.now(), items });
+       return items;
+     })
+     .catch((e) => {
+       console.warn("Napaka pri rekurzivnem branju posodobitev:", normalizedPath, e);
+       return [];
+     })
+     .finally(() => {
+       newFilesInFlight.delete(cacheKey);
+     });
+
+   newFilesInFlight.set(cacheKey, request);
+   return request;
 }
 
 function buildFolderSignature(data) {
@@ -638,7 +719,12 @@ async function processDataAndRender(data, rId) {
 function updateBreadcrumbs(path) {
   const p = path ? path.split('/').filter(Boolean) : [];
   let h = `<span class="breadcrumb-item" onclick="navigateTo('')">Domov</span>`, b = "";
-  p.forEach((pt, i) => { b += (i > 0 ? "/" : "") + pt; const label = formatDisplayName(decodeURIComponent(pt)); h += ` <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${b}')">${escapeHtml(label)}</span>`; });
+  p.forEach((pt, i) => {
+    b += (i > 0 ? "/" : "") + pt;
+    const label = formatDisplayName(decodeURIComponent(pt));
+    const safePath = escapeJsSingleQuotedString(b);
+    h += ` <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${safePath}')">${escapeHtml(label)}</span>`;
+  });
   breadcrumbsEl.innerHTML = h;
   if (backBtn) backBtn.style.display = p.length > 0 ? "inline-flex" : "none";
 }
@@ -672,7 +758,9 @@ async function renderItems(items, rId) {
        const pa = getSubfolderSortPriority(a);
        const pb = getSubfolderSortPriority(b);
        if (pa !== pb) return pa - pb;
-       return a.name.localeCompare(b.name, "sl", { sensitivity: "base", numeric: true });
+       const an = normalizeSortName(a.name);
+       const bn = normalizeSortName(b.name);
+       return an.localeCompare(bn, "sl", { sensitivity: "base", numeric: true });
      }
 
      const fa = !a.metadata, fb = !b.metadata;
@@ -701,16 +789,15 @@ async function createItemElement(item, cont) {
     
     // Značka NOVO: natanko en element na .item (brez podvajanja)
     if (isFolder) {
-        badges = `<span class="new-badge" style="display:none">NOVO</span>`;
         const hasUpdatesInFolder = folderHasUpdatesByCurrentPathCache(full);
-        if (hasUpdatesInFolder) {
-          const b = div.querySelector('.new-badge');
-          if (b) b.style.display = 'inline-block';
-        }
+        badges = hasUpdatesInFolder
+          ? `<span class="new-badge" style="display:inline-block">NOVO</span>`
+          : `<span class="new-badge" style="display:none">NOVO</span>`;
     } else if (isRelevantFile(item.name) && isAfterUpdatesSince(item.created_at)) {
         badges = `<span class="new-badge" style="display:inline-block">NOVO</span>`;
     }
-    const favBtnHtml = isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${item.name}')">★</button>` : '';
+    const safeItemName = escapeJsSingleQuotedString(item.name);
+    const favBtnHtml = isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${safeItemName}')">★</button>` : '';
     
     const base = getBaseName(item.name).toLowerCase();
     const ext = item.name.split('.').pop().toLowerCase();
@@ -941,23 +1028,14 @@ function findPathForFilename(filename) {
     const storageClean = cleanName(f.name);
     if (dbClean === storageClean) return f.fullPath;
   }
-  // Diagnostika: prikaži podobna imena iz Storage (samo datoteke)
-  const hint = dbClean.slice(0, 8);
-  const similar = list
-    .filter((f) => f.metadata && (cleanName(f.name).includes(hint) || hint.includes(cleanName(f.name).slice(0, 8))))
-    .slice(0, 8)
-    .map((f) => ({ raw: f.name, clean: cleanName(f.name) }));
-  console.warn("❌ Failed to match:", dbClean, "| DB filename:", filename, "| Similar in Storage:", similar);
   return null;
 }
 
 /** Naloži vse datoteke iz Storage v window.globalFileList (za iskanje po catalog_index). */
 async function preloadFiles() {
-  console.log("⏳ Starting file preload...");
   try {
     const files = await searchAllFilesRecursive("", "", 0, 8, 20000);
     window.globalFileList = Array.isArray(files) ? files : [];
-    console.log("✅ Files loaded:", window.globalFileList.length);
   } catch (e) {
     window.globalFileList = [];
     console.warn("Preload failed:", e);
@@ -1431,21 +1509,20 @@ async function handleUrlFile(storagePath) {
     }
     if (!extractedUrl && /https?:\/\//i.test(text)) extractedUrl = text.trim();
     if (extractedUrl && /^https?:\/\//i.test(extractedUrl)) {
-      window.open(extractedUrl, '_blank');
+      openExternalUrl(extractedUrl);
     } else if (data?.signedUrl) {
-      window.open(data.signedUrl, '_blank');
+      openExternalUrl(data.signedUrl);
     }
   } catch (e) {
     console.warn('handleUrlFile:', e);
     try {
       const { data } = await supabase.storage.from('Catalogs').createSignedUrl(storagePath, 3600);
-      if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+      if (data?.signedUrl) openExternalUrl(data.signedUrl);
     } catch (e2) {}
   }
 }
 
 window.openPdfViewer = async function(fn, path, page) {
-  console.log("[openPdfViewer] Klic:", { fn, path, page });
   const ext = (fn.split('.').pop() || '').toLowerCase();
   const forceDownload = ['xlsx', 'xls', 'dwg', 'dxf'].includes(ext);
   if (forceDownload) {
@@ -1462,7 +1539,7 @@ window.openPdfViewer = async function(fn, path, page) {
         a.click();
         URL.revokeObjectURL(blobUrl);
       } catch (e) {
-        window.open(data.signedUrl, '_blank');
+        openExternalUrl(data.signedUrl);
       }
     }
     return;
@@ -1473,7 +1550,6 @@ window.openPdfViewer = async function(fn, path, page) {
   pdfModal.style.display = 'flex';
   if (viewerFileName) viewerFileName.textContent = formatDisplayName(fn);
   const p = path || (currentPath ? `${currentPath}/${fn}` : fn);
-  console.log("[openPdfViewer] Pot za signed URL:", p);
   if (!pdfFrame) {
     console.error("[openPdfViewer] pdfFrame element ni najden (id=pdfFrame)");
     pdfModal.style.display = "none";
@@ -1490,7 +1566,6 @@ window.openPdfViewer = async function(fn, path, page) {
     }
     if (data?.signedUrl) {
       pdfFrame.src = data.signedUrl + "#page=" + pageNum + "&view=Fit";
-      console.log("[openPdfViewer] iframe.src nastavljen, stran", pageNum);
     } else {
       console.warn("[openPdfViewer] createSignedUrl vrnil brez signedUrl");
       pdfModal.style.display = "none";
@@ -1621,9 +1696,7 @@ function setupFormHandler() {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      console.log("Form handler triggered");
       const emailInput = document.getElementById("loginEmail");
-      console.log("Login button actually clicked!", emailInput ? emailInput.value : "(no email input)");
       const requestSection = document.getElementById("requestSection");
       const isRequestVisible = requestSection && requestSection.style.display !== "none";
       if (isRequestVisible) {
@@ -1861,9 +1934,6 @@ window.addEventListener('pageshow', (e) => {
 
   // 1) Listener TAKOJ na začetku – preden karkoli awaitamo, da ne zamudimo INITIAL_SESSION / SIGNED_IN (pomembno za mobilne brskalnike)
   supabase.auth.onAuthStateChange((event, session) => {
-    if (typeof console !== "undefined" && console.log) {
-      console.log("[Auth]", event, session ? "session" : "no session");
-    }
     if (event === "INITIAL_SESSION" && session) {
       replaceStatePreserveHash();
       if (!isAppVisible()) showApp(session.user.email);
@@ -1930,7 +2000,6 @@ window.addEventListener('pageshow', (e) => {
       const timeoutMs = 5000;
       const timeoutId = setTimeout(() => {
         if (!isAppVisible()) {
-          if (typeof console !== "undefined" && console.log) console.log("[Auth] Timeout – prikaz gumba Poskusite znova");
           showRetryAndClearHash();
         }
       }, timeoutMs);
