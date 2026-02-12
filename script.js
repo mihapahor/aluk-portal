@@ -541,11 +541,29 @@ window.navigateTo = function(path) {
       statusEl.style.fontWeight = "500";
     }
   }
-  window.history.pushState({ path }, "", "#" + path); 
+  window.history.pushState({ path }, "", "#" + pathToHash(path)); 
   loadContent(path); 
 }
-/** Navigacija vedno iz URL hasha – npr. #Okenski sistemi → currentPath ostane ob preklapljanju zaviho. */
-function getPathFromUrl() { const h = window.location.hash; if (!h || h.length <= 1 || h.startsWith("#view=")) return ""; return decodeURIComponent(h.slice(1)); }
+/** Kodira pot za lep URL: presledki → +, ostalo po segmentih (ohrani /). */
+function pathToHash(path) {
+  if (!path || typeof path !== "string") return "";
+  return path.split("/").map((seg) => encodeURIComponent(seg).replace(/%20/g, "+")).join("/");
+}
+/** Dekodira hash v pot (podpora + in %20 za presledke). */
+function hashToPath(hashPart) {
+  if (!hashPart || typeof hashPart !== "string") return "";
+  return hashPart
+    .split("/")
+    .map((seg) => decodeURIComponent(seg.replace(/\+/g, " ")))
+    .join("/")
+    .trim();
+}
+/** Navigacija vedno iz URL hasha – npr. #Pisarniski+sistemi/Hladni+sistem+C55K-NI. */
+function getPathFromUrl() {
+  const h = window.location.hash;
+  if (!h || h.length <= 1 || h.startsWith("#view=")) return "";
+  return hashToPath(h.slice(1));
+}
 window.addEventListener('popstate', () => {
   pdfModal.style.display = 'none';
   pdfFrame.src = "";
@@ -1591,7 +1609,7 @@ window.closePdfViewer = function() {
   pdfModal.style.display = 'none'; 
   pdfFrame.src = ""; 
   const p = currentPath; 
-  window.history.replaceState({ path: p }, "", "#" + p); 
+  window.history.replaceState({ path: p }, "", "#" + pathToHash(p)); 
   const hasActiveSearch = !!(isSearchActive && searchInput && searchInput.value.trim());
   if (hasActiveSearch) return;
   // Brez ponovnega nalaganja; obdrži točno isti seznam pod modalom.
