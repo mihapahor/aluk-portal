@@ -4,6 +4,7 @@ window.globalFileList = [];
 
 const SUPABASE_URL = "https://ugwchsznxsuxbxdvigsu.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnd2Noc3pueHN1eGJ4ZHZpZ3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTY0NzEsImV4cCI6MjA4NDY5MjQ3MX0.iFzB--KryoBedjIJnybL55-xfQFIBxWnKq9RqwxuyK4";
+const R2_BASE_URL = "https://pub-28724a107246493c93629c81b8105cff.r2.dev";
 const ADMIN_EMAIL = "miha@aluk.si";
 // Tabela v Supabase: ustvari z stolpci email, name, company, created_at (RLS dovoli INSERT za anon)
 const ACCESS_REQUESTS_TABLE = "access_requests"; 
@@ -113,6 +114,8 @@ const newFilesCache = new Map();
 const newFilesInFlight = new Map();
 const pathExistsCache = new Map();
 const pathExistsInFlight = new Map();
+let filesTableCache = null;
+let filesTableCachePromise = null;
 
 function startOfToday() {
   const d = new Date();
@@ -301,6 +304,129 @@ function normalizePath(path) { if (!path) return ""; try { return decodeURICompo
 function loadFavorites() { try { let raw = JSON.parse(localStorage.getItem('aluk_favorites') || '[]'); return [...new Set(raw.map(f => normalizePath(f)))].filter(f => f); } catch(e) { return []; } }
 function saveFavorites(favs) { localStorage.setItem('aluk_favorites', JSON.stringify(favs)); }
 
+function stripPathSlashes(path) {
+  return String(path || "").replace(/^\/+|\/+$/g, "");
+}
+
+function joinFolderAndFilename(folderPath, filename) {
+  const folder = String(folderPath || "");
+  const file = String(filename || "");
+  if (!folder) return file;
+  return folder.endsWith("/") ? `${folder}${file}` : `${folder}/${file}`;
+}
+
+function buildStoragePathFromRow(row) {
+  return stripPathSlashes(joinFolderAndFilename(row?.r2_path || "", row?.filename || ""));
+}
+
+function buildR2UrlFromStoragePath(storagePath) {
+  const base = R2_BASE_URL.replace(/\/+$/, "");
+  const normalizedPath = String(storagePath || "").replace(/^\/+/, "");
+  const finalUrl = `${base}/${normalizedPath}`;
+  return encodeURI(finalUrl);
+}
+
+function buildR2UrlFromFileRecord(file) {
+  const publicUrl = "https://pub-28724a107246493c93629c81b8105cff.r2.dev/" + (file?.r2_path || "") + (file?.filename || "");
+  return encodeURI(publicUrl);
+}
+
+function getRowTimestamp(row) {
+  return row?.updated_at || row?.modified_at || row?.created_at || null;
+}
+
+function toNumberOrZero(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getRowSizeBytes(row) {
+  return toNumberOrZero(
+    row?.size_bytes ??
+    row?.file_size_bytes ??
+    row?.size ??
+    row?.file_size ??
+    row?.bytes
+  );
+}
+
+async function fetchAllFilesFromTable(forceRefresh = false) {
+  if (!forceRefresh && Array.isArray(filesTableCache)) return filesTableCache;
+  if (!forceRefresh && filesTableCachePromise) return filesTableCachePromise;
+
+  filesTableCachePromise = (async () => {
+    const out = [];
+    const pageSize = 1000;
+    let from = 0;
+
+    while (true) {
+      const to = from + pageSize - 1;
+      const { data, error } = await supabase
+        .from("files")
+        .select("*")
+        .range(from, to);
+      if (error) throw error;
+
+      const batch = Array.isArray(data) ? data : [];
+      out.push(...batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
+
+    filesTableCache = out;
+    return out;
+  })().finally(() => {
+    filesTableCachePromise = null;
+  });
+
+  return filesTableCachePromise;
+}
+
+function buildVirtualItemsForPath(rows, path) {
+  const normalizedPath = stripPathSlashes(normalizePath(path || ""));
+  const prefix = normalizedPath ? `${normalizedPath}/` : "";
+  const expectedFolderName = normalizedPath ? normalizedPath.split("/").pop() : "Katalogi";
+  const folders = new Map();
+  const files = [];
+
+  for (const row of rows || []) {
+    const filename = row?.filename;
+    if (!filename) continue;
+    const fullPath = buildStoragePathFromRow(row);
+    if (prefix && !fullPath.startsWith(prefix)) continue;
+
+    const remaining = prefix ? fullPath.slice(prefix.length) : fullPath;
+    if (!remaining) continue;
+    const slashIdx = remaining.indexOf("/");
+
+    if (slashIdx !== -1) {
+      const folderName = remaining.slice(0, slashIdx);
+      if (!folderName || folders.has(folderName)) continue;
+      const folderFullPath = normalizedPath ? `${normalizedPath}/${folderName}` : folderName;
+      folders.set(folderName, {
+        name: folderName,
+        metadata: null,
+        created_at: getRowTimestamp(row),
+        fullPath: folderFullPath
+      });
+      continue;
+    }
+
+    if (row?.folder_name && row.folder_name !== expectedFolderName) continue;
+
+    files.push({
+      name: filename,
+      filename,
+      r2_path: row.r2_path || "",
+      created_at: getRowTimestamp(row),
+      fullPath,
+      metadata: { size: getRowSizeBytes(row) }
+    });
+  }
+
+  return [...folders.values(), ...files];
+}
+
 // Preveri, če pot obstaja v Supabase Storage
 async function pathExists(path) {
   const key = normalizePath(path || "");
@@ -315,23 +441,14 @@ async function pathExists(path) {
 
   const request = (async () => {
   try {
-    const parts = path.split('/').filter(p => p);
-    if (parts.length === 0) return true; // Root vedno obstaja
-    
-    const parentPath = parts.slice(0, -1).join('/');
-    const folderName = parts[parts.length - 1];
-    
-    const { data, error } = await supabase.storage.from('Catalogs').list(parentPath || '', {
-      limit: 1000
+    const normalized = stripPathSlashes(path);
+    if (!normalized) return true; // Root vedno obstaja
+    const rows = await fetchAllFilesFromTable();
+    const prefix = `${normalized}/`;
+    const exists = rows.some((row) => {
+      const fullPath = buildStoragePathFromRow(row);
+      return fullPath.startsWith(prefix);
     });
-    
-    if (error) {
-      console.warn(`Napaka pri preverjanju poti "${path}":`, error);
-      pathExistsCache.set(key, { ts: Date.now(), value: false });
-      return false;
-    }
-    
-    const exists = !!(data && data.some(item => !item.metadata && item.name === folderName));
     pathExistsCache.set(key, { ts: Date.now(), value: exists });
     return exists;
   } catch (e) {
@@ -503,8 +620,6 @@ async function showApp(email) {
   const path = getPathFromUrl();
   currentPath = path;
   loadContent(path);
-  // Prednalaganje indeksa za hitrejše prvo iskanje (ne blokira UI).
-  ensureGlobalFileListLoaded().catch((e) => console.warn("Background preload failed:", e));
 }
 
 document.getElementById("logout").addEventListener("click", async () => { 
@@ -592,24 +707,21 @@ async function getNewFilesRecursive(path, depth = 0) {
    }
 
    const request = (async () => {
-     const { data } = await supabase.storage.from('Catalogs').list(normalizedPath, { limit: 1000, sortBy: { column: 'created_at', order: 'desc' } });
-     if (!data) return [];
-     let all = [];
-     // Štejemo samo datoteke (i.metadata), ne map; samo relevantne in nove od reset datuma.
-     const files = data.filter(i => i.metadata);
-     all = [
-       ...all,
-       ...files
-         .filter(f => isRelevantFile(f.name) && isAfterUpdatesSince(f.created_at))
-         .map(f => ({ ...f, displayName: f.name, fullPath: normalizedPath ? `${normalizedPath}/${f.name}` : f.name }))
-     ];
-     const folders = data.filter(i => !i.metadata && i.name !== ".emptyFolderPlaceholder");
-     const sub = await Promise.all(folders.map(async f => {
-         const childPath = normalizedPath ? `${normalizedPath}/${f.name}` : f.name;
-         const s = await getNewFilesRecursive(childPath, depth + 1);
-         return s.map(sf => depth === 0 ? { ...sf, displayName: `${f.name} / ${sf.name}` } : sf);
-     }));
-     sub.forEach(g => all = [...all, ...g]);
+     const rows = await fetchAllFilesFromTable();
+     const prefix = normalizedPath ? `${stripPathSlashes(normalizedPath)}/` : "";
+     const all = rows
+       .map((row) => {
+         const fullPath = buildStoragePathFromRow(row);
+         return {
+           name: row.filename || "",
+           displayName: row.filename || "",
+           fullPath,
+           created_at: getRowTimestamp(row)
+         };
+       })
+       .filter((f) => f.name && isRelevantFile(f.name))
+       .filter((f) => !prefix || f.fullPath.startsWith(prefix))
+       .filter((f) => isAfterUpdatesSince(f.created_at));
      return all;
    })()
      .then((items) => {
@@ -673,7 +785,14 @@ async function loadContent(path) {
     }
   }
 
-  const { data, error } = await supabase.storage.from('Catalogs').list(path, { sortBy: { column: 'name', order: 'asc' }, limit: 1000 });
+  let data = null;
+  let error = null;
+  try {
+    const rows = await fetchAllFilesFromTable();
+    data = buildVirtualItemsForPath(rows, path);
+  } catch (e) {
+    error = e;
+  }
   skeletonLoader.style.display = "none";
   if (error) { statusEl.textContent = "Napaka pri branju."; return; }
   if (thisId !== currentRenderId) return;
@@ -838,24 +957,22 @@ async function createItemElement(item, cont) {
     // Cache za slike – če PDF ima predogled (npr. jpg v mapi), ga prikaži v grid view; v list view vedno ikona PDF
     const isPdf = !isFolder && item.name.toLowerCase().endsWith('pdf');
     if (imageMap[base] && !(viewMode === 'list' && isPdf)) {
-      const imagePath = currentPath ? `${currentPath}/${imageMap[base].name}` : imageMap[base].name;
+      const imagePath = imageMap[base].fullPath || (currentPath ? `${currentPath}/${imageMap[base].name}` : imageMap[base].name);
       const cacheKey = imagePath;
       
       if (imageUrlCache[cacheKey]) {
         // Uporabi cache URL (če ni pretekel - 3600s = 1h)
         icon = `<img src="${imageUrlCache[cacheKey]}" loading="lazy" />`;
       } else {
-        // Naloži nov URL in shrani v cache
-        const { data } = await supabase.storage.from('Catalogs').createSignedUrl(imagePath, 3600);
-        if (data) {
-          imageUrlCache[cacheKey] = data.signedUrl;
-          icon = `<img src="${data.signedUrl}" loading="lazy" />`;
-        }
+        const imageUrl = buildR2UrlFromStoragePath(imagePath);
+        imageUrlCache[cacheKey] = imageUrl;
+        icon = `<img src="${imageUrl}" loading="lazy" />`;
       }
     }
 
     // Za datoteke: prikaži datum takoj pod velikostjo
-    const fileSize = isFolder ? 'Mapa' : (item.metadata.size/1024/1024).toFixed(2)+' MB';
+    const fileSizeBytes = item.metadata && typeof item.metadata.size === "number" ? item.metadata.size : 0;
+    const fileSize = isFolder ? 'Mapa' : (fileSizeBytes/1024/1024).toFixed(2)+' MB';
     const dateInfo = !isFolder && item.created_at ? `<span class="item-date">Datum posodobitve: ${formatDate(item.created_at)}</span>` : '';
     const isDownloadType = !isFolder && !isLinkFile && ['dwg', 'dxf', 'xlsx', 'xls'].includes(ext);
     const previewExtraClass = isDownloadType ? ' file-preview-download' : '';
@@ -872,12 +989,14 @@ async function createItemElement(item, cont) {
       div.setAttribute('title', 'Prenesi datoteko (Direct Download)');
       div.classList.add('file-download-type');
     }
+    const fileUrl = !isFolder ? buildR2UrlFromFileRecord(item) : "";
+    if (fileUrl) div.dataset.fileUrl = fileUrl;
     div.onclick = () => {
       if (isFolder) navigateTo(full);
       else if (isLinkFile) handleUrlFile(full);
       else {
         if (isDownloadType) showDownloadNotification();
-        openPdfViewer(item.name, full);
+        openPdfViewer(item.name, full, null, fileUrl);
       }
     };
     cont.appendChild(div);
@@ -885,6 +1004,8 @@ async function createItemElement(item, cont) {
 
 // --- GLOBALNI PRILJUBLJENI ---
 async function renderGlobalFavorites() {
+  const favEl = document.getElementById("globalFavorites");
+  if (!favEl) return; // Exit if not found
   const container = getElement("globalFavContainer");
   if (!container) {
     console.warn("globalFavContainer ni najden, preskakujem renderGlobalFavorites");
@@ -893,10 +1014,10 @@ async function renderGlobalFavorites() {
   
   favorites = loadFavorites(); 
   if (favorites.length === 0) { 
-    if (globalFavorites) globalFavorites.style.display = "none"; 
+    favEl.style.display = "none"; 
     return; 
   }
-  if (globalFavorites) globalFavorites.style.display = "block"; 
+  favEl.style.display = "block"; 
   
   container.innerHTML = ""; 
   container.className = `file-container grid-view`;
@@ -1519,9 +1640,9 @@ function isUrlLinkFile(fileName) {
 
 async function handleUrlFile(storagePath) {
   try {
-    const { data } = await supabase.storage.from('Catalogs').createSignedUrl(storagePath, 3600);
-    if (!data || !data.signedUrl) return;
-    const res = await fetch(data.signedUrl);
+    const fileUrl = buildR2UrlFromStoragePath(storagePath);
+    if (!fileUrl) return;
+    const res = await fetch(fileUrl);
     const text = await res.text();
     let extractedUrl = null;
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -1538,27 +1659,24 @@ async function handleUrlFile(storagePath) {
     if (!extractedUrl && /https?:\/\//i.test(text)) extractedUrl = text.trim();
     if (extractedUrl && /^https?:\/\//i.test(extractedUrl)) {
       openExternalUrl(extractedUrl);
-    } else if (data?.signedUrl) {
-      openExternalUrl(data.signedUrl);
+    } else {
+      openExternalUrl(fileUrl);
     }
   } catch (e) {
     console.warn('handleUrlFile:', e);
-    try {
-      const { data } = await supabase.storage.from('Catalogs').createSignedUrl(storagePath, 3600);
-      if (data?.signedUrl) openExternalUrl(data.signedUrl);
-    } catch (e2) {}
+    openExternalUrl(buildR2UrlFromStoragePath(storagePath));
   }
 }
 
-window.openPdfViewer = async function(fn, path, page) {
+window.openPdfViewer = async function(fn, path, page, directUrl) {
   const ext = (fn.split('.').pop() || '').toLowerCase();
+  const p = path || (currentPath ? `${currentPath}/${fn}` : fn);
+  const fileUrl = directUrl || buildR2UrlFromStoragePath(p);
   const forceDownload = ['xlsx', 'xls', 'dwg', 'dxf'].includes(ext);
   if (forceDownload) {
-    const p = path || (currentPath ? `${currentPath}/${fn}` : fn);
-    const { data } = await supabase.storage.from('Catalogs').createSignedUrl(p, 3600);
-    if (data?.signedUrl) {
+    if (fileUrl) {
       try {
-        const res = await fetch(data.signedUrl);
+        const res = await fetch(fileUrl);
         const blob = await res.blob();
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1567,7 +1685,7 @@ window.openPdfViewer = async function(fn, path, page) {
         a.click();
         URL.revokeObjectURL(blobUrl);
       } catch (e) {
-        openExternalUrl(data.signedUrl);
+        openExternalUrl(fileUrl);
       }
     }
     return;
@@ -1577,7 +1695,6 @@ window.openPdfViewer = async function(fn, path, page) {
   window.history.pushState({ type: 'viewer', file: fn }, "", url);
   pdfModal.style.display = 'flex';
   if (viewerFileName) viewerFileName.textContent = formatDisplayName(fn);
-  const p = path || (currentPath ? `${currentPath}/${fn}` : fn);
   if (!pdfFrame) {
     console.error("[openPdfViewer] pdfFrame element ni najden (id=pdfFrame)");
     pdfModal.style.display = "none";
@@ -1585,17 +1702,10 @@ window.openPdfViewer = async function(fn, path, page) {
     return;
   }
   try {
-    const { data, error } = await supabase.storage.from("Catalogs").createSignedUrl(p, 3600);
-    if (error) {
-      console.error("[openPdfViewer] createSignedUrl napaka:", error.message, "path:", p);
-      pdfModal.style.display = "none";
-      if (statusEl) statusEl.textContent = "Datoteke ni mogoče naložiti: " + (error.message || "neznana napaka");
-      return;
-    }
-    if (data?.signedUrl) {
-      pdfFrame.src = data.signedUrl + "#page=" + pageNum + "&view=Fit";
+    if (fileUrl) {
+      pdfFrame.src = fileUrl + "#page=" + pageNum + "&view=Fit";
     } else {
-      console.warn("[openPdfViewer] createSignedUrl vrnil brez signedUrl");
+      console.warn("[openPdfViewer] R2 URL ni na voljo");
       pdfModal.style.display = "none";
       if (statusEl) statusEl.textContent = "Datoteke ni mogoče naložiti.";
     }
@@ -1839,78 +1949,45 @@ if (updatesAccordionHeader && updatesBanner) {
 // --- REKURZIVNO ISKANJE PO VSEH MAPAH (Za iskanje) - OPTIMIZIRANO ---
 async function searchAllFilesRecursive(path, searchTerm, depth = 0, maxDepth = 8, maxResults = 100) {
    if (depth > maxDepth) return [];
-   
-   const lowerSearchTerm = searchTerm.toLowerCase();
-   let results = [];
-   
-   try {
-       const pageSize = 1000;
-       let offset = 0;
-       const items = [];
 
-       while (items.length < maxResults) {
-           const { data, error } = await supabase.storage.from('Catalogs').list(path, { 
-               limit: pageSize,
-               offset,
-               sortBy: { column: 'name', order: 'asc' } 
-           });
-           if (error || !data || data.length === 0) break;
-           items.push(...data.filter(item => item.name !== ".emptyFolderPlaceholder"));
-           if (data.length < pageSize) break;
-           offset += pageSize;
-       }
-       
-       if (items.length === 0) return [];
-       
-       // Najprej preveri direktna ujemanja (hitreje)
-       for (const item of items) {
-           if (results.length >= maxResults) break;
-           
-           const itemName = item.name.toLowerCase();
-           const isFolder = !item.metadata;
-           const fullPath = path ? `${path}/${item.name}` : item.name;
-           
-           // Preveri, če se ime ujema z iskalnim nizom
-           if (itemName.includes(lowerSearchTerm)) {
-               // Za datoteke filtriraj samo pdf, dwg, xlsx
-               if (!isFolder) {
-                   const ext = item.name.split('.').pop().toLowerCase();
-                   if (!['pdf', 'dwg', 'xlsx'].includes(ext)) {
-                       continue; // Preskoči datoteke, ki niso pdf, dwg ali xlsx
-                   }
-               }
-               results.push({
-                   ...item,
-                   fullPath: fullPath,
-                   displayPath: fullPath
-               });
-           }
-       }
-       
-       // Nato rekurzivno išči v mapah (samo če še ni dosežen maxResults)
-       if (results.length < maxResults) {
-           for (const item of items) {
-               if (results.length >= maxResults) break;
-               
-               const isFolder = !item.metadata;
-               if (isFolder) {
-                   const fullPath = path ? `${path}/${item.name}` : item.name;
-                   const subResults = await searchAllFilesRecursive(
-                       fullPath, 
-                       searchTerm, 
-                       depth + 1, 
-                       maxDepth, 
-                       maxResults - results.length
-                   );
-                   results = [...results, ...subResults];
-               }
-           }
-       }
+   const lowerSearchTerm = String(searchTerm || "").toLowerCase();
+   const normalizedBasePath = stripPathSlashes(path);
+
+   try {
+     const rows = await fetchAllFilesFromTable();
+     const out = [];
+     const prefix = normalizedBasePath ? `${normalizedBasePath}/` : "";
+
+     for (const row of rows) {
+       if (out.length >= maxResults) break;
+       const fileName = row.filename || "";
+       if (!fileName) continue;
+
+       const fullPath = buildStoragePathFromRow(row);
+       if (prefix && !fullPath.startsWith(prefix)) continue;
+
+       const lowerName = fileName.toLowerCase();
+       if (lowerSearchTerm && !lowerName.includes(lowerSearchTerm)) continue;
+
+       const ext = lowerName.split(".").pop();
+       if (ext && !["pdf", "dwg", "xlsx"].includes(ext)) continue;
+
+       out.push({
+         name: fileName,
+         filename: fileName,
+         r2_path: row.r2_path || "",
+         metadata: { size: getRowSizeBytes(row) },
+         created_at: getRowTimestamp(row),
+         fullPath,
+         displayPath: fullPath
+       });
+     }
+
+     return out;
    } catch (e) {
-       console.warn("Napaka pri iskanju v mapi:", path, e);
+     console.warn("Napaka pri iskanju v mapi:", path, e);
+     return [];
    }
-   
-   return results;
 }
 
 // Obnovi rezultate ob vračanju na stran
@@ -2048,6 +2125,4 @@ window.addEventListener('pageshow', (e) => {
   if (loader) loader.style.display = "none";
 })();
 
-document.addEventListener("DOMContentLoaded", () => {
-  preloadFiles();
-});
+// Iskalni indeks se naloži na zahtevo (ob iskanju), brez background preloada ob zagonu.
