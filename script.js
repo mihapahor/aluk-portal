@@ -236,7 +236,12 @@ function renderUpdatesBanner(items, { loading = false } = {}) {
   const sorted = [...(items || [])].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 
   if (sorted.length === 0) {
-    if (lastUpdateDateEl) lastUpdateDateEl.textContent = "Ni novih datotek od danes.";
+    if (lastUpdateDateEl) {
+      lastUpdateDateEl.textContent = "";
+      lastUpdateDateEl.style.display = "none";
+    }
+    const updatesDescEl = getElement("updatesDescription");
+    if (updatesDescEl) updatesDescEl.style.display = "none";
     if (updatesBadge) updatesBadge.style.display = "none";
     const li = document.createElement("li");
     li.innerHTML = `<span><strong>Ni novih posodobitev.</strong></span><span></span>`;
@@ -244,7 +249,12 @@ function renderUpdatesBanner(items, { loading = false } = {}) {
     return;
   }
 
-  if (lastUpdateDateEl) lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(sorted[0].created_at)}`;
+  if (lastUpdateDateEl) {
+    lastUpdateDateEl.textContent = `Zadnja sprememba: ${formatDate(sorted[0].created_at)}`;
+    lastUpdateDateEl.style.display = "";
+  }
+  const updatesDescEl = getElement("updatesDescription");
+  if (updatesDescEl) updatesDescEl.style.display = "";
   if (updatesBadge) {
     updatesBadge.textContent = sorted.length;
     updatesBadge.style.display = sorted.length > 0 ? "inline-flex" : "none";
