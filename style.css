@@ -837,23 +837,125 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   height: 192px !important;
 }
 
-.file-container.list-view { display: flex; flex-direction: column; gap: 10px; }
-.file-container.list-view .item { display: flex; flex-direction: row; align-items: center; padding: 13px 15px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: #fff; transition: all 0.1s; position: relative; }
-.file-container.list-view .item:hover { border-color: var(--primary); background: #fcfcfc; }
-.file-container.list-view .item-preview { width: 50px; height: 50px; border-radius: 6px; margin-right: 15px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; border: none; }
-.file-container.list-view .item-preview svg { width: 24px; height: 24px; }
-.file-container.list-view .item-info { text-align: left; flex-grow: 1; padding: 0; }
-.file-container.list-view .item-preview img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
-.file-container.list-view .icon-img { width: 32px; height: 32px; }
-.file-container.list-view .item-preview .icon-img[src*="PDF_file_icon"],
-.file-container.list-view .item-preview .icon-img[src*="256px-PDF"] {
-  width: 29px;
-  height: 29px;
-  object-fit: contain !important;
+/* List view (Drive-like): compact rows + columns (only for main list, not search results) */
+.file-container.list-view.list-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
 }
-.file-container.list-view .item-preview .icon-img[src*="excel_icon"] {
-  width: 29px;
-  height: 29px;
+
+.file-container.list-view.list-compact .list-header {
+  display: grid;
+  grid-template-columns: 1fr 140px 110px 44px;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.03);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+}
+.file-container.list-view.list-compact .list-header > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-container.list-view.list-compact .lvh-modified,
+.file-container.list-view.list-compact .lvh-size { text-align: right; }
+
+.file-container.list-view.list-compact .item.item-card {
+  display: grid;
+  grid-template-columns: 1fr 140px 110px 44px;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.12s ease;
+}
+.file-container.list-view.list-compact .item.item-card:last-child { border-bottom: 0; }
+.file-container.list-view.list-compact .item.item-card:hover { background: rgba(15, 23, 42, 0.03); }
+
+.file-container.list-view.list-compact .lv-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.file-container.list-view.list-compact .item.item-card .item-preview {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  margin-right: 0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+.file-container.list-view.list-compact .item.item-card .item-preview svg { width: 18px; height: 18px; }
+.file-container.list-view.list-compact .item.item-card .item-preview img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
+
+.file-container.list-view.list-compact .lv-title { min-width: 0; }
+.file-container.list-view.list-compact .lv-title strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-container.list-view.list-compact .lv-meta {
+  display: none;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.file-container.list-view.list-compact .lv-modified,
+.file-container.list-view.list-compact .lv-size {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.file-container.list-view.list-compact .lv-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Star button in list view: compact */
+.file-container.list-view.list-compact .lv-actions .fav-btn {
+  position: static;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255,255,255,0.9);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.file-container.list-view.list-compact .lv-actions .fav-btn:hover { transform: none; }
+
+/* List view: download overlay smaller (fits 34x34) */
+.file-container.list-view.list-compact .item-preview .download-overlay-icon {
+  bottom: 2px;
+  right: 2px;
+  padding: 1px 3px;
+  font-size: 9px;
+  border-radius: 4px;
 }
 
 .item-preview img { width: 100%; height: 100%; object-fit: cover; }
@@ -887,14 +989,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   line-height: 1;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
-/* List view: ikona prenosa desno spodaj v kvadrantu (50×50) */
-.file-container.list-view .item-preview .download-overlay-icon {
-  bottom: 2px;
-  right: 2px;
-  padding: 2px 4px;
-  font-size: 10px;
-  border-radius: 4px;
-}
+/* (old list-view download overlay styles replaced by list-compact override above) */
 .file-download-type { cursor: pointer; }
 .item-info strong { 
   display: block; 
@@ -972,22 +1067,31 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   top: -1px !important; /* Fina nastavitev, da sedi točno na sredini vrstice */
 }
 
-/* List view: značka NOVO v zgornjem desnem kotu vrstice (kot v gridu) */
-.file-container.list-view .item {
-  position: relative !important;
-  padding-right: 60px !important;
-}
-.file-container.list-view .item .new-badge {
+/* List view (compact): NOVO badge doesn't clash with actions column */
+.file-container.list-view.list-compact .item.item-card .new-badge {
   position: absolute !important;
-  top: 10px !important;
-  right: 15px !important;
+  top: 8px !important;
+  right: 56px !important;
   margin: 0 !important;
+}
+
+@media (max-width: 768px) {
+  .file-container.list-view.list-compact .list-header { display: none; }
+  .file-container.list-view.list-compact .item.item-card {
+    grid-template-columns: 1fr 44px;
+  }
+  .file-container.list-view.list-compact .lv-modified,
+  .file-container.list-view.list-compact .lv-size { display: none; }
+  .file-container.list-view.list-compact .lv-meta { display: block; }
+  .file-container.list-view.list-compact .item.item-card .new-badge {
+    right: 50px !important;
+  }
 }
 
 .fav-btn { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9); border: 1px solid #ddd; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 20; color: #ccc; font-size: 18px; transition: all 0.2s; }
 .fav-btn:hover { transform: scale(1.1); color: var(--fav-color); border-color: var(--fav-color); }
 .fav-btn.active { color: var(--fav-color); border-color: var(--fav-color); background: #fffbeb; }
-.file-container.list-view .fav-btn {
+.file-container.list-view:not(.list-compact) .fav-btn {
   position: static;
   margin-left: auto;
   flex-shrink: 0;
@@ -997,7 +1101,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   width: auto;
   height: auto;
 }
-.file-container.list-view .item-preview {
+.file-container.list-view:not(.list-compact) .item-preview {
   flex-shrink: 0;
 }
 

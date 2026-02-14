@@ -19,7 +19,7 @@ const folderIcons = {
   // "Tehnični katalogi" in podobno: raje ikona dokumentacije kot orodje.
   "tehničn": "book", "tehnicn": "book", "katalog": "book",
   "galerij": "image", "foto": "image", "referenc": "image",
-  "certifikat": "badge", "izjav": "badge",
+  "certifikat": "medal", "izjav": "medal",
   "vgradni": "ruler", "prerezi": "ruler",
   "navodil": "info", "obdelav": "info", "brosur": "info",
   "montaz": "tool",
@@ -53,6 +53,10 @@ const ICON_SVGS = {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 11l2.5 3 2-2.5L18 18H6z"/><path d="M9 8.5a1.2 1.2 0 1 0 0 .01z"/></svg>',
   badge:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 5 5 .9-3.6 3.6.9 5-4.3-2.3-4.3 2.3.9-5L4 7.9 9 7z"/></svg>',
+  medal:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2h3l1 4 1-4h3l-2.2 7H10.2z"/><path d="M12 10a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/><path d="M12 13.2l1 2 2.2.2-1.7 1.4.6 2.1-2.1-1.2-2.1 1.2.6-2.1-1.7-1.4 2.2-.2z"/></svg>',
+  cad:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a3 3 0 0 0-3 3c0 2.2 1.5 3.6 3 5 1.5-1.4 3-2.8 3-5a3 3 0 0 0-3-3z"/><path d="M12 13v8"/><path d="M7 21h10"/><path d="M6 9l-3 3"/><path d="M18 9l3 3"/><path d="M9 16l-4-4"/><path d="M15 16l4-4"/></svg>',
   ruler:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l10-10 6 6-10 10H4z"/><path d="M14 6l4 4"/><path d="M7 13l1 1"/><path d="M9 11l1 1"/><path d="M11 9l1 1"/></svg>',
   info:
@@ -1039,7 +1043,19 @@ async function renderItems(items, rId) {
   }
   statusEl.textContent = `${items.length} ${elementWord(items.length)}`;
   const cont = document.createElement("div");
-  cont.className = viewMode === "list" ? "file-container list-view" : "file-container grid-view";
+  cont.className = viewMode === "list" ? "file-container list-view list-compact" : "file-container grid-view";
+
+  if (viewMode === "list") {
+    const header = document.createElement("div");
+    header.className = "list-header";
+    header.innerHTML = `
+      <div class="lvh-name">Ime</div>
+      <div class="lvh-modified">Posodobljeno</div>
+      <div class="lvh-size">Velikost</div>
+      <div class="lvh-actions"></div>
+    `;
+    cont.appendChild(header);
+  }
   favorites = loadFavorites();
   const favs = [], norms = [];
   items.forEach(i => { const p = normalizePath(currentPath ? `${currentPath}/${i.name}` : i.name); (!i.metadata && favorites.includes(p)) ? favs.push(i) : norms.push(i); });
@@ -1099,7 +1115,7 @@ async function createItemElement(item, cont) {
     } else if (isLinkFile) {
       icon = `<div class="big-icon">${iconSvg("link")}</div>`;
     } else if (item.name.toLowerCase().endsWith('dwg') || item.name.toLowerCase().endsWith('dxf')) {
-      icon = `<div class="big-icon">${iconSvg("ruler")}</div>`;
+      icon = `<div class="big-icon">${iconSvg("cad")}</div>`;
     } else {
       icon = `<div class="big-icon">${iconSvg(getFileIconKeyForExt(ext))}</div>`;
     }
@@ -1122,15 +1138,30 @@ async function createItemElement(item, cont) {
 
     // Za datoteke: prikaži datum takoj pod velikostjo
     const fileSizeBytes = item.metadata && typeof item.metadata.size === "number" ? item.metadata.size : 0;
-    const fileSize = isFolder ? 'Mapa' : (fileSizeBytes/1024/1024).toFixed(2)+' MB';
+    const fileSize = isFolder ? 'Mapa' : (fileSizeBytes > 0 ? (fileSizeBytes/1024/1024).toFixed(2)+' MB' : '—');
     const dateInfo = !isFolder && item.created_at ? `<span class="item-date">Datum posodobitve: ${formatDate(item.created_at)}</span>` : '';
+    const modifiedText = item.created_at ? formatDate(item.created_at) : '—';
     const isDownloadType = !isFolder && !isLinkFile && ['dwg', 'dxf', 'xlsx', 'xls'].includes(ext);
     const previewExtraClass = isDownloadType ? ' file-preview-download' : '';
     const downloadOverlay = isDownloadType ? '<span class="download-overlay-icon" aria-hidden="true">⬇</span>' : '';
     const previewHtml = `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}${previewExtraClass}">${icon}${downloadOverlay}</div>`;
     const infoHtml = `<div class="item-info"><strong>${formatDisplayName(item.name)}</strong><small>${fileSize}</small>${dateInfo}</div>`;
     if (viewMode === 'list') {
-      div.innerHTML = badges + previewHtml + infoHtml + favBtnHtml;
+      const sizeCol = isFolder ? '—' : fileSize;
+      const metaLine = isFolder ? 'Mapa' : `${modifiedText}${sizeCol && sizeCol !== '—' ? ` · ${sizeCol}` : ''}`;
+      div.innerHTML = `
+        ${badges}
+        <div class="lv-name">
+          ${previewHtml}
+          <div class="lv-title">
+            <strong>${escapeHtml(formatDisplayName(item.name))}</strong>
+            <small class="lv-meta">${escapeHtml(metaLine)}</small>
+          </div>
+        </div>
+        <div class="lv-modified">${escapeHtml(modifiedText)}</div>
+        <div class="lv-size">${escapeHtml(sizeCol)}</div>
+        <div class="lv-actions">${favBtnHtml}</div>
+      `;
     } else {
       div.innerHTML = favBtnHtml + badges + previewHtml + infoHtml;
     }
@@ -1698,7 +1729,7 @@ if (searchInput) {
           const ext = fileName.split(".").pop().toLowerCase();
           if (!isFolder && isLinkFile) displayIcon = iconSvg("link");
           else if (!isFolder) displayIcon = iconSvg(getFileIconKeyForExt(ext));
-          if (!isFolder && !isLinkFile && (ext === "dwg" || ext === "dxf")) displayIcon = iconSvg("ruler");
+          if (!isFolder && !isLinkFile && (ext === "dwg" || ext === "dxf")) displayIcon = iconSvg("cad");
           div.innerHTML = `
             <div class="item-preview ${isFolder ? "folder-bg" : "file-bg"}">${displayIcon}</div>
             <div class="item-info">
