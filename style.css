@@ -297,7 +297,7 @@ body {
 @media (max-width: 480px) {
   .sticky-nav-bar {
     top: 70px;
-    border-radius: 10px 10px 0 0;
+    border-radius: 12px 12px 0 0;
     margin: 0 -20px 0 -20px;
   }
   .sticky-nav-row {
@@ -1712,18 +1712,87 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 
 @media (max-width: 768px) {
   .sidebar {
-    display: none;
+    display: flex;
+    position: fixed;
+    top: 80px; /* pod headerjem */
+    left: 0;
+    height: calc(100vh - 80px);
+    max-height: calc(100vh - 80px);
+    width: min(320px, 86vw);
+    min-width: 0;
+    border-radius: 0 16px 16px 0;
+    z-index: 1200;
+    transform: translateX(-110%);
+    transition: transform 0.22s ease;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.18);
   }
   .main-content .card {
-    padding: 30px;
+    /* Na mobile naj sticky breadcrumbs bar sede cisto na vrh kartice (brez belega roba zgoraj). */
+    padding: 0 30px 30px;
   }
 }
 
 @media (max-width: 480px) {
+  .sidebar {
+    top: 70px; /* pod headerjem */
+    height: calc(100vh - 70px);
+    max-height: calc(100vh - 70px);
+  }
   .main-content .card {
-    padding: 20px;
+    padding: 0 20px 20px;
     border-radius: 12px;
   }
+}
+
+/* Sidebar drawer open state + overlay (mobile) */
+.sidebar.is-open {
+  transform: translateX(0);
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 80px 0 0 0; /* ne prekrij headerja na tablet/mobile */
+  background: rgba(0,0,0,0.40);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 1100;
+}
+
+.sidebar-overlay.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.sidebar-open {
+  overflow: hidden;
+}
+
+/* Mobile menu (hamburger) button in sticky breadcrumbs row */
+.sticky-nav-menu-btn {
+  width: auto !important;
+  min-width: auto !important;
+  max-width: none !important;
+  padding: 8px 12px !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: none;
+  line-height: 1;
+}
+
+@media (max-width: 768px) {
+  .sticky-nav-menu-btn { display: inline-flex; align-items: center; justify-content: center; }
+}
+
+@media (max-width: 480px) {
+  .sidebar-overlay { inset: 70px 0 0 0; }
+  .sticky-nav-menu-btn { padding: 6px 10px !important; font-size: 15px !important; }
 }
 
 /* =====================================================

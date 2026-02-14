@@ -92,6 +92,9 @@ const btnList = getElement("btnList");
 const globalFavorites = getElement("globalFavorites");
 const globalFavContainer = getElement("globalFavContainer");
 const sidebarFavList = getElement("sidebarFavList");
+const sidebarEl = getElement("sidebar");
+const sidebarOverlay = getElement("sidebarOverlay");
+const menuBtn = getElement("menuBtn");
 
 let currentPath = ""; 
 let currentItems = [];
@@ -106,7 +109,8 @@ let preloadFilesPromise = null;
 const UPDATES_CACHE_KEY = "aluk_updates_cache";
 const UPDATES_SINCE_KEY = "aluk_updates_since";
 const UPDATES_RESET_VERSION_KEY = "aluk_updates_reset_version";
-const UPDATES_RESET_VERSION = "2026-02-11";
+// Spremeni vrednost, ko želiš globalno (za vse uporabnike) resetirati "posodobitve" od današnjega dne naprej.
+const UPDATES_RESET_VERSION = "2026-02-14";
 const NEW_FILES_CACHE_TTL_MS = 60 * 1000;
 const PATH_EXISTS_CACHE_TTL_MS = 30 * 1000;
 let updatesRequestId = 0;
@@ -689,6 +693,60 @@ window.addEventListener('popstate', () => {
   loadContent(p);
 });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pdfModal && pdfModal.style.display === 'flex') closePdfViewer(); });
+
+// --- MOBILE SIDEBAR DRAWER ---
+function isSidebarOpen() {
+  return !!(sidebarEl && sidebarEl.classList.contains("is-open"));
+}
+
+function openSidebar() {
+  if (!sidebarEl) return;
+  sidebarEl.classList.add("is-open");
+  if (sidebarOverlay) sidebarOverlay.classList.add("is-active");
+  document.body.classList.add("sidebar-open");
+  if (sidebarOverlay) sidebarOverlay.setAttribute("aria-hidden", "false");
+}
+
+function closeSidebar() {
+  if (!sidebarEl) return;
+  sidebarEl.classList.remove("is-open");
+  if (sidebarOverlay) sidebarOverlay.classList.remove("is-active");
+  document.body.classList.remove("sidebar-open");
+  if (sidebarOverlay) sidebarOverlay.setAttribute("aria-hidden", "true");
+}
+
+function toggleSidebar() {
+  if (isSidebarOpen()) closeSidebar();
+  else openSidebar();
+}
+
+if (menuBtn) {
+  menuBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    toggleSidebar();
+  });
+}
+
+if (sidebarOverlay) {
+  sidebarOverlay.addEventListener("click", () => closeSidebar());
+}
+
+if (sidebarEl) {
+  // Ko na mobile kliknes na navigacijo ali favorite, zapri drawer (ne vpliva na desktop).
+  sidebarEl.addEventListener("click", (e) => {
+    const t = e.target;
+    if (!(t instanceof Element)) return;
+    if (t.closest(".sidebar-link") || t.closest(".sidebar-fav-item") || t.closest(".fav-remove")) {
+      closeSidebar();
+    }
+  });
+}
+
+// Esc naj zapre sidebar, ce je odprt (in PDF viewer ima prednost zgoraj).
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (isSidebarOpen()) closeSidebar();
+});
 
 // --- REKURZIVNO ISKANJE (Banner) – šteje vse NOVE datoteke v trenutni mapi in vseh podmapah ---
 const MAX_DEPTH_NEW_FILES = 25; // dovolj globoko za vse podmape, prepreči neskončno rekurzijo

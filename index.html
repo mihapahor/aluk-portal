@@ -2,6 +2,15 @@
 <html lang="sl">
 <head>
   <meta charset="utf-8" />
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-KY4YRV76JC"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-KY4YRV76JC');
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
@@ -104,12 +113,16 @@
           </div>
         </div>
       </aside>
+
+      <!-- Mobile overlay for sidebar drawer -->
+      <div id="sidebarOverlay" class="sidebar-overlay" aria-hidden="true"></div>
       
       <!-- MAIN CONTENT -->
       <main class="main-content">
         <div class="card">
         <div class="sticky-nav-bar">
           <div class="sticky-nav-row">
+            <button type="button" id="menuBtn" class="sticky-nav-menu-btn" title="Meni" aria-label="Meni">☰</button>
             <button type="button" id="backBtn" class="sticky-nav-back-btn" style="display:none;" title="Nazaj v nadrejeno mapo">← Nazaj</button>
             <div class="breadcrumbs" id="breadcrumbs"></div>
           </div>

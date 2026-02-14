@@ -1,15 +1,20 @@
 const { S3Client, ListObjectsV2Command } = require("@aws-sdk/client-s3");
 const { createClient } = require("@supabase/supabase-js");
 
-const R2_ENDPOINT = "https://ef2bd3a95bf46a4691f8c1d525b0c876.r2.cloudflarestorage.com";
-const R2_BUCKET = "portal-aluk";
-const R2_ACCESS_KEY_ID = "36d936b2280fb3933f0620ac0fbef799";
-const R2_SECRET_ACCESS_KEY = "11b4f399ac882f0f5c7133d174bdbf7045192f2fd81222ac4ad651d77d09eacd";
+function requireEnv(name, fallback) {
+  const v = process.env[name] || fallback;
+  if (!v) throw new Error(`Missing required env var: ${name}`);
+  return v;
+}
 
-const SUPABASE_URL = "https://ugwchsznxsuxbxdvigsu.supabase.co";
-const SUPABASE_SERVICE_ROLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnd2Noc3pueHN1eGJ4ZHZpZ3N1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTExNjQ3MSwiZXhwIjoyMDg0NjkyNDcxfQ.vTBbAzs7FwkQ-VH2KsJXuwEJT1E1wbF8AdylFn1qEDc";
-const SUPABASE_TABLE = "files";
+const R2_ENDPOINT = requireEnv("R2_ENDPOINT");
+const R2_BUCKET = requireEnv("R2_BUCKET", "portal-aluk");
+const R2_ACCESS_KEY_ID = requireEnv("R2_ACCESS_KEY_ID");
+const R2_SECRET_ACCESS_KEY = requireEnv("R2_SECRET_ACCESS_KEY");
+
+const SUPABASE_URL = requireEnv("SUPABASE_URL");
+const SUPABASE_SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+const SUPABASE_TABLE = process.env.SUPABASE_TABLE || "files";
 
 const s3 = new S3Client({
   region: "auto",
