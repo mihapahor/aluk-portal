@@ -53,7 +53,13 @@
   <form id="authForm" class="card login-card-center" method="post" action="javascript:void(0);">
     <div id="authCard" class="login-inner">
       <div class="info-box">
-        <strong>🔒 Zavarovan dostop:</strong> Portal je namenjen izključno registriranim partnerjem.
+        <strong><span class="ui-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 11V8a5 5 0 0 1 10 0v3"/>
+            <path d="M6 11h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z"/>
+            <path d="M12 16v2"/>
+          </svg>
+        </span> Zavarovan dostop:</strong> Portal je namenjen izključno registriranim partnerjem.
       </div>
       <div class="auth-tabs" role="tablist">
         <button type="button" class="auth-tab active" role="tab" aria-selected="true" data-tab="login">Obstoječi uporabnik</button>
@@ -101,7 +107,11 @@
         <nav class="sidebar-nav">
           <div class="sidebar-section-title">Meni</div>
           <a href="#" class="sidebar-link active" onclick="navigateTo(''); return false;">
-            <span class="sidebar-icon">🏠</span>
+            <span class="sidebar-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>
+              </svg>
+            </span>
             <span>Domov</span>
           </a>
         </nav>
@@ -130,7 +140,7 @@
         <div class="toolbar toolbar-scrollable">
           <div class="search-box">
             <div class="search-input-wrap">
-              <input id="search" type="text" placeholder="🔍 Išči po vseh mapah in šifrantu artiklov..." />
+              <input id="search" type="text" placeholder="Išči po vseh mapah in šifrantu artiklov..." />
               <span id="searchSpinner" class="search-spinner" style="display:none;" aria-hidden="true"></span>
               <button id="clearSearch" type="button" class="clear-search-btn" style="display:none;" title="Izbriši iskanje">✕</button>
             </div>
@@ -141,7 +151,14 @@
           </div>
         </div>
         <div class="search-section">
-          <h3 style="font-size:16px; font-weight:600; color:var(--heading-color); margin-bottom:12px; margin-top:0;">🔍 Iskanje</h3>
+          <h3 style="font-size:16px; font-weight:600; color:var(--heading-color); margin-bottom:12px; margin-top:0;">
+            <span class="ui-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z"/><path d="M16.5 16.5 21 21"/>
+              </svg>
+            </span>
+            Iskanje
+          </h3>
           <p style="font-size:13px; color:var(--text-secondary); margin-bottom:15px; line-height:1.5;">
             <strong style="color:var(--text-primary);">Iskanje šifre artikla:</strong> Vpišite šifro artikla in dobili boste rezultate iz vseh katalogov, kjer se ta artikel pojavlja.<br>
             <strong style="color:var(--text-primary);">Iskanje katalogov:</strong> Vpišite ime kataloga ali datoteke in dobili boste vse kataloge, ki se ujemajo in so na voljo na tem portalu.
@@ -150,7 +167,11 @@
 
         <div id="updatesBanner" class="updates-banner" style="display:none;">
           <button type="button" class="updates-accordion-header" id="updatesAccordionHeader" aria-expanded="false">
-            <span class="updates-accordion-icon" aria-hidden="true">🔔</span>
+            <span class="updates-accordion-icon ui-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+              </svg>
+            </span>
             <span class="updates-accordion-title">Zadnje posodobitve</span>
             <span id="updatesBadge" class="updates-badge" style="display:none;"></span>
             <span class="updates-accordion-chevron" aria-hidden="true">▼</span>
@@ -167,7 +188,17 @@
       </div>
 
       <div class="content-title-row">
-        <div class="section-title" id="contentTitle">📂 Tehnična dokumentacija</div>
+        <div class="section-title" id="contentTitle">
+          <span class="ui-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <path d="M14 2v6h6"/>
+              <path d="M8 13h8"/>
+              <path d="M8 17h6"/>
+            </svg>
+          </span>
+          Tehnična dokumentacija
+        </div>
         <span id="status" class="content-status"></span>
       </div>
       <p id="contentTitleDesc" class="content-desc">Kliknite na mapo za vstop ali na datoteko za predogled. Datoteke z oznako <span class="new-badge inline-badge">NOVO</span> so bile dodane od danes naprej.</p>
