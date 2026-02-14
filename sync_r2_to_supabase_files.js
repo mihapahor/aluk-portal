@@ -1,5 +1,39 @@
 const { S3Client, ListObjectsV2Command } = require("@aws-sdk/client-s3");
 const { createClient } = require("@supabase/supabase-js");
+const fs = require("fs");
+const path = require("path");
+
+// Load local .env automatically when running the script directly.
+// This avoids "Missing required env var" when user forgets to export env vars.
+function loadDotEnvFile(envPath = path.join(__dirname, ".env")) {
+  try {
+    if (!fs.existsSync(envPath)) return;
+    const raw = fs.readFileSync(envPath, "utf8");
+    raw.split(/\r?\n/).forEach((line) => {
+      const s = String(line || "").trim();
+      if (!s || s.startsWith("#")) return;
+      const cleaned = s.startsWith("export ") ? s.slice("export ".length) : s;
+      const eq = cleaned.indexOf("=");
+      if (eq === -1) return;
+      const key = cleaned.slice(0, eq).trim();
+      let val = cleaned.slice(eq + 1).trim();
+      if (!key) return;
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      if (process.env[key] == null) process.env[key] = val;
+    });
+  } catch (e) {
+    // Non-fatal: script can still run if env vars are provided externally.
+  }
+}
+
+loadDotEnvFile();
+
+// Convenience: derive endpoint from account id if not explicitly provided.
+if (!process.env.R2_ENDPOINT && process.env.R2_ACCOUNT_ID) {
+  process.env.R2_ENDPOINT = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+}
 
 function requireEnv(name, fallback) {
   const v = process.env[name] || fallback;

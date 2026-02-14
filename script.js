@@ -558,6 +558,12 @@ function normalizeSortName(name) {
     .trim();
 }
 
+function getLastPathSegment(pathStr) {
+  const p = String(pathStr || "");
+  const parts = p.split("/").filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : "";
+}
+
 /** Prioriteta razvrščanja znotraj podmap:
  * 1 Tehnični katalogi, 2 Vgradni detajli/prerezi, 3 Izjave o lastnostih,
  * 4 ostale mape, 5 PDF, 6 Excel, 7 ostale datoteke.
@@ -565,6 +571,18 @@ function normalizeSortName(name) {
 function getSubfolderSortPriority(item) {
   const isFolder = !item.metadata;
   const name = normalizeSortName(item.name);
+  const currentFolder = normalizeSortName(getLastPathSegment(currentPath));
+
+  // Special order for: Notranje predelne stene
+  // Desired: Slim, Glass, Double Glass, C55K-NI (then other folders, then files).
+  if (isFolder && currentFolder === "notranje predelne stene") {
+    if (name.includes("slim")) return 1;
+    // "double glass" contains "glass", so check it first.
+    if (name.includes("double glass")) return 3;
+    if (name.includes("glass")) return 2;
+    if (name.includes("c55k ni")) return 4;
+    return 10;
+  }
 
   if (isFolder) {
     if (name.includes("tehnicni katalog")) return 1;
@@ -574,9 +592,11 @@ function getSubfolderSortPriority(item) {
   }
 
   const ext = (item.name.split(".").pop() || "").toLowerCase();
-  if (ext === "pdf") return 5;
-  if (ext === "xls" || ext === "xlsx" || ext === "xlsm" || ext === "xlsb") return 6;
-  return 7;
+  // Keep files after folders even in special folder ordering.
+  const base = (currentFolder === "notranje predelne stene") ? 50 : 0;
+  if (ext === "pdf") return base + 5;
+  if (ext === "xls" || ext === "xlsx" || ext === "xlsm" || ext === "xlsb") return base + 6;
+  return base + 7;
 }
 
 function formatDate(iso) { if (!iso) return ""; return new Date(iso).toLocaleDateString('sl-SI'); }
