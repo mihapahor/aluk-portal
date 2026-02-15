@@ -10,6 +10,16 @@ const ADMIN_EMAIL = "miha@aluk.si";
 const ACCESS_REQUESTS_TABLE = "access_requests"; 
 
 // --- KONFIGURACIJA ---
+const ANNOUNCEMENTS_ROUTE = "__obvestila__";
+// Mape, ki so namenjene samo internemu indeksiranju (ne prikazuj v portalu).
+const HIDDEN_INDEX_FOLDER_KEYS = new Set([
+  "novialukpokoncni"
+]);
+// Root mape, ki naj bodo vedno zadnje v seznamu (UI preference).
+const LAST_ROOT_FOLDER_KEYS = new Set([
+  normalizeSegmentKey("Bioklimatske pergole"),
+  normalizeSegmentKey("Bioklimatska pergola")
+]);
 const customSortOrder = [
   "Okenski sistemi", "Vratni sistemi", "Panoramski sistemi",
   "Fasadni sistemi", "Pisarniski sistemi", "Dekorativne obloge Skin"
@@ -124,13 +134,37 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'aluk-portal-auth' }
 });
 
+// --- OBVESTILA (en vir za login novico in "Obvestila" tab) ---
+const ANNOUNCEMENTS = [
+  {
+    id: "portal-launch",
+    title: "Novi AluK Portal za partnerje",
+    published_at: "2026-02-15",
+    lead:
+      "Z veseljem predstavljamo prenovljen ALUK Portal za partnerje, kjer so vsa ključna tehnična gradiva zbrana na enem mestu in vedno na voljo v najnovejši različici.",
+    bullets: [
+      { title: "Tehnična dokumentacija in katalogi", text: "Urejeno po sistemih in mapah, da hitro najdete pravo vsebino." },
+      { title: "Hitro iskanje po mapah in datotekah", text: "Poiščete katalog, dokument ali datoteko po imenu, brez ročnega brskanja." },
+      { title: "Iskanje po šifri artikla v katalogih", text: "Vpišete šifro in portal vrne zadetke iz vsebine katalogov (strani in naslovi), kar bistveno skrajša čas iskanja." },
+      { title: "Priljubljene", text: "Pogosto uporabljene mape si označite med priljubljene za še hitrejši dostop." },
+      { title: "Zadnje posodobitve in oznaka \"NOVO\"", text: "Takoj vidite, kaj je bilo dodano ali kateri katalog je bil posodobljen." },
+      { title: "Ostala dokumentacija", text: "Ločen razdelek za obrazce, priporočila za montažo in druga podporna gradiva." },
+      { title: "Prilagojeno tudi za mobilne naprave", text: "Portal ostaja pregleden in uporaben tudi na telefonu." }
+    ],
+    note: "Če imate predlog za dodatne vsebine ali izboljšave, nam sporočite in bomo portal nadgrajevali naprej."
+  }
+];
+
 // DOM ELEMENTI (z varnostnimi preverjanji)
 const authForm = getElement("authForm");
 const loginNewsCard = getElement("loginNewsCard");
+const loginNewsMount = getElement("loginNewsMount");
+const loginFooter = getElement("loginFooter");
 const appCard = getElement("appCard");
 const mainContent = getElement("mainContent");
 const searchResultsWrapper = getElement("searchResultsWrapper");
 const catalogResultsSection = getElement("catalogResultsSection");
+const announcementsSection = getElement("announcementsSection");
 const searchSpinner = getElement("searchSpinner");
 const skeletonLoader = getElement("skeletonLoader");
 const statusEl = getElement("status");
@@ -155,6 +189,11 @@ const sidebarFavList = getElement("sidebarFavList");
 const sidebarEl = getElement("sidebar");
 const sidebarOverlay = getElement("sidebarOverlay");
 const menuBtn = getElement("menuBtn");
+
+const toolbarEl = document.querySelector(".toolbar");
+const searchSectionEl = document.querySelector(".search-section");
+const contentTitleDescEl = getElement("contentTitleDesc");
+const DEFAULT_CONTENT_DESC_HTML = contentTitleDescEl ? contentTitleDescEl.innerHTML : "";
 
 let currentPath = ""; 
 let currentItems = [];
@@ -203,6 +242,11 @@ function updateSidebarNavActive(path) {
 function updateContentSectionTitle(path) {
   const contentTitleEl = getElement("contentTitle");
   if (!contentTitleEl) return;
+
+  if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
+    contentTitleEl.innerHTML = `<span class="ui-icon" aria-hidden="true">${iconSvg("bell")}</span>Obvestila`;
+    return;
+  }
 
   const root = normalizePath(getRootSegment(path));
   const isOtherDocs = root === normalizePath(OTHER_DOCS_ROOT);
@@ -270,7 +314,7 @@ function folderHasUpdatesByCurrentPathCache(folderPath) {
   if (!updatesInCurrentPath || !updatesInCurrentPath.length) return false;
   const folderPrefix = normalizePath(folderPath) + "/";
   return updatesInCurrentPath.some((f) => {
-    const fp = normalizePath(f.fullPath || "");
+    const fp = normalizePath(f.virtualPath || f.fullPath || "");
     return fp.startsWith(folderPrefix);
   });
 }
@@ -309,7 +353,8 @@ function normalizeUpdateItems(path, items) {
   return (items || []).map((f) => ({
     name: f.name || "",
     displayName: f.displayName || f.name || "",
-    fullPath: f.fullPath || (path ? `${path}/${f.name}` : f.name),
+    fullPath: f.fullPath || (path ? `${path}/${f.name}` : f.name), // real storage path (used for open)
+    virtualPath: f.virtualPath || null,
     created_at: f.created_at || null
   }));
 }
@@ -403,6 +448,28 @@ function stripPathSlashes(path) {
   return String(path || "").replace(/^\/+|\/+$/g, "");
 }
 
+function normalizeSegmentKey(seg) {
+  return String(seg || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function isHiddenIndexFolderSegment(seg) {
+  return HIDDEN_INDEX_FOLDER_KEYS.has(normalizeSegmentKey(seg));
+}
+
+function virtualizeStoragePath(storagePath) {
+  const p = stripPathSlashes(String(storagePath || ""));
+  if (!p) return "";
+  return p
+    .split("/")
+    .filter(Boolean)
+    .filter((seg) => !isHiddenIndexFolderSegment(seg))
+    .join("/");
+}
+
 function joinFolderAndFilename(folderPath, filename) {
   const folder = String(folderPath || "");
   const file = String(filename || "");
@@ -480,17 +547,17 @@ async function fetchAllFilesFromTable(forceRefresh = false) {
 function buildVirtualItemsForPath(rows, path) {
   const normalizedPath = stripPathSlashes(normalizePath(path || ""));
   const prefix = normalizedPath ? `${normalizedPath}/` : "";
-  const expectedFolderName = normalizedPath ? normalizedPath.split("/").pop() : "Katalogi";
   const folders = new Map();
   const files = [];
 
   for (const row of rows || []) {
     const filename = row?.filename;
     if (!filename) continue;
-    const fullPath = buildStoragePathFromRow(row);
-    if (prefix && !fullPath.startsWith(prefix)) continue;
+    const fullPath = buildStoragePathFromRow(row); // real storage path
+    const virtualPath = virtualizeStoragePath(fullPath);
+    if (prefix && !virtualPath.startsWith(prefix)) continue;
 
-    const remaining = prefix ? fullPath.slice(prefix.length) : fullPath;
+    const remaining = prefix ? virtualPath.slice(prefix.length) : virtualPath;
     if (!remaining) continue;
     const slashIdx = remaining.indexOf("/");
 
@@ -506,8 +573,6 @@ function buildVirtualItemsForPath(rows, path) {
       });
       continue;
     }
-
-    if (row?.folder_name && row.folder_name !== expectedFolderName) continue;
 
     files.push({
       name: filename,
@@ -542,7 +607,8 @@ async function pathExists(path) {
     const prefix = `${normalized}/`;
     const exists = rows.some((row) => {
       const fullPath = buildStoragePathFromRow(row);
-      return fullPath.startsWith(prefix);
+      const v = virtualizeStoragePath(fullPath);
+      return v.startsWith(prefix);
     });
     pathExistsCache.set(key, { ts: Date.now(), value: exists });
     return exists;
@@ -701,8 +767,129 @@ async function checkUser() {
 function showLogin() { 
   if (authForm) authForm.style.display = "block";
   if (loginNewsCard) loginNewsCard.style.display = "block";
+  if (loginFooter) loginFooter.style.display = "block";
   appCard.style.display = "none"; 
   document.getElementById("logout").style.display = "none"; 
+}
+
+function setDocsUiVisible(visible) {
+  if (searchResultsWrapper) searchResultsWrapper.style.display = visible ? "" : "none";
+  if (toolbarEl) toolbarEl.style.display = visible ? "" : "none";
+  if (searchSectionEl) searchSectionEl.style.display = visible ? "" : "none";
+  // updatesBanner and skeletonLoader visibility is controlled by the docs rendering logic;
+  // here we only ensure they are hidden on the announcements page.
+  if (!visible) {
+    if (updatesBanner) updatesBanner.style.display = "none";
+    if (skeletonLoader) skeletonLoader.style.display = "none";
+  }
+}
+
+function showAnnouncementsPage() {
+  // Hide "docs" UI and show announcements content.
+  setDocsUiVisible(false);
+  if (announcementsSection) announcementsSection.style.display = "block";
+  if (statusEl) statusEl.textContent = "";
+  if (contentTitleDescEl) {
+    contentTitleDescEl.style.display = "";
+    contentTitleDescEl.innerHTML = "Zadnje pomembne informacije, posodobitve in novosti na portalu.";
+  }
+  renderAnnouncements();
+}
+
+function hideAnnouncementsPage() {
+  if (announcementsSection) {
+    announcementsSection.style.display = "none";
+    announcementsSection.innerHTML = "";
+  }
+  if (contentTitleDescEl) {
+    contentTitleDescEl.style.display = "";
+    if (DEFAULT_CONTENT_DESC_HTML) contentTitleDescEl.innerHTML = DEFAULT_CONTENT_DESC_HTML;
+  }
+  setDocsUiVisible(true);
+}
+
+function renderLoginNews() {
+  if (!loginNewsMount) return;
+  const a = ANNOUNCEMENTS[0];
+  if (!a) return;
+  const published = a.published_at ? formatDate(a.published_at) : "";
+  const bullets = (a.bullets || [])
+    .map((b) => {
+      const t = escapeHtml(b.title || "");
+      const tx = escapeHtml(b.text || "");
+      return `
+        <li>
+          <span class="news-bullet ui-icon" aria-hidden="true">${iconSvg("info")}</span>
+          <span><strong>${t}:</strong> ${tx}</span>
+        </li>
+      `;
+    })
+    .join("");
+  loginNewsMount.innerHTML = `
+    <div class="news-hero">
+      <div class="news-kicker"></div>
+      <div class="news-title-row">
+        <h2 class="news-title">${escapeHtml(a.title || "")}</h2>
+        <div class="news-title-right">
+          ${published ? `<span class="news-date">${escapeHtml(published)}</span>` : ""}
+          <span class="new-badge inline-badge" aria-label="Novo">NOVO</span>
+        </div>
+      </div>
+      <p class="news-lead">${escapeHtml(a.lead || "")}</p>
+    </div>
+    <div class="news-body">
+      <h3 class="news-subtitle">Kaj dobite v portalu</h3>
+      <ul class="news-list">${bullets}</ul>
+      <p class="news-note">${escapeHtml(a.note || "")}</p>
+    </div>
+  `;
+}
+
+function renderAnnouncements() {
+  if (!announcementsSection) return;
+  const items = [...ANNOUNCEMENTS].sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
+  announcementsSection.innerHTML = `
+    <div class="announcements-list">
+      ${items
+        .map((a, idx) => {
+          const published = a.published_at ? formatDate(a.published_at) : "";
+          const bullets = (a.bullets || [])
+            .map((b) => {
+              const t = escapeHtml(b.title || "");
+              const tx = escapeHtml(b.text || "");
+              return `
+                <li>
+                  <span class="news-bullet ui-icon" aria-hidden="true">${iconSvg("info")}</span>
+                  <span><strong>${t}:</strong> ${tx}</span>
+                </li>
+              `;
+            })
+            .join("");
+          const badge = idx === 0 ? `<span class="new-badge inline-badge" aria-label="Novo">NOVO</span>` : "";
+          return `
+            <section class="card login-news-card news-card">
+              <div class="news-hero">
+                <div class="news-kicker"></div>
+                <div class="news-title-row">
+                  <h3 class="news-title">${escapeHtml(a.title || "")}</h3>
+                  <div class="news-title-right">
+                    ${published ? `<span class="news-date">${escapeHtml(published)}</span>` : ""}
+                    ${badge}
+                  </div>
+                </div>
+                <p class="news-lead">${escapeHtml(a.lead || "")}</p>
+              </div>
+              <div class="news-body">
+                <h4 class="news-subtitle">Kaj dobite v portalu</h4>
+                <ul class="news-list">${bullets}</ul>
+                ${a.note ? `<p class="news-note">${escapeHtml(a.note)}</p>` : ""}
+              </div>
+            </section>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
 }
 
 async function showApp(email) {
@@ -710,6 +897,7 @@ async function showApp(email) {
   window.scrollTo(0, 0);
   if (authForm) authForm.style.display = "none";
   if (loginNewsCard) loginNewsCard.style.display = "none";
+  if (loginFooter) loginFooter.style.display = "none";
   if (appCard) {
     appCard.style.display = "flex";
     appCard.style.flexDirection = "column";
@@ -749,7 +937,11 @@ async function showApp(email) {
   currentPath = path;
   updateSidebarNavActive(path);
   updateContentSectionTitle(path);
-  loadContent(path);
+  if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) showAnnouncementsPage();
+  else {
+    hideAnnouncementsPage();
+    loadContent(path);
+  }
 }
 
 document.getElementById("logout").addEventListener("click", async () => { 
@@ -778,6 +970,14 @@ window.navigateTo = function(path) {
     catalogResultsSection.innerHTML = "";
   }
   updateBreadcrumbs(path);
+  if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
+    if (mainContent) mainContent.innerHTML = "";
+    if (skeletonLoader) skeletonLoader.style.display = "none";
+    if (statusEl) statusEl.textContent = "";
+    window.history.pushState({ path }, "", "#" + pathToHash(path));
+    showAnnouncementsPage();
+    return;
+  }
   const hasCachedTarget = !!folderCache[path];
   if (!hasCachedTarget) {
     if (mainContent) mainContent.innerHTML = "";
@@ -789,6 +989,7 @@ window.navigateTo = function(path) {
     }
   }
   window.history.pushState({ path }, "", "#" + pathToHash(path)); 
+  hideAnnouncementsPage();
   loadContent(path); 
 }
 /** Kodira pot za lep URL: presledki → +, ostalo po segmentih (ohrani /). */
@@ -820,6 +1021,11 @@ window.addEventListener('popstate', () => {
   updateContentSectionTitle(p);
   const hasActiveSearch = !!(isSearchActive && searchInput && searchInput.value.trim());
   if (hasActiveSearch) return;
+  if (normalizePath(p) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
+    showAnnouncementsPage();
+    return;
+  }
+  hideAnnouncementsPage();
   loadContent(p);
 });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pdfModal && pdfModal.style.display === 'flex') closePdfViewer(); });
@@ -900,15 +1106,17 @@ async function getNewFilesRecursive(path, depth = 0) {
      const all = rows
        .map((row) => {
          const fullPath = buildStoragePathFromRow(row);
+         const virtualPath = virtualizeStoragePath(fullPath);
          return {
            name: row.filename || "",
            displayName: row.filename || "",
            fullPath,
+           virtualPath,
            created_at: getRowTimestamp(row)
          };
        })
        .filter((f) => f.name && isRelevantFile(f.name))
-       .filter((f) => !prefix || f.fullPath.startsWith(prefix))
+       .filter((f) => !prefix || String(f.virtualPath || "").startsWith(prefix))
        .filter((f) => isAfterUpdatesSince(f.created_at));
      return all;
    })()
@@ -1064,6 +1272,12 @@ async function processDataAndRender(data, rId) {
 }
 
 function updateBreadcrumbs(path) {
+  if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
+    const h = `<span class="breadcrumb-item" onclick="navigateTo('')">Domov</span> <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${escapeJsSingleQuotedString(ANNOUNCEMENTS_ROUTE)}')">Obvestila</span>`;
+    breadcrumbsEl.innerHTML = h;
+    if (backBtn) backBtn.style.display = "inline-flex";
+    return;
+  }
   const p = path ? path.split('/').filter(Boolean) : [];
   let h = `<span class="breadcrumb-item" onclick="navigateTo('')">Domov</span>`, b = "";
   p.forEach((pt, i) => {
@@ -1122,14 +1336,17 @@ async function renderItems(items, rId) {
        return an.localeCompare(bn, "sl", { sensitivity: "base", numeric: true });
      }
 
-     const fa = !a.metadata, fb = !b.metadata;
-     if (fa && !fb) return -1; if (!fa && fb) return 1;
-     if (fa && fb) {
-       const ia = getCustomSortIndex(a.name), ib = getCustomSortIndex(b.name);
-       if (ia !== ib) return ia - ib;
-     }
-     return a.name.localeCompare(b.name, "sl", { sensitivity: "base", numeric: true });
-  });
+	     const fa = !a.metadata, fb = !b.metadata;
+	     if (fa && !fb) return -1; if (!fa && fb) return 1;
+	     if (fa && fb) {
+	       const aLast = LAST_ROOT_FOLDER_KEYS.has(normalizeSegmentKey(a.name));
+	       const bLast = LAST_ROOT_FOLDER_KEYS.has(normalizeSegmentKey(b.name));
+	       if (aLast !== bLast) return aLast ? 1 : -1;
+	       const ia = getCustomSortIndex(a.name), ib = getCustomSortIndex(b.name);
+	       if (ia !== ib) return ia - ib;
+	     }
+	     return a.name.localeCompare(b.name, "sl", { sensitivity: "base", numeric: true });
+	  });
   for (const item of sorted) { if (rId !== currentRenderId) return; await createItemElement(item, cont); }
   if (rId === currentRenderId) {
     mainContent.innerHTML = "";
@@ -1395,6 +1612,57 @@ function cleanName(name) {
     .replace(/\.pdf$/i, "")
     .replace(/[^a-z0-9]/g, "");
   return s;
+}
+
+function normalizeTitleKey(s) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9 ]/g, "")
+    .trim();
+}
+
+const CATALOG_PAGE_TITLE_TRANSLATIONS = new Map([
+  ["nodi tipici", "Tipični prerezi"],
+  ["profili fermavetro", "Steklitvene letvice"],
+  ["profili anta", "Profili krila"],
+  ["guarnizioni e profili in plastica", "Tesnila in plastični profili"],
+  ["trasmittanza termica u", "Toplotna prehodnost"],
+  ["distinte di taglio", "Razrezne liste"],
+  ["accessori", "Okovje"],
+  ["accessori di chiusura", "Okovje"],
+  ["indice profili", "Profili"],
+  ["sinottico", "Zbor profilov"],
+  ["profili stipite", "Profili fiksov"]
+]);
+
+function translateCatalogPageTitle(title) {
+  const t = String(title || "").trim();
+  if (!t) return "";
+  const mapped = CATALOG_PAGE_TITLE_TRANSLATIONS.get(normalizeTitleKey(t));
+  return mapped || t;
+}
+
+function resolveCatalogPdfPath(pdfFilenameOrPath) {
+  const raw = stripPathSlashes(String(pdfFilenameOrPath || "").trim());
+  if (!raw) return null;
+  const list = window.globalFileList;
+  if (Array.isArray(list) && list.length) {
+    for (const f of list) {
+      if (!f || !f.metadata) continue;
+      const real = stripPathSlashes(String(f.fullPath || ""));
+      if (!real) continue;
+      if (real === raw) return f.fullPath;
+      const virt = virtualizeStoragePath(real);
+      if (virt === raw) return f.fullPath;
+    }
+  }
+  // Fallback: try by basename (handles cases where catalog_index stores a path or a different folder).
+  const base = raw.includes("/") ? raw.split("/").pop() : raw;
+  return findPathForFilename(base);
 }
 
 /**
@@ -1686,6 +1954,7 @@ if (searchInput) {
           const maxItems = (expanded || onlyCatalog) ? Number.MAX_SAFE_INTEGER : initialLimit;
           let shown = 0;
           for (const [filename, pageEntries] of catalogEntries) {
+            const displayFilename = String(filename || "").split("/").pop() || String(filename || "");
             const visibleEntries = [];
             for (const entry of pageEntries) {
               if (shown >= maxItems) break;
@@ -1694,14 +1963,14 @@ if (searchInput) {
             }
             if (!visibleEntries.length) continue;
 
-            const fullPath = findPathForFilename(filename);
+            const fullPath = resolveCatalogPdfPath(filename);
             const card = document.createElement("div");
             card.className = "catalog-card";
             const header = document.createElement("div");
             header.className = "catalog-card-header";
             header.innerHTML = `
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-              <span>${formatDisplayName(filename)}</span>
+              <span>${formatDisplayName(displayFilename)}</span>
             `;
             card.appendChild(header);
             const list = document.createElement("div");
@@ -1709,16 +1978,28 @@ if (searchInput) {
             visibleEntries.forEach(({ page, title }) => {
               const link = document.createElement("a");
               link.className = "match-item";
-              link.href = `${fullPath || filename}#page=${page}`;
-              link.target = "_blank";
-              if (fullPath && typeof window.openPdfViewer === "function") {
-                link.addEventListener("click", (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  window.openPdfViewer(filename, fullPath, page);
-                });
+              if (fullPath) {
+                // Open the real PDF directly from R2 when user opens in a new tab or copies link.
+                const r2Url = buildR2UrlFromStoragePath(fullPath);
+                link.href = `${r2Url}#page=${page}`;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+              } else {
+                // Fallback: keep it clickable via JS, but don't navigate to a non-existent local URL.
+                link.href = "#";
               }
-              const titleText = title ? title : `Stran ${page}`;
+              // Always prevent default so we don't jump to top on href="#".
+              link.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (fullPath && typeof window.openPdfViewer === "function") {
+                  window.openPdfViewer(displayFilename, fullPath, page);
+                } else if (statusEl) {
+                  statusEl.textContent = "Kataloga ni mogoče najti v bazi datotek. Najprej osvežite kataloge.";
+                  statusEl.style.color = "var(--error)";
+                }
+              });
+              const titleText = title ? translateCatalogPageTitle(title) : `Stran ${page}`;
               link.innerHTML = `
                 <span class="page-badge">Str. ${page}</span>
                 <span class="match-title">${titleText}</span>
@@ -1771,7 +2052,9 @@ if (searchInput) {
           const div = document.createElement("div");
           div.className = "item search-item-card";
           const isFolder = !item.metadata;
-          const pathParts = item.fullPath.split("/");
+          const realPath = String(item.fullPath || "");
+          const displayPath = virtualizeStoragePath(realPath) || realPath;
+          const pathParts = displayPath.split("/");
           const fileName = pathParts[pathParts.length - 1];
           const folderPath = pathParts.slice(0, -1).map(formatDisplayName).join(" / ");
           const isLinkFile = !isFolder && isUrlLinkFile(fileName);
@@ -2165,6 +2448,7 @@ function setupFormHandler() {
 
 // Pokliči takoj, ker je script type="module" naložen na koncu body
 setupFormHandler();
+renderLoginNews();
 
 if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid')); 
 if (btnList) btnList.addEventListener('click', () => setViewMode('list'));

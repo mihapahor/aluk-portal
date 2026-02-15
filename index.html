@@ -21,7 +21,7 @@
   
   <link rel="icon" type="image/png" href="favicon.png">
 
-  <link rel="stylesheet" href="style.css?v=1608">
+  <link rel="stylesheet" href="style.css?v=1613">
 </head>
 <body>
 
@@ -50,8 +50,8 @@
     <iframe id="pdfFrame" class="viewer-iframe" src=""></iframe>
   </div>
 
-  <form id="authForm" class="card login-card-center" method="post" action="javascript:void(0);">
-    <div id="authCard" class="login-inner">
+	  <form id="authForm" class="card login-card-center" method="post" action="javascript:void(0);">
+	    <div id="authCard" class="login-inner">
       <div class="info-box">
         <strong><span class="ui-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -77,7 +77,7 @@
         <button id="sendLink" class="primary" type="submit">Pošlji povezavo za vstop</button>
         <div id="authMsg"></div>
       </div>
-      <div id="requestSection" class="auth-section" role="tabpanel" style="display:none;">
+	      <div id="requestSection" class="auth-section" role="tabpanel" style="display:none;">
         <div class="input-group">
           <label for="reqName">Ime in Priimek</label>
           <input id="reqName" type="text" placeholder="Janez Novak" autocomplete="name" />
@@ -90,98 +90,33 @@
           <label for="reqEmail">E-poštni naslov</label>
           <input id="reqEmail" type="email" placeholder="email@podjetje.si" autocomplete="email" />
         </div>
-        <button id="requestMailBtn" class="secondary" type="button">Odpri e-pošto za zahtevek</button>
-      </div>
-    </div>
-  </form>
+	        <button id="requestMailBtn" class="secondary" type="button">Odpri e-pošto za zahtevek</button>
+	      </div>
 
-  <section id="loginNewsCard" class="card login-news-card" aria-label="Novica">
-    <div class="news-hero">
-      <div class="news-kicker">Novost</div>
-      <div class="news-title-row">
-        <h2 class="news-title">Novi ALUK Portal za partnerje je na voljo</h2>
-        <span class="new-badge inline-badge" aria-label="Novo">NOVO</span>
-      </div>
-      <p class="news-lead">
-        Z veseljem predstavljamo prenovljen <strong>ALUK Portal za partnerje</strong>, kjer so vsa ključna tehnična gradiva zbrana na enem mestu
-        in vedno na voljo v najnovejši različici.
-      </p>
-    </div>
-    <div class="news-body">
-      <h3 class="news-subtitle">Kaj dobite v portalu</h3>
-      <ul class="news-list">
-        <li>
-          <span class="news-bullet ui-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10z"/>
-              <path d="M8 12l2.5 2.5L16 9"/>
-            </svg>
-          </span>
-          <span><strong>Tehnična dokumentacija in katalogi:</strong> urejeno po sistemih in mapah, da hitro najdete pravo vsebino.</span>
-        </li>
-        <li>
-          <span class="news-bullet ui-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10z"/>
-              <path d="M8 12l2.5 2.5L16 9"/>
-            </svg>
-          </span>
-          <span><strong>Hitro iskanje po mapah in datotekah:</strong> poiščete katalog, dokument ali datoteko po imenu, brez ročnega brskanja.</span>
-        </li>
-        <li>
-          <span class="news-bullet ui-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10z"/>
-              <path d="M8 12l2.5 2.5L16 9"/>
-            </svg>
-          </span>
-          <span><strong>Iskanje po šifri artikla v katalogih:</strong> vpišete šifro in portal vrne zadetke iz vsebine katalogov (strani in naslovi), kar bistveno skrajša čas iskanja.</span>
-        </li>
-        <li>
-          <span class="news-bullet ui-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10z"/>
-              <path d="M8 12l2.5 2.5L16 9"/>
-            </svg>
-          </span>
-          <span><strong>Priljubljene:</strong> pogosto uporabljene mape si označite med priljubljene za še hitrejši dostop.</span>
-        </li>
-        <li>
-          <span class="news-bullet ui-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10z"/>
-              <path d="M8 12l2.5 2.5L16 9"/>
-            </svg>
-          </span>
-          <span><strong>Zadnje posodobitve in oznaka &ldquo;NOVO&rdquo;:</strong> takoj vidite, kaj je bilo dodano ali kateri katalog je bil posodobljen.</span>
-        </li>
-        <li>
-          <span class="news-bullet ui-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10z"/>
-              <path d="M8 12l2.5 2.5L16 9"/>
-            </svg>
-          </span>
-          <span><strong>Ostala dokumentacija:</strong> ločen razdelek za obrazce, priporočila za montažo in druga podporna gradiva.</span>
-        </li>
-        <li>
-          <span class="news-bullet ui-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22a10 10 0 1 0-10-10 10 10 0 0 0 10 10z"/>
-              <path d="M8 12l2.5 2.5L16 9"/>
-            </svg>
-          </span>
-          <span><strong>Prilagojeno tudi za mobilne naprave:</strong> portal ostaja pregleden in uporaben tudi na telefonu.</span>
-        </li>
-      </ul>
-      <p class="news-note">
-        Če imate predlog za dodatne vsebine ali izboljšave, nam sporočite in bomo portal nadgrajevali naprej.
-      </p>
-    </div>
-  </section>
+	      <div class="legal-consent" id="legalConsent">
+	        Z uporabo portala se strinjate s
+	        <a href="pogoji.html" target="_blank" rel="noopener noreferrer">Splošnimi pogoji</a>,
+	        <a href="zasebnost.html" target="_blank" rel="noopener noreferrer">Politiko zasebnosti (GDPR)</a>
+	        in
+	        <a href="piskotki.html" target="_blank" rel="noopener noreferrer">Politiko piškotkov</a>.
+	      </div>
+	    </div>
+		  </form>
 
-  <div id="appCard" class="app-wrapper" style="display:none;">
-    <div class="app-container">
+		  <section id="loginNewsCard" class="card login-news-card" aria-label="Novica">
+		    <div id="loginNewsMount"></div>
+		  </section>
+
+	  <div id="loginFooter" class="footer footer-login">
+	    &copy; 2026 Alumit d.o.o. ·
+	    <a href="pogoji.html" target="_blank" rel="noopener noreferrer">Splošni pogoji</a> ·
+	    <a href="zasebnost.html" target="_blank" rel="noopener noreferrer">Politika zasebnosti</a> ·
+	    <a href="piskotki.html" target="_blank" rel="noopener noreferrer">Politika piškotkov</a> ·
+	    Tehnična pomoč: <a href="mailto:miha@aluk.si">miha@aluk.si</a>
+	  </div>
+
+	  <div id="appCard" class="app-wrapper" style="display:none;">
+	    <div class="app-container">
       
       <!-- SIDEBAR -->
       <aside class="sidebar" id="sidebar">
@@ -199,18 +134,27 @@
             </span>
             <span>Domov</span>
           </a>
-          <a href="#" class="sidebar-link" data-path="Ostala dokumentacija" onclick="navigateTo('Ostala dokumentacija'); return false;">
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <path d="M14 2v6h6"/>
-                <path d="M8 13h8"/>
-                <path d="M8 17h6"/>
-              </svg>
-            </span>
-            <span>Ostala dokumentacija</span>
-          </a>
-        </nav>
+	          <a href="#" class="sidebar-link" data-path="Ostala dokumentacija" onclick="navigateTo('Ostala dokumentacija'); return false;">
+	            <span class="sidebar-icon" aria-hidden="true">
+	              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+	                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+	                <path d="M14 2v6h6"/>
+	                <path d="M8 13h8"/>
+	                <path d="M8 17h6"/>
+	              </svg>
+	            </span>
+	            <span>Ostala dokumentacija</span>
+	          </a>
+	          <a href="#" class="sidebar-link" data-path="__obvestila__" onclick="navigateTo('__obvestila__'); return false;">
+	            <span class="sidebar-icon" aria-hidden="true">
+	              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+	                <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/>
+	                <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+	              </svg>
+	            </span>
+	            <span>Obvestila</span>
+	          </a>
+	        </nav>
         
         <div class="sidebar-favorites">
           <div class="sidebar-section-title">★ Priljubljene</div>
@@ -298,20 +242,25 @@
         <span id="status" class="content-status"></span>
       </div>
       <p id="contentTitleDesc" class="content-desc">Kliknite na mapo za vstop ali na datoteko za predogled. Datoteke z oznako <span class="new-badge inline-badge">NOVO</span> so bile dodane od danes naprej.</p>
-      <div id="searchResultsWrapper">
-        <div id="mainContent"></div>
-        <div id="catalogResultsSection" style="display:none;"></div>
-      </div>
+	      <div id="searchResultsWrapper">
+	        <div id="mainContent"></div>
+	        <div id="catalogResultsSection" style="display:none;"></div>
+	      </div>
+	      <div id="announcementsSection" class="announcements-section" style="display:none;"></div>
 
-      </div>
+	      </div>
       
-        <div class="footer">
-          &copy; 2026 Alumit. Tehnična pomoč: <a href="mailto:miha@aluk.si">miha@aluk.si</a>
-        </div>
-      </main>
-    </div>
-  </div>
+	        <div class="footer">
+	          &copy; 2026 Alumit d.o.o. ·
+	          <a href="pogoji.html" target="_blank" rel="noopener noreferrer">Splošni pogoji</a> ·
+	          <a href="zasebnost.html" target="_blank" rel="noopener noreferrer">Politika zasebnosti</a> ·
+	          <a href="piskotki.html" target="_blank" rel="noopener noreferrer">Politika piškotkov</a> ·
+	          Tehnična pomoč: <a href="mailto:miha@aluk.si">miha@aluk.si</a>
+	        </div>
+	      </main>
+	    </div>
+	  </div>
 
-  <script type="module" src="script.js?v=1623"></script>
+  <script type="module" src="script.js?v=1635"></script>
 </body>
 </html>
