@@ -126,6 +126,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 // DOM ELEMENTI (z varnostnimi preverjanji)
 const authForm = getElement("authForm");
+const loginNewsCard = getElement("loginNewsCard");
 const appCard = getElement("appCard");
 const mainContent = getElement("mainContent");
 const searchResultsWrapper = getElement("searchResultsWrapper");
@@ -698,7 +699,8 @@ async function checkUser() {
 }
 
 function showLogin() { 
-  authForm.style.display = "block"; 
+  if (authForm) authForm.style.display = "block";
+  if (loginNewsCard) loginNewsCard.style.display = "block";
   appCard.style.display = "none"; 
   document.getElementById("logout").style.display = "none"; 
 }
@@ -707,6 +709,7 @@ async function showApp(email) {
   const alreadyVisible = appCard && appCard.style.display === "flex";
   window.scrollTo(0, 0);
   if (authForm) authForm.style.display = "none";
+  if (loginNewsCard) loginNewsCard.style.display = "none";
   if (appCard) {
     appCard.style.display = "flex";
     appCard.style.flexDirection = "column";
