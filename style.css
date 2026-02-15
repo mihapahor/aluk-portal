@@ -563,6 +563,10 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   gap: 15px;
 }
 
+.catalog-grid.single-column {
+  grid-template-columns: 1fr;
+}
+
 /* Catalog section title above cards */
 .catalog-results-title {
   margin: 0 0 12px;

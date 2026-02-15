@@ -1666,8 +1666,10 @@ if (searchInput) {
 
         const hasCatalogResults = liveVal.length >= 3 && catalogTotalCount > 0;
         const hasMapResults = fileCount > 0;
+        const onlyCatalog = hasCatalogResults && !hasMapResults;
         const initialLimit = getDynamicSearchInitialLimit({ hasMapResults, hasCatalogResults });
-        const catalogNeedsMore = hasCatalogResults && catalogTotalCount > initialLimit;
+        // When we only have catalog results, show everything immediately (no "Pokaži več").
+        const catalogNeedsMore = !onlyCatalog && hasCatalogResults && catalogTotalCount > initialLimit;
         const mapsNeedsMore = hasMapResults && fileCount > initialLimit;
         let isExpanded = false;
 
@@ -1678,7 +1680,7 @@ if (searchInput) {
         const renderCatalogResults = (expanded) => {
           if (!catalogGrid) return;
           catalogGrid.innerHTML = "";
-          const maxItems = expanded ? Number.MAX_SAFE_INTEGER : initialLimit;
+          const maxItems = (expanded || onlyCatalog) ? Number.MAX_SAFE_INTEGER : initialLimit;
           let shown = 0;
           for (const [filename, pageEntries] of catalogEntries) {
             const visibleEntries = [];
@@ -1750,7 +1752,7 @@ if (searchInput) {
             catalogHeader.appendChild(p);
             catalogResultsSection.appendChild(catalogHeader);
             catalogGrid = document.createElement("div");
-            catalogGrid.className = "catalog-grid";
+            catalogGrid.className = "catalog-grid" + (!hasMapResults ? " single-column" : "");
             catalogResultsSection.appendChild(catalogGrid);
             renderCatalogResults(false);
           }
