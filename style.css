@@ -904,6 +904,12 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .file-container.list-view.list-compact .item.item-card .item-preview img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
 
 .file-container.list-view.list-compact .lv-title { min-width: 0; }
+.file-container.list-view.list-compact .lv-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .file-container.list-view.list-compact .lv-title strong {
   display: block;
   font-size: 14px;
@@ -913,6 +919,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 .file-container.list-view.list-compact .lv-meta {
   display: none;
@@ -1067,14 +1074,6 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   top: -1px !important; /* Fina nastavitev, da sedi točno na sredini vrstice */
 }
 
-/* List view (compact): NOVO badge doesn't clash with actions column */
-.file-container.list-view.list-compact .item.item-card .new-badge {
-  position: absolute !important;
-  top: 8px !important;
-  right: 56px !important;
-  margin: 0 !important;
-}
-
 @media (max-width: 768px) {
   .file-container.list-view.list-compact .list-header { display: none; }
   .file-container.list-view.list-compact .item.item-card {
@@ -1083,9 +1082,6 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   .file-container.list-view.list-compact .lv-modified,
   .file-container.list-view.list-compact .lv-size { display: none; }
   .file-container.list-view.list-compact .lv-meta { display: block; }
-  .file-container.list-view.list-compact .item.item-card .new-badge {
-    right: 50px !important;
-  }
 }
 
 .fav-btn { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9); border: 1px solid #ddd; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 20; color: #ccc; font-size: 18px; transition: all 0.2s; }

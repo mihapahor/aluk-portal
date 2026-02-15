@@ -180,6 +180,37 @@ const pathExistsInFlight = new Map();
 let filesTableCache = null;
 let filesTableCachePromise = null;
 
+// --- NAV SECTIONS ---
+const OTHER_DOCS_ROOT = "Ostala dokumentacija";
+
+function getRootSegment(p) {
+  const n = normalizePath(p || "");
+  if (!n) return "";
+  return n.split("/").filter(Boolean)[0] || "";
+}
+
+function updateSidebarNavActive(path) {
+  const root = normalizePath(getRootSegment(path));
+  document.querySelectorAll(".sidebar-link[data-path]").forEach((a) => {
+    const target = normalizePath(a.getAttribute("data-path") || "");
+    const active = (target === "" && root === "") || (target !== "" && target === root);
+    a.classList.toggle("active", active);
+    a.setAttribute("aria-current", active ? "page" : "false");
+  });
+}
+
+function updateContentSectionTitle(path) {
+  const contentTitleEl = getElement("contentTitle");
+  if (!contentTitleEl) return;
+
+  const root = normalizePath(getRootSegment(path));
+  const isOtherDocs = root === normalizePath(OTHER_DOCS_ROOT);
+
+  const title = isOtherDocs ? "Ostala dokumentacija" : "Tehnična dokumentacija";
+  const iconKey = "fileText";
+  contentTitleEl.innerHTML = `<span class="ui-icon" aria-hidden="true">${iconSvg(iconKey)}</span>${escapeHtml(title)}`;
+}
+
 function startOfToday() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -713,6 +744,8 @@ async function showApp(email) {
   if (alreadyVisible) return;
   const path = getPathFromUrl();
   currentPath = path;
+  updateSidebarNavActive(path);
+  updateContentSectionTitle(path);
   loadContent(path);
 }
 
@@ -730,6 +763,8 @@ window.navigateTo = function(path) {
   clearSharedSearchMoreButton();
   currentRenderId++; // invalidiraj pending search renderje
   currentPath = path; 
+  updateSidebarNavActive(path);
+  updateContentSectionTitle(path);
   searchInput.value = ""; 
   isSearchActive = false; // Deaktiviraj iskanje ob navigaciji
   sessionStorage.removeItem('aluk_search_query');
@@ -778,6 +813,8 @@ window.addEventListener('popstate', () => {
   pdfFrame.src = "";
   const p = getPathFromUrl();
   currentPath = p;
+  updateSidebarNavActive(p);
+  updateContentSectionTitle(p);
   const hasActiveSearch = !!(isSearchActive && searchInput && searchInput.value.trim());
   if (hasActiveSearch) return;
   loadContent(p);
@@ -906,6 +943,9 @@ function buildFolderSignature(data) {
 async function loadContent(path) {
   statusEl.textContent = ""; updateBreadcrumbs(path); currentRenderId++; const thisId = currentRenderId;
   if (mainContent) mainContent.style.display = "";
+
+  updateSidebarNavActive(path);
+  updateContentSectionTitle(path);
   
   // Prikaži sekcijo "TEHNIČNA DOKUMENTACIJA" ko naložiš normalno vsebino
   const contentTitleEl = getElement("contentTitle");
@@ -1004,7 +1044,16 @@ async function updateBannerAsync(path) {
 window.openFileFromBanner = function(path) { openPdfViewer(path.split('/').pop(), path); }
 
 async function processDataAndRender(data, rId) {
-  const raw = data.filter(i => i.name !== ".emptyFolderPlaceholder");
+  const raw = data
+    .filter(i => i.name !== ".emptyFolderPlaceholder")
+    // "Ostala dokumentacija" naj bo dosegljiva samo prek sidebar taba, ne med mapami na Domov.
+    .filter((i) => {
+      const isRoot = !normalizePath(currentPath || "");
+      if (!isRoot) return true;
+      const isFolder = !i.metadata;
+      if (!isFolder) return true;
+      return normalizePath(i.name || "") !== normalizePath(OTHER_DOCS_ROOT);
+    });
   const imgs = raw.filter(f => f.metadata && /\.(jpg|jpeg|png|webp)$/i.test(f.name));
   imageMap = {}; imgs.forEach(i => imageMap[getBaseName(i.name).toLowerCase()] = i);
   currentItems = raw.filter(f => { if (!f.metadata) return true; return !/\.(jpg|jpeg|png|webp)$/i.test(f.name); });
@@ -1115,7 +1164,7 @@ async function createItemElement(item, cont) {
     } else if (isLinkFile) {
       icon = `<div class="big-icon">${iconSvg("link")}</div>`;
     } else if (item.name.toLowerCase().endsWith('dwg') || item.name.toLowerCase().endsWith('dxf')) {
-      icon = `<div class="big-icon">${iconSvg("cad")}</div>`;
+      icon = `<div class="big-icon">${iconSvg("ruler")}</div>`;
     } else {
       icon = `<div class="big-icon">${iconSvg(getFileIconKeyForExt(ext))}</div>`;
     }
@@ -1150,11 +1199,13 @@ async function createItemElement(item, cont) {
       const sizeCol = isFolder ? '—' : fileSize;
       const metaLine = isFolder ? 'Mapa' : `${modifiedText}${sizeCol && sizeCol !== '—' ? ` · ${sizeCol}` : ''}`;
       div.innerHTML = `
-        ${badges}
         <div class="lv-name">
           ${previewHtml}
           <div class="lv-title">
-            <strong>${escapeHtml(formatDisplayName(item.name))}</strong>
+            <div class="lv-title-line">
+              <strong>${escapeHtml(formatDisplayName(item.name))}</strong>
+              ${badges}
+            </div>
             <small class="lv-meta">${escapeHtml(metaLine)}</small>
           </div>
         </div>
@@ -1729,7 +1780,7 @@ if (searchInput) {
           const ext = fileName.split(".").pop().toLowerCase();
           if (!isFolder && isLinkFile) displayIcon = iconSvg("link");
           else if (!isFolder) displayIcon = iconSvg(getFileIconKeyForExt(ext));
-          if (!isFolder && !isLinkFile && (ext === "dwg" || ext === "dxf")) displayIcon = iconSvg("cad");
+          if (!isFolder && !isLinkFile && (ext === "dwg" || ext === "dxf")) displayIcon = iconSvg("ruler");
           div.innerHTML = `
             <div class="item-preview ${isFolder ? "folder-bg" : "file-bg"}">${displayIcon}</div>
             <div class="item-info">
