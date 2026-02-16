@@ -18,10 +18,12 @@
   
   <title>AluK Portal - Katalogi</title>
   <meta name="description" content="Portal za partnerje AluK." />
+  <meta name="theme-color" content="#e2001a" />
   
   <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
 
-  <link rel="stylesheet" href="style.css?v=1613">
+  <link rel="stylesheet" href="style.css?v=1616">
 </head>
 <body>
 
@@ -35,6 +37,7 @@
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:15px;">
+        <button id="installAppBtn" class="ghost" style="display:none;">Namesti aplikacijo</button>
         <button id="logout" class="ghost" style="display:none;">Odjava</button>
       </div>
     </div>
@@ -241,28 +244,49 @@
           </span>
           Tehnična dokumentacija
         </div>
-        <span id="status" class="content-status"></span>
+        <div class="content-status-wrap">
+          <span id="connectionStateChip" class="connection-state-chip">Online</span>
+          <span id="status" class="content-status"></span>
+        </div>
       </div>
       <p id="contentTitleDesc" class="content-desc">Kliknite na mapo za vstop ali na datoteko za predogled. Datoteke z oznako <span class="new-badge inline-badge">NOVO</span> so bile dodane od danes naprej.</p>
+	      <div id="offlineEmptyHint" class="offline-empty-hint" style="display:none;">
+	        <strong>Trenutno ste brez povezave.</strong> Za uporabo dokumentov brez interneta najprej odprite aplikacijo online in na mapi izberite <em>⋮ → Na voljo brez povezave</em>.
+	      </div>
 	      <div id="searchResultsWrapper">
 	        <div id="mainContent"></div>
 	        <div id="catalogResultsSection" style="display:none;"></div>
 	      </div>
 	      <div id="announcementsSection" class="announcements-section" style="display:none;"></div>
+	      <div id="adminSection" class="admin-section" style="display:none;"></div>
 
 	      </div>
-      
+	      
 	        <div class="footer">
 	          &copy; 2026 Alumit d.o.o. ·
 	          <a href="pogoji.html" target="_blank" rel="noopener noreferrer">Splošni pogoji</a> ·
 	          <a href="zasebnost.html" target="_blank" rel="noopener noreferrer">Politika zasebnosti</a> ·
 	          <a href="piskotki.html" target="_blank" rel="noopener noreferrer">Politika piškotkov</a> ·
 	          Tehnična pomoč: <a href="mailto:miha@aluk.si">miha@aluk.si</a>
+	          <a id="adminLink" class="admin-link" href="#" onclick="navigateTo('__admin__'); return false;" style="display:none;">Admin</a>
 	        </div>
 	      </main>
 	    </div>
 	  </div>
 
-  <script type="module" src="script.js?v=1635"></script>
+  <div id="offlineOnboardingModal" class="offline-onboarding-modal" aria-hidden="true" style="display:none;">
+    <div class="offline-onboarding-card">
+      <h2>Novi Offline način</h2>
+      <p>Datoteke lahko zdaj označite kot <strong>Na voljo brez povezave</strong> prek menija s tremi pikami.</p>
+      <ul>
+        <li><strong>Cloud</strong>: datoteka še ni lokalno shranjena.</li>
+        <li><strong>Cloud + kljukica</strong>: datoteka je na voljo brez povezave.</li>
+        <li><strong>Sprosti prostor</strong>: odstrani lokalno kopijo, metapodatki ostanejo.</li>
+      </ul>
+      <button id="offlineOnboardingClose" class="primary" type="button">Razumem</button>
+    </div>
+  </div>
+
+  <script type="module" src="script.js?v=1648"></script>
 </body>
 </html>

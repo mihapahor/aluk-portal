@@ -6,11 +6,16 @@ const SUPABASE_URL = "https://ugwchsznxsuxbxdvigsu.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnd2Noc3pueHN1eGJ4ZHZpZ3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTY0NzEsImV4cCI6MjA4NDY5MjQ3MX0.iFzB--KryoBedjIJnybL55-xfQFIBxWnKq9RqwxuyK4";
 const R2_BASE_URL = "https://pub-28724a107246493c93629c81b8105cff.r2.dev";
 const ADMIN_EMAIL = "miha@aluk.si";
+const ADMIN_EMAILS = new Set([
+  "miha@aluk.si",
+  "miha.pahor97@gmail.com"
+]);
 // Tabela v Supabase: ustvari z stolpci email, name, company, created_at (RLS dovoli INSERT za anon)
 const ACCESS_REQUESTS_TABLE = "access_requests"; 
 
 // --- KONFIGURACIJA ---
 const ANNOUNCEMENTS_ROUTE = "__obvestila__";
+const ADMIN_ROUTE = "__admin__";
 // Mape, ki so namenjene samo internemu indeksiranju (ne prikazuj v portalu).
 const HIDDEN_INDEX_FOLDER_KEYS = new Set([
   "novialukpokoncni"
@@ -73,6 +78,14 @@ const ICON_SVGS = {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20z"/><path d="M12 10v7"/><path d="M12 7h.01"/></svg>',
   tool:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 7l3 3"/><path d="M12.3 9.7 6 16v3h3l6.3-6.3"/><path d="M16 3a4 4 0 0 0-3 6.7l1.3 1.3A4 4 0 1 0 16 3z"/></svg>',
+  cloud:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 17.5a3.5 3.5 0 0 0-1-6.86A6 6 0 0 0 7.3 8.2 4.5 4.5 0 0 0 7.5 17.5z"/></svg>',
+  cloudCheck:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 17.5a3.5 3.5 0 0 0-1-6.86A6 6 0 0 0 7.3 8.2 4.5 4.5 0 0 0 7.5 17.5z"/><path d="m10 14 2 2 4-4"/></svg>',
+  dotsVertical:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/></svg>',
+  download:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>',
   link:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1 0l2.1-2.1a5 5 0 0 0-7.1-7.1L11 2.9"/><path d="M14 11a5 5 0 0 0-7.1 0L4.8 13.1a5 5 0 0 0 7.1 7.1L13 19.1"/></svg>',
   file:
@@ -115,6 +128,10 @@ function getElement(id) {
 
 /** Kratko obvestilo "Prenašanje..." ob kliku na datoteko za prenos (DWG, Excel). */
 function showDownloadNotification() {
+  showToast("Prenašanje...");
+}
+
+function showToast(message) {
   let toast = document.getElementById("downloadToast");
   if (!toast) {
     toast = document.createElement("div");
@@ -122,7 +139,7 @@ function showDownloadNotification() {
     toast.className = "download-toast";
     document.body.appendChild(toast);
   }
-  toast.textContent = "Prenašanje...";
+  toast.textContent = message;
   toast.classList.add("visible");
   clearTimeout(toast._hideTimer);
   toast._hideTimer = setTimeout(() => {
@@ -135,7 +152,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // --- OBVESTILA (en vir za login novico in "Obvestila" tab) ---
-const ANNOUNCEMENTS = [
+const FALLBACK_ANNOUNCEMENTS = [
   {
     id: "portal-launch",
     title: "Novi AluK Portal za partnerje",
@@ -146,15 +163,16 @@ const ANNOUNCEMENTS = [
       { title: "Tehnična dokumentacija in katalogi", text: "Urejeno po sistemih in mapah, da hitro najdete pravo vsebino." },
       { title: "Hitro iskanje po mapah in datotekah", text: "Poiščete katalog, dokument ali datoteko po imenu, brez ročnega brskanja." },
       { title: "Iskanje po šifri artikla v katalogih", text: "Vpišete šifro in portal vrne zadetke iz vsebine katalogov (strani in naslovi), kar bistveno skrajša čas iskanja." },
-      { title: "Prihajajoča Offline aplikacija", text: "Izbrane mape in datoteke boste lahko shranili na napravo, dostopali brez interneta in ob povezavi samodejno prejeli posodobitve." },
       { title: "Priljubljene", text: "Pogosto uporabljene mape si označite med priljubljene za še hitrejši dostop." },
       { title: "Zadnje posodobitve in oznaka \"NOVO\"", text: "Takoj vidite, kaj je bilo dodano ali kateri katalog je bil posodobljen." },
       { title: "Ostala dokumentacija", text: "Ločen razdelek za obrazce, priporočila za montažo in druga podporna gradiva." },
       { title: "Prilagojeno tudi za mobilne naprave", text: "Portal ostaja pregleden in uporaben tudi na telefonu." }
     ],
-    note: ""
+    note: "Če imate predlog za dodatne vsebine ali izboljšave, nam sporočite in bomo portal nadgrajevali naprej."
   }
 ];
+let announcementsCache = [...FALLBACK_ANNOUNCEMENTS];
+const LOGIN_ANNOUNCEMENT_ID = "portal-launch";
 
 // DOM ELEMENTI (z varnostnimi preverjanji)
 const authForm = getElement("authForm");
@@ -167,9 +185,11 @@ const mainContent = getElement("mainContent");
 const searchResultsWrapper = getElement("searchResultsWrapper");
 const catalogResultsSection = getElement("catalogResultsSection");
 const announcementsSection = getElement("announcementsSection");
+const adminSection = getElement("adminSection");
 const searchSpinner = getElement("searchSpinner");
 const skeletonLoader = getElement("skeletonLoader");
 const statusEl = getElement("status");
+const connectionStateChip = getElement("connectionStateChip");
 const searchInput = getElement("search");
 const breadcrumbsEl = getElement("breadcrumbs");
 const backBtn = getElement("backBtn");
@@ -185,12 +205,17 @@ const pdfFrame = getElement("pdfFrame");
 const viewerFileName = getElement("viewerFileName");
 const btnGrid = getElement("btnGrid");
 const btnList = getElement("btnList");
-const globalFavorites = getElement("globalFavorites");
-const globalFavContainer = getElement("globalFavContainer");
+const globalFavorites = document.getElementById("globalFavorites");
+const globalFavContainer = document.getElementById("globalFavContainer");
 const sidebarFavList = getElement("sidebarFavList");
 const sidebarEl = getElement("sidebar");
 const sidebarOverlay = getElement("sidebarOverlay");
 const menuBtn = getElement("menuBtn");
+const adminLink = getElement("adminLink");
+const installAppBtn = getElement("installAppBtn");
+const offlineOnboardingModal = getElement("offlineOnboardingModal");
+const offlineOnboardingClose = getElement("offlineOnboardingClose");
+const offlineEmptyHint = getElement("offlineEmptyHint");
 
 const toolbarEl = document.querySelector(".toolbar");
 const searchSectionEl = document.querySelector(".search-section");
@@ -210,6 +235,16 @@ let preloadFilesPromise = null;
 const UPDATES_CACHE_KEY = "aluk_updates_cache";
 const UPDATES_SINCE_KEY = "aluk_updates_since";
 const UPDATES_RESET_VERSION_KEY = "aluk_updates_reset_version";
+const OFFLINE_CACHE_NAME_APP = "aluk-offline-files-app-v1";
+const OFFLINE_CACHE_NAME_BROWSER = "aluk-offline-files-browser-v1";
+const OFFLINE_PINS_KEY = "aluk_offline_pins";
+const OFFLINE_DB_NAME = "aluk-offline-db";
+const OFFLINE_DB_VERSION = 1;
+const OFFLINE_FILES_STORE = "files_meta";
+const OFFLINE_CACHED_META_STORE = "cached_files_meta";
+const OFFLINE_META_STORE = "meta";
+const OFFLINE_CATALOG_INDEX_STORE = "catalog_index";
+const OFFLINE_ONBOARDING_KEY = "aluk_offline_onboarding_seen_v1";
 // Spremeni vrednost, ko želiš globalno (za vse uporabnike) resetirati "posodobitve" od današnjega dne naprej.
 const UPDATES_RESET_VERSION = "2026-02-14";
 const NEW_FILES_CACHE_TTL_MS = 60 * 1000;
@@ -221,6 +256,31 @@ const pathExistsCache = new Map();
 const pathExistsInFlight = new Map();
 let filesTableCache = null;
 let filesTableCachePromise = null;
+let activeItemMenuWrap = null;
+let currentViewerBlobUrl = null;
+let deferredInstallPrompt = null;
+let offlineDbPromise = null;
+const supportsOfflineStorage = typeof window !== "undefined" && "caches" in window && "indexedDB" in window;
+function isPwaRuntimeContext() {
+  if (typeof window === "undefined") return false;
+  const hasMatch = (q) => window.matchMedia && window.matchMedia(q).matches;
+  return (
+    hasMatch("(display-mode: standalone)") ||
+    hasMatch("(display-mode: fullscreen)") ||
+    hasMatch("(display-mode: minimal-ui)") ||
+    hasMatch("(display-mode: window-controls-overlay)") ||
+    window.navigator.standalone === true
+  );
+}
+const isStandaloneApp = isPwaRuntimeContext();
+const OFFLINE_CACHE_NAME = isStandaloneApp ? OFFLINE_CACHE_NAME_APP : OFFLINE_CACHE_NAME_BROWSER;
+const showPwaItemActionMenu = isStandaloneApp;
+const itemSyncState = new Map();
+const itemSyncProgress = new Map();
+let syncStatusRenderTimer = null;
+const CATALOG_INDEX_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
+let isMetadataSyncRunning = false;
+let lastSyncAtIso = null;
 
 // --- NAV SECTIONS ---
 const OTHER_DOCS_ROOT = "Ostala dokumentacija";
@@ -244,6 +304,11 @@ function updateSidebarNavActive(path) {
 function updateContentSectionTitle(path) {
   const contentTitleEl = getElement("contentTitle");
   if (!contentTitleEl) return;
+
+  if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) {
+    contentTitleEl.innerHTML = `<span class="ui-icon" aria-hidden="true">${iconSvg("wrench")}</span>Admin`;
+    return;
+  }
 
   if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
     contentTitleEl.innerHTML = `<span class="ui-icon" aria-hidden="true">${iconSvg("bell")}</span>Obvestila`;
@@ -445,6 +510,699 @@ function getDynamicSearchInitialLimit({ hasMapResults, hasCatalogResults }) {
 function normalizePath(path) { if (!path) return ""; try { return decodeURIComponent(path).trim(); } catch (e) { return path.trim(); } }
 function loadFavorites() { try { let raw = JSON.parse(localStorage.getItem('aluk_favorites') || '[]'); return [...new Set(raw.map(f => normalizePath(f)))].filter(f => f); } catch(e) { return []; } }
 function saveFavorites(favs) { localStorage.setItem('aluk_favorites', JSON.stringify(favs)); }
+function loadOfflinePins() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(OFFLINE_PINS_KEY) || "[]");
+    return new Set((Array.isArray(raw) ? raw : []).map((p) => normalizePath(p)).filter(Boolean));
+  } catch (e) {
+    return new Set();
+  }
+}
+function saveOfflinePins(pins) {
+  try {
+    localStorage.setItem(OFFLINE_PINS_KEY, JSON.stringify([...pins]));
+  } catch (e) {}
+}
+let offlinePins = loadOfflinePins();
+
+function openOfflineDb() {
+  if (offlineDbPromise) return offlineDbPromise;
+  offlineDbPromise = new Promise((resolve, reject) => {
+    if (!("indexedDB" in window)) {
+      reject(new Error("IndexedDB ni na voljo"));
+      return;
+    }
+    const request = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(OFFLINE_FILES_STORE)) {
+        db.createObjectStore(OFFLINE_FILES_STORE, { keyPath: "storage_path" });
+      }
+      if (!db.objectStoreNames.contains(OFFLINE_CACHED_META_STORE)) {
+        db.createObjectStore(OFFLINE_CACHED_META_STORE, { keyPath: "storage_path" });
+      }
+      if (!db.objectStoreNames.contains(OFFLINE_META_STORE)) {
+        db.createObjectStore(OFFLINE_META_STORE, { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains(OFFLINE_CATALOG_INDEX_STORE)) {
+        db.createObjectStore(OFFLINE_CATALOG_INDEX_STORE, { keyPath: "id", autoIncrement: true });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("IndexedDB open error"));
+  });
+  return offlineDbPromise;
+}
+
+function idbGetAll(storeName) {
+  return openOfflineDb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const store = tx.objectStore(storeName);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  }));
+}
+
+function idbGet(storeName, key) {
+  return openOfflineDb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const store = tx.objectStore(storeName);
+    const req = store.get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  }));
+}
+
+function idbPut(storeName, value) {
+  return openOfflineDb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+    tx.objectStore(storeName).put(value);
+  }));
+}
+
+function idbDelete(storeName, key) {
+  return openOfflineDb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+    tx.objectStore(storeName).delete(key);
+  }));
+}
+
+async function saveRowsToIndexedDb(rows) {
+  if (!Array.isArray(rows)) return;
+  const db = await openOfflineDb();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_FILES_STORE, "readwrite");
+    const store = tx.objectStore(OFFLINE_FILES_STORE);
+    store.clear();
+    for (const row of rows) {
+      const storage_path = buildStoragePathFromRow(row);
+      if (!storage_path) continue;
+      store.put({
+        storage_path,
+        filename: row.filename || "",
+        r2_path: row.r2_path || "",
+        created_at: row.created_at || null,
+        updated_at: row.updated_at || null,
+        modified_at: row.modified_at || null,
+        size_bytes: getRowSizeBytes(row)
+      });
+    }
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+  await idbPut(OFFLINE_META_STORE, { key: "files_last_sync_at", value: new Date().toISOString() });
+}
+
+async function loadRowsFromIndexedDb() {
+  const rows = await idbGetAll(OFFLINE_FILES_STORE);
+  return rows.map((row) => ({
+    filename: row.filename || "",
+    r2_path: row.r2_path || "",
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null,
+    modified_at: row.modified_at || null,
+    size_bytes: row.size_bytes || 0
+  }));
+}
+
+async function getCachedMetaMapFromDb() {
+  const cachedRows = await idbGetAll(OFFLINE_CACHED_META_STORE);
+  const map = new Map();
+  for (const rec of cachedRows) {
+    map.set(rec.storage_path, rec);
+  }
+  return map;
+}
+
+async function fetchAllCatalogIndexRowsFromSupabase() {
+  const rows = [];
+  const pageSize = 1000;
+  let from = 0;
+  while (true) {
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from("catalog_index")
+      .select("code,pdf_filename,page_number,page_title,updated_at,created_at")
+      .range(from, to);
+    if (error) throw error;
+    const batch = Array.isArray(data) ? data : [];
+    if (!batch.length) break;
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+  return rows;
+}
+
+async function saveCatalogIndexRowsToIndexedDb(rows) {
+  const db = await openOfflineDb();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_CATALOG_INDEX_STORE, "readwrite");
+    const store = tx.objectStore(OFFLINE_CATALOG_INDEX_STORE);
+    store.clear();
+    for (const row of rows || []) {
+      store.put({
+        code: String(row?.code || ""),
+        pdf_filename: String(row?.pdf_filename || ""),
+        page_number: row?.page_number != null ? Number(row.page_number) : 1,
+        page_title: String(row?.page_title || ""),
+        updated_at: row?.updated_at || row?.created_at || null
+      });
+    }
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+  await idbPut(OFFLINE_META_STORE, { key: "catalog_index_last_sync_at", value: new Date().toISOString() });
+}
+
+async function maybeSyncCatalogIndexLocal({ force = false } = {}) {
+  if (!navigator.onLine) return;
+  if (!force) {
+    const lastSync = await idbGet(OFFLINE_META_STORE, "catalog_index_last_sync_at");
+    const ts = lastSync?.value ? new Date(lastSync.value).getTime() : 0;
+    if (ts && (Date.now() - ts) < CATALOG_INDEX_SYNC_INTERVAL_MS) return;
+  }
+  try {
+    const rows = await fetchAllCatalogIndexRowsFromSupabase();
+    await saveCatalogIndexRowsToIndexedDb(rows);
+  } catch (e) {
+    console.warn("Catalog index local sync ni uspel:", e);
+  }
+}
+
+function groupCatalogIndexRows(rows) {
+  const groupedByPdf = {};
+  for (const row of rows || []) {
+    const fn = row?.pdf_filename;
+    const page = row?.page_number != null ? Number(row.page_number) : 1;
+    const title = row?.page_title ? String(row.page_title).trim() : "";
+    if (!fn) continue;
+    if (!groupedByPdf[fn]) groupedByPdf[fn] = [];
+    const exists = groupedByPdf[fn].some((e) => e.page === page && e.title === title);
+    if (!exists) groupedByPdf[fn].push({ page, title });
+  }
+  for (const fn of Object.keys(groupedByPdf)) {
+    groupedByPdf[fn].sort((a, b) => a.page - b.page);
+  }
+  const catalogTotalCount = Object.values(groupedByPdf).reduce((sum, items) => sum + items.length, 0);
+  return { groupedByPdf, catalogTotalCount };
+}
+
+async function searchLocalCatalogIndex(query) {
+  const out = { groupedByPdf: {}, catalogTotalCount: 0 };
+  const trimmed = String(query || "").trim();
+  if (trimmed.length < 2) return out;
+  try {
+    const rows = await idbGetAll(OFFLINE_CATALOG_INDEX_STORE);
+    if (!rows.length) return out;
+    const q = trimmed.toLowerCase();
+    const filtered = rows.filter((r) => String(r?.code || "").toLowerCase().includes(q));
+    return groupCatalogIndexRows(filtered);
+  } catch (e) {
+    console.warn("Local catalog search error:", e);
+    return out;
+  }
+}
+
+function closeItemActionMenu() {
+  if (!activeItemMenuWrap) return;
+  activeItemMenuWrap.classList.remove("open");
+  activeItemMenuWrap = null;
+}
+
+function getItemSyncState(path) {
+  return itemSyncState.get(normalizePath(path || "")) || "idle";
+}
+
+function getItemSyncProgress(path) {
+  const key = normalizePath(path || "");
+  if (!key) return null;
+  const pct = itemSyncProgress.get(key);
+  return Number.isFinite(pct) ? pct : null;
+}
+
+function setItemSyncState(path, state) {
+  const key = normalizePath(path || "");
+  if (!key) return;
+  if (!state || state === "idle") {
+    itemSyncState.delete(key);
+    itemSyncProgress.delete(key);
+    return;
+  }
+  itemSyncState.set(key, state);
+}
+
+function setItemSyncProgress(path, pct) {
+  const key = normalizePath(path || "");
+  if (!key) return;
+  if (!Number.isFinite(pct)) {
+    itemSyncProgress.delete(key);
+    return;
+  }
+  itemSyncProgress.set(key, Math.max(0, Math.min(100, pct)));
+}
+
+function scheduleSyncStatusRender() {
+  if (syncStatusRenderTimer) return;
+  syncStatusRenderTimer = setTimeout(() => {
+    syncStatusRenderTimer = null;
+    if (!isSearchActive && currentItems.length > 0) {
+      renderItems(currentItems, currentRenderId);
+    }
+  }, 120);
+}
+
+function setTransferProgressStatus({ label, current, total, percent }) {
+  if (!statusEl) return;
+  const safeCurrent = Math.max(0, Number(current) || 0);
+  const safeTotal = Math.max(0, Number(total) || 0);
+  const safePercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+  const suffix = safeTotal > 0 ? ` (${safeCurrent}/${safeTotal})` : "";
+  statusEl.textContent = `${label}: ${safePercent}%${suffix}`;
+  statusEl.style.color = "var(--text-secondary)";
+  statusEl.style.fontWeight = "600";
+}
+
+function clearTransferProgressStatus() {
+  if (!statusEl) return;
+  statusEl.style.color = "";
+  statusEl.style.fontWeight = "";
+}
+
+function formatTimeShort(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" });
+}
+
+function updateConnectionStateChip() {
+  if (!connectionStateChip) return;
+  if (!isStandaloneApp) {
+    connectionStateChip.style.display = "none";
+    return;
+  }
+  connectionStateChip.style.display = "inline-flex";
+  connectionStateChip.classList.remove("offline", "syncing");
+
+  if (isMetadataSyncRunning) {
+    connectionStateChip.classList.add("syncing");
+    connectionStateChip.textContent = "Sinhronizacija...";
+    return;
+  }
+
+  if (!navigator.onLine) {
+    connectionStateChip.classList.add("offline");
+    connectionStateChip.textContent = "Offline";
+    return;
+  }
+
+  const time = formatTimeShort(lastSyncAtIso);
+  connectionStateChip.textContent = time ? `Online • ${time}` : "Online";
+}
+
+async function updateOfflineEmptyHintVisibility() {
+  if (!offlineEmptyHint) return;
+  if (!isStandaloneApp) {
+    offlineEmptyHint.style.display = "none";
+    return;
+  }
+  if (navigator.onLine) {
+    offlineEmptyHint.style.display = "none";
+    return;
+  }
+  try {
+    const cachedRows = await idbGetAll(OFFLINE_CACHED_META_STORE);
+    offlineEmptyHint.style.display = cachedRows.length > 0 ? "none" : "block";
+  } catch (e) {
+    offlineEmptyHint.style.display = "block";
+  }
+}
+
+function toggleItemActionMenu(menuWrap) {
+  if (!menuWrap) return;
+  if (activeItemMenuWrap && activeItemMenuWrap !== menuWrap) {
+    activeItemMenuWrap.classList.remove("open");
+  }
+  const shouldOpen = !menuWrap.classList.contains("open");
+  menuWrap.classList.toggle("open", shouldOpen);
+  activeItemMenuWrap = shouldOpen ? menuWrap : null;
+}
+
+async function isPathCachedOffline(storagePath, directUrl) {
+  if (!isStandaloneApp) return false;
+  if (!("caches" in window)) return false;
+  const url = directUrl || buildR2UrlFromStoragePath(storagePath);
+  if (!url) return false;
+  try {
+    const cache = await caches.open(OFFLINE_CACHE_NAME);
+    const match = await cache.match(url);
+    return !!match;
+  } catch (e) {
+    return false;
+  }
+}
+
+function fetchBlobWithProgress(url, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.responseType = "blob";
+    xhr.timeout = 120000;
+    xhr.onprogress = (event) => {
+      if (typeof onProgress !== "function") return;
+      if (event.lengthComputable && event.total > 0) {
+        onProgress((event.loaded / event.total) * 100);
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (typeof onProgress === "function") onProgress(100);
+        resolve(xhr.response);
+        return;
+      }
+      reject(new Error(`HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error("Network error"));
+    xhr.ontimeout = () => reject(new Error("Timeout"));
+    xhr.send();
+  }).catch(async (xhrErr) => {
+    // Fallback na fetch (brez natančnega progressa), če XHR odpove.
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    if (typeof onProgress === "function") onProgress(100);
+    return blob;
+  });
+}
+
+function formatOfflineActionError(err) {
+  const msg = String(err?.message || "").toLowerCase();
+  if (
+    msg.includes("network error") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("cors") ||
+    msg.includes("typeerror")
+  ) {
+    return "CORS/omrežje: vir ne dovoljuje dostopa iz tega izvora (origin).";
+  }
+  if (msg.startsWith("http ")) {
+    return `Strežnik je vrnil napako ${err.message.replace(/^http\s*/i, "")}.`;
+  }
+  return err?.message || "neznana napaka";
+}
+
+function getAncestorFoldersFromVirtualFilePath(virtualFilePath) {
+  const parts = normalizePath(virtualFilePath || "").split("/").filter(Boolean);
+  const folders = [];
+  for (let i = 1; i < parts.length; i += 1) {
+    folders.push(parts.slice(0, i).join("/"));
+  }
+  return folders;
+}
+
+async function cacheSingleFile(storagePath, directUrl, updatedAt, onProgress) {
+  if (!("caches" in window)) throw new Error("Cache API ni na voljo");
+  const url = directUrl || buildR2UrlFromStoragePath(storagePath);
+  if (!url) throw new Error("Datoteka nima URL naslova");
+
+  const cache = await caches.open(OFFLINE_CACHE_NAME);
+  const blob = await fetchBlobWithProgress(url, onProgress);
+  await cache.put(url, new Response(blob, { headers: { "Content-Type": blob.type || "application/octet-stream" } }));
+  offlinePins.add(normalizePath(storagePath));
+  saveOfflinePins(offlinePins);
+  await idbPut(OFFLINE_CACHED_META_STORE, {
+    storage_path: normalizePath(storagePath),
+    updated_at: updatedAt || null,
+    cached_at: new Date().toISOString()
+  });
+  return true;
+}
+
+async function removeSingleCachedFile(storagePath, directUrl) {
+  if (!("caches" in window)) return false;
+  const url = directUrl || buildR2UrlFromStoragePath(storagePath);
+  if (!url) return false;
+
+  const cache = await caches.open(OFFLINE_CACHE_NAME);
+  const removed = await cache.delete(url);
+  offlinePins.delete(normalizePath(storagePath));
+  saveOfflinePins(offlinePins);
+  await idbDelete(OFFLINE_CACHED_META_STORE, normalizePath(storagePath));
+  return removed;
+}
+
+async function getFolderFilesForCaching(folderPath) {
+  const rows = await fetchAllFilesFromTable();
+  const normalizedFolder = stripPathSlashes(normalizePath(folderPath));
+  const prefix = normalizedFolder ? `${normalizedFolder}/` : "";
+  const files = [];
+
+  for (const row of rows) {
+    const storagePath = buildStoragePathFromRow(row);
+    const virtualPath = virtualizeStoragePath(storagePath);
+    if (!storagePath || !virtualPath) continue;
+    if (prefix && !virtualPath.startsWith(prefix)) continue;
+    files.push({
+      storagePath,
+      virtualPath,
+      ancestorFolders: getAncestorFoldersFromVirtualFilePath(virtualPath),
+      fileName: row.filename || storagePath.split("/").pop() || "",
+      fileUrl: buildR2UrlFromStoragePath(storagePath),
+      updatedAt: getRowTimestamp(row)
+    });
+  }
+  return files;
+}
+
+async function downloadToComputer(fileName, fileUrl, storagePath) {
+  const fallbackUrl = fileUrl || buildR2UrlFromStoragePath(storagePath);
+  if (!fallbackUrl) return;
+  try {
+    const response = await fetch(fallbackUrl);
+    if (!response.ok) throw new Error("download_failed");
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = fileName || "download";
+    a.click();
+    URL.revokeObjectURL(blobUrl);
+  } catch (e) {
+    try {
+      const cache = await caches.open(OFFLINE_CACHE_NAME);
+      const cached = await cache.match(fallbackUrl);
+      if (cached) {
+        const blob = await cached.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = fileName || "download";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+        return;
+      }
+    } catch (err) {}
+    openExternalUrl(fallbackUrl);
+  }
+}
+
+async function openCachedFile(fileName, storagePath, directUrl) {
+  if (!("caches" in window)) return false;
+  const ext = String(fileName || "").split(".").pop().toLowerCase();
+  const fileUrl = directUrl || buildR2UrlFromStoragePath(storagePath);
+  if (!fileUrl) return false;
+
+  const cache = await caches.open(OFFLINE_CACHE_NAME);
+  const response = await cache.match(fileUrl);
+  if (!response) return false;
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+
+  if (["xlsx", "xls", "dwg", "dxf"].includes(ext)) {
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = fileName;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+    return true;
+  }
+
+  currentViewerBlobUrl = blobUrl;
+  pdfModal.style.display = "flex";
+  if (viewerFileName) viewerFileName.textContent = formatDisplayName(fileName);
+  if (pdfFrame) pdfFrame.src = blobUrl;
+  return true;
+}
+
+async function handleItemAction(action, itemCtx) {
+  const { isFolder, fullPath, storagePath, fileName, fileUrl } = itemCtx;
+  const stateKey = isFolder ? fullPath : storagePath;
+  try {
+    if (!supportsOfflineStorage && (action === "cache" || action === "free")) {
+      showToast("Ta brskalnik ne podpira offline shranjevanja.");
+      return;
+    }
+    if (!isStandaloneApp && (action === "cache" || action === "free")) {
+      showToast("Za to funkcionalnost odprite nameščeno aplikacijo.");
+      return;
+    }
+    if (action === "cache") {
+      if (!navigator.onLine) {
+        showToast("Za lokalno shranjevanje je potrebna internetna povezava.");
+        return;
+      }
+      setItemSyncState(stateKey, "loading");
+      setItemSyncProgress(stateKey, 0);
+      if (!isSearchActive && currentItems.length > 0) renderItems(currentItems, currentRenderId);
+      if (isFolder) {
+        const folderFiles = await getFolderFilesForCaching(fullPath);
+        if (!folderFiles.length) {
+          setItemSyncState(stateKey, "error");
+          setItemSyncProgress(stateKey, null);
+          showToast("Mapa ne vsebuje datotek za lokalno hrambo.");
+          return;
+        }
+
+        const folderStats = new Map();
+        for (const f of folderFiles) {
+          const relevantFolders = (f.ancestorFolders || []).filter((p) => p === fullPath || p.startsWith(`${fullPath}/`));
+          for (const folderKey of relevantFolders) {
+            const stat = folderStats.get(folderKey) || { total: 0, done: 0, active: 0 };
+            stat.total += 1;
+            folderStats.set(folderKey, stat);
+            setItemSyncState(folderKey, "loading");
+            setItemSyncProgress(folderKey, 0);
+          }
+        }
+        if (!isSearchActive && currentItems.length > 0) renderItems(currentItems, currentRenderId);
+
+        const updateFolderProgresses = () => {
+          for (const [folderKey, stat] of folderStats.entries()) {
+            const pct = stat.total > 0 ? ((stat.done + (stat.active / 100)) / stat.total) * 100 : 0;
+            setItemSyncProgress(folderKey, pct);
+          }
+        };
+
+        let ok = 0;
+        let fail = 0;
+        setTransferProgressStatus({ label: "Prenašanje mape", current: 0, total: folderFiles.length, percent: 0 });
+        for (const f of folderFiles) {
+          setItemSyncState(f.virtualPath, "loading");
+          setItemSyncProgress(f.virtualPath, 0);
+          const relevantFolders = (f.ancestorFolders || []).filter((p) => p === fullPath || p.startsWith(`${fullPath}/`));
+          try {
+            await cacheSingleFile(
+              f.storagePath,
+              f.fileUrl,
+              f.updatedAt,
+              (pct) => {
+                setItemSyncProgress(f.virtualPath, pct);
+                for (const folderKey of relevantFolders) {
+                  const stat = folderStats.get(folderKey);
+                  if (!stat) continue;
+                  stat.active = pct;
+                }
+                updateFolderProgresses();
+                const overall = ((ok + (pct / 100)) / folderFiles.length) * 100;
+                setTransferProgressStatus({
+                  label: "Prenašanje mape",
+                  current: ok + 1,
+                  total: folderFiles.length,
+                  percent: overall
+                });
+              }
+            );
+            setItemSyncState(f.virtualPath, "ready");
+            setItemSyncProgress(f.virtualPath, null);
+            ok += 1;
+          } catch (e) {
+            setItemSyncState(f.virtualPath, "error");
+            setItemSyncProgress(f.virtualPath, null);
+            fail += 1;
+          } finally {
+            for (const folderKey of relevantFolders) {
+              const stat = folderStats.get(folderKey);
+              if (!stat) continue;
+              stat.done += 1;
+              stat.active = 0;
+            }
+            updateFolderProgresses();
+            const overall = ((ok + fail) / folderFiles.length) * 100;
+            setTransferProgressStatus({
+              label: "Prenašanje mape",
+              current: ok + fail,
+              total: folderFiles.length,
+              percent: overall
+            });
+          }
+        }
+        for (const [folderKey] of folderStats.entries()) {
+          setItemSyncState(folderKey, fail > 0 && ok === 0 ? "error" : "ready");
+          setItemSyncProgress(folderKey, null);
+        }
+        setItemSyncState(stateKey, fail > 0 && ok === 0 ? "error" : "ready");
+        setItemSyncProgress(stateKey, null);
+        showToast(`Lokalno shranjeno: ${ok}/${folderFiles.length}${fail ? `, napake: ${fail}` : ""}`);
+      } else {
+        setTransferProgressStatus({ label: "Prenašanje datoteke", current: 0, total: 1, percent: 0 });
+        await cacheSingleFile(storagePath, fileUrl, itemCtx.updatedAt, (pct) => {
+          setItemSyncProgress(stateKey, pct);
+          setTransferProgressStatus({ label: "Prenašanje datoteke", current: 1, total: 1, percent: pct });
+        });
+        setItemSyncState(stateKey, "ready");
+        setItemSyncProgress(stateKey, null);
+        showToast("Datoteka je na voljo brez povezave.");
+      }
+    }
+
+    if (action === "free") {
+      setItemSyncState(stateKey, "loading");
+      setItemSyncProgress(stateKey, 0);
+      if (!isSearchActive && currentItems.length > 0) renderItems(currentItems, currentRenderId);
+      if (isFolder) {
+        const folderFiles = await getFolderFilesForCaching(fullPath);
+        let removed = 0;
+        for (const f of folderFiles) {
+          if (await removeSingleCachedFile(f.storagePath, f.fileUrl)) removed += 1;
+          setItemSyncState(f.virtualPath, "idle");
+          setItemSyncProgress(f.virtualPath, null);
+        }
+        setItemSyncState(stateKey, "idle");
+        setItemSyncProgress(stateKey, null);
+        showToast(`Odstranjeno iz naprave: ${removed}`);
+      } else {
+        await removeSingleCachedFile(storagePath, fileUrl);
+        setItemSyncState(stateKey, "idle");
+        setItemSyncProgress(stateKey, null);
+        showToast("Lokalna kopija odstranjena.");
+      }
+    }
+
+    if (action === "download") {
+      if (isFolder) {
+        showToast("Prenos mape ni podprt. Izberi datoteko.");
+      } else {
+        showDownloadNotification();
+        await downloadToComputer(fileName, fileUrl, storagePath);
+      }
+    }
+  } catch (e) {
+    setItemSyncState(stateKey, "error");
+    showToast(`Akcija ni uspela: ${formatOfflineActionError(e)}`);
+  } finally {
+    clearTransferProgressStatus();
+    closeItemActionMenu();
+    if (!isSearchActive && currentItems.length > 0) {
+      renderItems(currentItems, currentRenderId);
+    }
+  }
+}
 
 function stripPathSlashes(path) {
   return String(path || "").replace(/^\/+|\/+$/g, "");
@@ -519,31 +1277,108 @@ async function fetchAllFilesFromTable(forceRefresh = false) {
   if (!forceRefresh && filesTableCachePromise) return filesTableCachePromise;
 
   filesTableCachePromise = (async () => {
-    const out = [];
-    const pageSize = 1000;
-    let from = 0;
+    const loadFromDbFallback = async () => {
+      const localRows = await loadRowsFromIndexedDb();
+      if (localRows.length > 0) {
+        filesTableCache = localRows;
+        return localRows;
+      }
+      throw new Error("Ni lokalnih podatkov za offline način.");
+    };
 
-    while (true) {
-      const to = from + pageSize - 1;
-      const { data, error } = await supabase
-        .from("files")
-        .select("*")
-        .range(from, to);
-      if (error) throw error;
-
-      const batch = Array.isArray(data) ? data : [];
-      out.push(...batch);
-      if (batch.length < pageSize) break;
-      from += pageSize;
+    if (!navigator.onLine) {
+      return loadFromDbFallback();
     }
 
-    filesTableCache = out;
-    return out;
+    try {
+      const out = [];
+      const pageSize = 1000;
+      let from = 0;
+
+      while (true) {
+        const to = from + pageSize - 1;
+        const { data, error } = await supabase
+          .from("files")
+          .select("*")
+          .range(from, to);
+        if (error) throw error;
+
+        const batch = Array.isArray(data) ? data : [];
+        out.push(...batch);
+        if (batch.length < pageSize) break;
+        from += pageSize;
+      }
+
+      filesTableCache = out;
+      try {
+        await saveRowsToIndexedDb(out);
+      } catch (dbErr) {
+        console.warn("Shranjevanje metadata v IndexedDB ni uspelo:", dbErr);
+      }
+      return out;
+    } catch (networkErr) {
+      console.warn("Supabase branje ni uspelo, preklapljam na IndexedDB:", networkErr);
+      return loadFromDbFallback();
+    }
   })().finally(() => {
     filesTableCachePromise = null;
   });
 
   return filesTableCachePromise;
+}
+
+async function refreshCachedFilesIfServerUpdated(rows) {
+  if (!isStandaloneApp) return;
+  if (!navigator.onLine) return;
+  const byStoragePath = new Map();
+  for (const row of rows || []) {
+    const sp = normalizePath(buildStoragePathFromRow(row));
+    if (!sp) continue;
+    byStoragePath.set(sp, row);
+  }
+
+  let refreshedCount = 0;
+  const cachedMetaMap = await getCachedMetaMapFromDb();
+  for (const [storagePath, meta] of cachedMetaMap.entries()) {
+    const serverRow = byStoragePath.get(storagePath);
+    if (!serverRow) continue;
+    const serverUpdatedAt = getRowTimestamp(serverRow);
+    const metaUpdatedAt = meta?.updated_at || null;
+    if (serverUpdatedAt && serverUpdatedAt !== metaUpdatedAt) {
+      try {
+        await cacheSingleFile(storagePath, buildR2UrlFromStoragePath(storagePath), serverUpdatedAt);
+        refreshedCount += 1;
+      } catch (e) {
+        console.warn("Osvežitev lokalne datoteke ni uspela:", storagePath, e);
+      }
+    }
+  }
+
+  if (refreshedCount > 0) {
+    showToast(`Posodobljene lokalne datoteke: ${refreshedCount}`);
+  }
+}
+
+async function syncOfflineMetadataAndCache({ force = false } = {}) {
+  if (!navigator.onLine && !force) return;
+  isMetadataSyncRunning = true;
+  updateConnectionStateChip();
+  try {
+    const rows = await fetchAllFilesFromTable(true);
+    await refreshCachedFilesIfServerUpdated(rows);
+    await maybeSyncCatalogIndexLocal({ force });
+    lastSyncAtIso = new Date().toISOString();
+    await idbPut(OFFLINE_META_STORE, { key: "last_sync_run_at", value: lastSyncAtIso });
+    if (!isSearchActive && currentItems.length > 0) {
+      renderItems(currentItems, currentRenderId);
+    }
+  } catch (e) {
+    console.warn("Offline sync ni uspel:", e);
+  } finally {
+    isMetadataSyncRunning = false;
+    updateConnectionStateChip();
+    updateOfflineEmptyHintVisibility();
+  }
 }
 
 function buildVirtualItemsForPath(rows, path) {
@@ -766,6 +1601,51 @@ async function checkUser() {
   else showLogin(); 
 }
 
+function isAdminEmail(email) {
+  const e = String(email || "").trim().toLowerCase();
+  return ADMIN_EMAILS.has(e);
+}
+
+async function getCurrentUserEmail() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session && session.user ? session.user.email : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function refreshAnnouncements() {
+  // Try to load from Supabase (table: announcements). If missing/blocked, fallback to hard-coded.
+  try {
+    const { data, error } = await supabase
+      .from("announcements")
+      .select("id,title,published_at,lead,bullets,note,created_at")
+      .order("published_at", { ascending: false });
+    if (error) throw error;
+    const rows = Array.isArray(data) ? data : [];
+    if (!rows.length) {
+      announcementsCache = [...FALLBACK_ANNOUNCEMENTS];
+    } else {
+      announcementsCache = rows.map((r) => ({
+        id: r.id,
+        title: r.title || "",
+        published_at: r.published_at || null,
+        lead: r.lead || "",
+        bullets: Array.isArray(r.bullets) ? r.bullets : (r.bullets && typeof r.bullets === "object" ? r.bullets : []),
+        note: r.note || ""
+      }));
+    }
+  } catch (e) {
+    announcementsCache = [...FALLBACK_ANNOUNCEMENTS];
+  }
+
+  // Keep UI in sync.
+  renderLoginNews();
+  if (normalizePath(currentPath) === normalizePath(ANNOUNCEMENTS_ROUTE)) renderAnnouncements();
+  if (normalizePath(currentPath) === normalizePath(ADMIN_ROUTE)) renderAdminPage();
+}
+
 function showLogin() { 
   document.body.classList.add("login-view");
   document.body.classList.remove("app-view");
@@ -793,6 +1673,7 @@ function showAnnouncementsPage() {
   // Hide "docs" UI and show announcements content.
   setDocsUiVisible(false);
   if (announcementsSection) announcementsSection.style.display = "block";
+  if (adminSection) adminSection.style.display = "none";
   if (statusEl) statusEl.textContent = "";
   if (contentTitleDescEl) {
     contentTitleDescEl.style.display = "";
@@ -806,6 +1687,10 @@ function hideAnnouncementsPage() {
     announcementsSection.style.display = "none";
     announcementsSection.innerHTML = "";
   }
+  if (adminSection) {
+    adminSection.style.display = "none";
+    adminSection.innerHTML = "";
+  }
   if (contentTitleDescEl) {
     contentTitleDescEl.style.display = "";
     if (DEFAULT_CONTENT_DESC_HTML) contentTitleDescEl.innerHTML = DEFAULT_CONTENT_DESC_HTML;
@@ -813,9 +1698,25 @@ function hideAnnouncementsPage() {
   setDocsUiVisible(true);
 }
 
+function showAdminPage() {
+  setDocsUiVisible(false);
+  if (announcementsSection) announcementsSection.style.display = "none";
+  if (adminSection) adminSection.style.display = "block";
+  if (statusEl) statusEl.textContent = "";
+  if (contentTitleDescEl) {
+    contentTitleDescEl.style.display = "";
+    contentTitleDescEl.innerHTML = "Urejanje obvestil in administracija portala.";
+  }
+  renderAdminPage();
+}
+
 function renderLoginNews() {
   if (!loginNewsMount) return;
-  const a = ANNOUNCEMENTS[0];
+  const a =
+    (announcementsCache || []).find((x) => x && x.id === LOGIN_ANNOUNCEMENT_ID) ||
+    (FALLBACK_ANNOUNCEMENTS || []).find((x) => x && x.id === LOGIN_ANNOUNCEMENT_ID) ||
+    (FALLBACK_ANNOUNCEMENTS || [])[0] ||
+    null;
   if (!a) return;
   const bullets = (a.bullets || [])
     .slice(0, 6)
@@ -843,7 +1744,7 @@ function renderLoginNews() {
 
 function renderAnnouncements() {
   if (!announcementsSection) return;
-  const items = [...ANNOUNCEMENTS].sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
+  const items = [...(announcementsCache || [])].sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
   announcementsSection.innerHTML = `
     <div class="announcements-list">
       ${items
@@ -888,6 +1789,202 @@ function renderAnnouncements() {
   `;
 }
 
+function parseBulletsFromEditor(text) {
+  const raw = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const bullets = [];
+  for (const line of raw) {
+    const idx = line.indexOf(":");
+    if (idx === -1) {
+      bullets.push({ title: line, text: "" });
+      continue;
+    }
+    const t = line.slice(0, idx).trim();
+    const tx = line.slice(idx + 1).trim();
+    bullets.push({ title: t, text: tx });
+  }
+  return bullets;
+}
+
+function bulletsToEditorText(bullets) {
+  const arr = Array.isArray(bullets) ? bullets : [];
+  return arr
+    .map((b) => {
+      const t = (b && b.title) ? String(b.title).trim() : "";
+      const tx = (b && b.text) ? String(b.text).trim() : "";
+      return tx ? `${t}: ${tx}` : t;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function upsertAnnouncementAdmin(payload) {
+  const email = await getCurrentUserEmail();
+  if (!isAdminEmail(email)) throw new Error("Nimate pravic za urejanje obvestil.");
+  const { data, error } = await supabase.from("announcements").upsert(payload).select("*");
+  if (error) throw error;
+  return data;
+}
+
+async function deleteAnnouncementAdmin(id) {
+  const email = await getCurrentUserEmail();
+  if (!isAdminEmail(email)) throw new Error("Nimate pravic za brisanje obvestil.");
+  const { error } = await supabase.from("announcements").delete().eq("id", id);
+  if (error) throw error;
+}
+
+function renderAdminPage() {
+  if (!adminSection) return;
+  adminSection.innerHTML = "";
+
+  (async () => {
+    const email = await getCurrentUserEmail();
+    const isAdmin = isAdminEmail(email);
+    if (!isAdmin) {
+      adminSection.innerHTML = `<div class="card"><strong>Dostop zavrnjen.</strong><div style="margin-top:8px; color:var(--text-secondary); font-size:13px;">Ta stran je vidna samo administratorju.</div></div>`;
+      return;
+    }
+
+    const items = [...(announcementsCache || [])].sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
+
+    const wrap = document.createElement("div");
+    wrap.className = "admin-grid";
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "admin-header";
+    actionsRow.innerHTML = `
+      <div style="font-size:12px; color:var(--text-secondary); padding-top:10px;">${escapeHtml(email || "")}</div>
+      <div class="admin-actions">
+        <button type="button" class="admin-btn" id="adminReloadAnnouncementsBtn">Osveži</button>
+        <button type="button" class="admin-btn primary" id="adminNewAnnouncementBtn">+ Novo obvestilo</button>
+      </div>
+    `;
+    adminSection.appendChild(actionsRow);
+    adminSection.appendChild(wrap);
+
+    const renderEditorCard = (initial) => {
+      const a = initial || { id: "", title: "", published_at: new Date().toISOString().slice(0, 10), lead: "", bullets: [], note: "" };
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div style="font-weight:800; color:var(--text-primary);">Urejanje obvestila</div>
+          <div style="font-size:12px; color:var(--text-secondary);">${escapeHtml(email || "")}</div>
+        </div>
+        <div style="height:12px;"></div>
+        <form class="admin-form" id="adminAnnouncementForm">
+          <div class="full">
+            <label>Naslov</label>
+            <input id="adminA_title" type="text" value="${escapeHtml(a.title || "")}" placeholder="Naslov obvestila" required />
+          </div>
+          <div>
+            <label>Datum objave</label>
+            <input id="adminA_published" type="date" value="${escapeHtml(String(a.published_at || '').slice(0,10))}" />
+          </div>
+          <div></div>
+          <div class="full">
+            <label>Besedilo (lead)</label>
+            <textarea id="adminA_lead" placeholder="Kratek opis...">${escapeHtml(a.lead || "")}</textarea>
+          </div>
+          <div class="full">
+            <label>Točke (bullets)</label>
+            <textarea id="adminA_bullets" placeholder="Naslov: besedilo (vsaka vrstica posebej)">${escapeHtml(bulletsToEditorText(a.bullets))}</textarea>
+            <div class="hint">Format: <code>Naslov: besedilo</code> (vsaka vrstica je ena točka).</div>
+          </div>
+          <div class="full">
+            <label>Zaključek (note)</label>
+            <textarea id="adminA_note" placeholder="Zaključni stavek...">${escapeHtml(a.note || "")}</textarea>
+          </div>
+          <div class="admin-row-actions full">
+            ${a.id ? `<button type="button" class="admin-btn admin-danger" id="adminDeleteAnnouncementBtn">Izbriši</button>` : ""}
+            <button type="button" class="admin-btn" id="adminCancelAnnouncementBtn">Prekliči</button>
+            <button type="submit" class="admin-btn primary" id="adminSaveAnnouncementBtn">Shrani</button>
+          </div>
+        </form>
+      `;
+
+      const form = card.querySelector("#adminAnnouncementForm");
+      const cancelBtn = card.querySelector("#adminCancelAnnouncementBtn");
+      const delBtn = card.querySelector("#adminDeleteAnnouncementBtn");
+      const reloadBtn = document.getElementById("adminReloadAnnouncementsBtn");
+
+      if (reloadBtn) reloadBtn.onclick = async () => { await refreshAnnouncements(); };
+      if (cancelBtn) cancelBtn.onclick = () => { card.remove(); };
+      if (delBtn) delBtn.onclick = async () => {
+        if (!a.id) return;
+        const ok = confirm("Želite izbrisati to obvestilo?");
+        if (!ok) return;
+        try {
+          await deleteAnnouncementAdmin(a.id);
+          await refreshAnnouncements();
+          card.remove();
+        } catch (e) {
+          alert("Brisanje ni uspelo: " + (e.message || e));
+        }
+      };
+
+      if (form) {
+        form.onsubmit = async (ev) => {
+          ev.preventDefault();
+          const title = card.querySelector("#adminA_title").value.trim();
+          const published = card.querySelector("#adminA_published").value || null;
+          const lead = card.querySelector("#adminA_lead").value.trim();
+          const bullets = parseBulletsFromEditor(card.querySelector("#adminA_bullets").value);
+          const note = card.querySelector("#adminA_note").value.trim();
+          if (!title) return;
+          const payload = {
+            ...(a.id ? { id: a.id } : {}),
+            title,
+            published_at: published,
+            lead,
+            bullets,
+            note
+          };
+          try {
+            await upsertAnnouncementAdmin(payload);
+            await refreshAnnouncements();
+            card.remove();
+          } catch (e) {
+            alert("Shranjevanje ni uspelo: " + (e.message || e));
+          }
+        };
+      }
+
+      return card;
+    };
+
+    // List cards (read-only preview)
+    for (const a of items) {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.style.padding = "18px";
+      const date = a.published_at ? formatDate(a.published_at) : "—";
+      card.innerHTML = `
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+          <div style="font-weight:800; color:var(--text-primary);">${escapeHtml(a.title || "")}</div>
+          <div style="font-size:12px; color:var(--text-secondary); white-space:nowrap;">${escapeHtml(date)}</div>
+        </div>
+        <div style="margin-top:10px; color:var(--text-secondary); font-size:13px; line-height:1.6;">${escapeHtml(a.lead || "")}</div>
+        <div style="margin-top:12px; display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="admin-btn" data-edit-id="${escapeHtml(a.id || "")}">Uredi</button>
+        </div>
+      `;
+      const editBtn = card.querySelector("button[data-edit-id]");
+      if (editBtn) editBtn.onclick = () => {
+        wrap.prepend(renderEditorCard(a));
+      };
+      wrap.appendChild(card);
+    }
+
+    const newBtn = document.getElementById("adminNewAnnouncementBtn");
+    if (newBtn) newBtn.onclick = () => {
+      wrap.prepend(renderEditorCard(null));
+    };
+
+    const reloadBtn2 = document.getElementById("adminReloadAnnouncementsBtn");
+    if (reloadBtn2) reloadBtn2.onclick = async () => { await refreshAnnouncements(); };
+  })();
+}
+
 async function showApp(email) {
   const alreadyVisible = appCard && appCard.style.display === "flex";
   window.scrollTo(0, 0);
@@ -929,14 +2026,18 @@ async function showApp(email) {
     renderGlobalFavorites();
     updateSidebarFavorites();
   });
+  maybeShowOfflineOnboarding();
+  syncOfflineMetadataAndCache();
 
   // Pri že prikazanem portalu ne resetiraj poti in ne kličem loadContent (prepreči skok na Domov ob preklapljanju zaviho)
   if (alreadyVisible) return;
+  if (adminLink) adminLink.style.display = isAdminEmail(email) ? "inline" : "none";
   const path = getPathFromUrl();
   currentPath = path;
   updateSidebarNavActive(path);
   updateContentSectionTitle(path);
-  if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) showAnnouncementsPage();
+  if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) showAdminPage();
+  else if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) showAnnouncementsPage();
   else {
     hideAnnouncementsPage();
     loadContent(path);
@@ -969,6 +2070,14 @@ window.navigateTo = function(path) {
     catalogResultsSection.innerHTML = "";
   }
   updateBreadcrumbs(path);
+  if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) {
+    if (mainContent) mainContent.innerHTML = "";
+    if (skeletonLoader) skeletonLoader.style.display = "none";
+    if (statusEl) statusEl.textContent = "";
+    window.history.pushState({ path }, "", "#" + pathToHash(path));
+    showAdminPage();
+    return;
+  }
   if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
     if (mainContent) mainContent.innerHTML = "";
     if (skeletonLoader) skeletonLoader.style.display = "none";
@@ -1020,6 +2129,10 @@ window.addEventListener('popstate', () => {
   updateContentSectionTitle(p);
   const hasActiveSearch = !!(isSearchActive && searchInput && searchInput.value.trim());
   if (hasActiveSearch) return;
+  if (normalizePath(p) === normalizePath(ADMIN_ROUTE)) {
+    showAdminPage();
+    return;
+  }
   if (normalizePath(p) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
     showAnnouncementsPage();
     return;
@@ -1028,6 +2141,12 @@ window.addEventListener('popstate', () => {
   loadContent(p);
 });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pdfModal && pdfModal.style.display === 'flex') closePdfViewer(); });
+document.addEventListener("click", (e) => {
+  const target = e.target;
+  if (!(target instanceof Element)) return;
+  if (target.closest(".item-menu-wrap")) return;
+  closeItemActionMenu();
+});
 
 // --- MOBILE SIDEBAR DRAWER ---
 function isSidebarOpen() {
@@ -1271,6 +2390,12 @@ async function processDataAndRender(data, rId) {
 }
 
 function updateBreadcrumbs(path) {
+  if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) {
+    const h = `<span class="breadcrumb-item" onclick="navigateTo('')">Domov</span> <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${escapeJsSingleQuotedString(ADMIN_ROUTE)}')">Admin</span>`;
+    breadcrumbsEl.innerHTML = h;
+    if (backBtn) backBtn.style.display = "inline-flex";
+    return;
+  }
   if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
     const h = `<span class="breadcrumb-item" onclick="navigateTo('')">Domov</span> <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${escapeJsSingleQuotedString(ANNOUNCEMENTS_ROUTE)}')">Obvestila</span>`;
     breadcrumbsEl.innerHTML = h;
@@ -1353,76 +2478,117 @@ async function renderItems(items, rId) {
   }
 }
 
+function buildSyncStatusHtml({ isFolder, isCached, syncState }) {
+  if (!isStandaloneApp) return "";
+  if (syncState === "loading") {
+    return `<span class="sync-status-icon loading" title="Sinhronizacija v teku"><span class="sync-spinner" aria-hidden="true"></span></span>`;
+  }
+  if (syncState === "error") {
+    return `<span class="sync-status-icon error" title="Sinhronizacija ni uspela">!</span>`;
+  }
+  if (isFolder) {
+    return `<span class="sync-status-icon cloud" title="Mapa je na voljo ob povezavi">${iconSvg("cloud")}</span>`;
+  }
+  if (isCached) {
+    return `<span class="sync-status-icon ready" title="Datoteka je na voljo brez povezave">${iconSvg("cloudCheck")}</span>`;
+  }
+  return `<span class="sync-status-icon cloud" title="Datoteka ni shranjena lokalno">${iconSvg("cloud")}</span>`;
+}
+
+function buildItemActionMenuHtml({ disableOfflineActions = false, offlineOnlyHint = false }) {
+  const hintAttr = offlineOnlyHint ? `title="Na voljo v nameščeni aplikaciji"` : "";
+  return `
+    <div class="item-menu-wrap">
+      <button type="button" class="item-menu-btn" title="Več možnosti" aria-label="Več možnosti">
+        <span class="ui-icon" aria-hidden="true">${iconSvg("dotsVertical")}</span>
+      </button>
+      <div class="item-menu-dropdown" role="menu">
+        <button type="button" class="item-menu-action" data-action="cache" role="menuitem" ${disableOfflineActions ? "disabled" : ""} ${hintAttr}>Na voljo brez povezave</button>
+        <button type="button" class="item-menu-action" data-action="free" role="menuitem" ${disableOfflineActions ? "disabled" : ""} ${hintAttr}>Sprosti prostor</button>
+        <button type="button" class="item-menu-action" data-action="download" role="menuitem">Prenesi na računalnik</button>
+      </div>
+    </div>
+  `;
+}
+
 // Enaka struktura in razredi za vsako kartico (koren in vse podmape) – brez dodatnih razredov glede na globino.
 async function createItemElement(item, cont) {
-    const isFolder = !item.metadata; 
+    const isFolder = !item.metadata;
     const div = document.createElement("div");
     div.className = isFolder ? "item item-card folder-item" : "item item-card";
-    const full = currentPath ? `${currentPath}/${item.name}` : item.name; 
+    const full = currentPath ? `${currentPath}/${item.name}` : item.name;
     const clean = normalizePath(full);
     let badges = "";
-    
-    // Značka NOVO: natanko en element na .item (brez podvajanja)
+
     if (isFolder) {
-        const hasUpdatesInFolder = folderHasUpdatesByCurrentPathCache(full);
-        badges = hasUpdatesInFolder
-          ? `<span class="new-badge" style="display:inline-block">NOVO</span>`
-          : `<span class="new-badge" style="display:none">NOVO</span>`;
+      const hasUpdatesInFolder = folderHasUpdatesByCurrentPathCache(full);
+      badges = hasUpdatesInFolder
+        ? `<span class="new-badge" style="display:inline-block">NOVO</span>`
+        : `<span class="new-badge" style="display:none">NOVO</span>`;
     } else if (isRelevantFile(item.name) && isAfterUpdatesSince(item.created_at)) {
-        badges = `<span class="new-badge" style="display:inline-block">NOVO</span>`;
+      badges = `<span class="new-badge" style="display:inline-block">NOVO</span>`;
     }
+
     const safeItemName = escapeJsSingleQuotedString(item.name);
-    const favBtnHtml = isFolder ? `<button class="fav-btn ${favorites.includes(clean)?'active':''}" onclick="toggleFavorite(event, '${safeItemName}')">★</button>` : '';
-    
+    const favBtnHtml = isFolder ? `<button class="fav-btn ${favorites.includes(clean) ? "active" : ""}" onclick="toggleFavorite(event, '${safeItemName}')">★</button>` : "";
     const base = getBaseName(item.name).toLowerCase();
-    const ext = item.name.split('.').pop().toLowerCase();
+    const ext = item.name.split(".").pop().toLowerCase();
     const isLinkFile = !isFolder && isUrlLinkFile(item.name);
+    const storagePath = !isFolder ? normalizePath(buildStoragePathFromRow(item)) : "";
+    const fileUrl = !isFolder ? buildR2UrlFromStoragePath(storagePath) : "";
+    const isCachedOffline = !isFolder ? await isPathCachedOffline(storagePath, fileUrl) : false;
+    const syncStateKey = isFolder ? full : storagePath;
+    const syncState = getItemSyncState(syncStateKey);
+    const syncStatusHtml = buildSyncStatusHtml({ isFolder, isCached: isCachedOffline, syncState });
+
     let icon = "";
     if (isFolder) {
       icon = `<div class="big-icon">${iconSvg(getIconForName(base))}</div>`;
     } else if (isLinkFile) {
       icon = `<div class="big-icon">${iconSvg("link")}</div>`;
-    } else if (item.name.toLowerCase().endsWith('dwg') || item.name.toLowerCase().endsWith('dxf')) {
+    } else if (item.name.toLowerCase().endsWith("dwg") || item.name.toLowerCase().endsWith("dxf")) {
       icon = `<div class="big-icon">${iconSvg("ruler")}</div>`;
     } else {
       icon = `<div class="big-icon">${iconSvg(getFileIconKeyForExt(ext))}</div>`;
     }
-    
-    // Cache za slike – če PDF ima predogled (npr. jpg v mapi), ga prikaži v grid view; v list view vedno ikona PDF
-    const isPdf = !isFolder && item.name.toLowerCase().endsWith('pdf');
-    if (imageMap[base] && !(viewMode === 'list' && isPdf)) {
+
+    const isPdf = !isFolder && item.name.toLowerCase().endsWith("pdf");
+    if (imageMap[base] && !(viewMode === "list" && isPdf)) {
       const imagePath = imageMap[base].fullPath || (currentPath ? `${currentPath}/${imageMap[base].name}` : imageMap[base].name);
       const cacheKey = imagePath;
-      
+      const fallbackIcon = isFolder ? getIconForName(base) : (isLinkFile ? "link" : getFileIconKeyForExt(ext));
       if (imageUrlCache[cacheKey]) {
-        // Uporabi cache URL (če ni pretekel - 3600s = 1h)
-        icon = `<img src="${imageUrlCache[cacheKey]}" loading="lazy" />`;
+        icon = `<div class="big-icon thumb-fallback">${iconSvg(fallbackIcon)}</div><img src="${imageUrlCache[cacheKey]}" loading="lazy" onload="if(this.previousElementSibling){this.previousElementSibling.style.display='none';}" onerror="if(this.previousElementSibling){this.previousElementSibling.style.display='flex';} this.remove();" />`;
       } else {
         const imageUrl = buildR2UrlFromStoragePath(imagePath);
         imageUrlCache[cacheKey] = imageUrl;
-        icon = `<img src="${imageUrl}" loading="lazy" />`;
+        icon = `<div class="big-icon thumb-fallback">${iconSvg(fallbackIcon)}</div><img src="${imageUrl}" loading="lazy" onload="if(this.previousElementSibling){this.previousElementSibling.style.display='none';}" onerror="if(this.previousElementSibling){this.previousElementSibling.style.display='flex';} this.remove();" />`;
       }
     }
 
-    // Za datoteke: prikaži datum takoj pod velikostjo
     const fileSizeBytes = item.metadata && typeof item.metadata.size === "number" ? item.metadata.size : 0;
-    const fileSize = isFolder ? 'Mapa' : (fileSizeBytes > 0 ? (fileSizeBytes/1024/1024).toFixed(2)+' MB' : '—');
-    const dateInfo = !isFolder && item.created_at ? `<span class="item-date">Datum posodobitve: ${formatDate(item.created_at)}</span>` : '';
-    const modifiedText = item.created_at ? formatDate(item.created_at) : '—';
-    const isDownloadType = !isFolder && !isLinkFile && ['dwg', 'dxf', 'xlsx', 'xls'].includes(ext);
-    const previewExtraClass = isDownloadType ? ' file-preview-download' : '';
-    const downloadOverlay = isDownloadType ? '<span class="download-overlay-icon" aria-hidden="true">⬇</span>' : '';
-    const previewHtml = `<div class="item-preview ${isFolder?'folder-bg':'file-bg'}${previewExtraClass}">${icon}${downloadOverlay}</div>`;
-    const infoHtml = `<div class="item-info"><strong>${formatDisplayName(item.name)}</strong><small>${fileSize}</small>${dateInfo}</div>`;
-    if (viewMode === 'list') {
-      const sizeCol = isFolder ? '—' : fileSize;
-      const metaLine = isFolder ? 'Mapa' : `${modifiedText}${sizeCol && sizeCol !== '—' ? ` · ${sizeCol}` : ''}`;
+    const fileSize = isFolder ? "Mapa" : (fileSizeBytes > 0 ? `${(fileSizeBytes / 1024 / 1024).toFixed(2)} MB` : "—");
+    const dateInfo = !isFolder && item.created_at ? `<span class="item-date">Datum posodobitve: ${formatDate(item.created_at)}</span>` : "";
+    const modifiedText = item.created_at ? formatDate(item.created_at) : "—";
+    const previewHtml = `<div class="item-preview ${isFolder ? "folder-bg" : "file-bg"}">${icon}</div>`;
+    const infoHtml = `<div class="item-info"><strong>${formatDisplayName(item.name)} ${syncStatusHtml}</strong><small>${fileSize}</small>${dateInfo}</div>`;
+    const actionsMenuHtml = showPwaItemActionMenu
+      ? buildItemActionMenuHtml({
+          disableOfflineActions: !supportsOfflineStorage || !isStandaloneApp,
+          offlineOnlyHint: !isStandaloneApp
+        })
+      : "";
+
+    if (viewMode === "list") {
+      const sizeCol = isFolder ? "—" : fileSize;
+      const metaLine = isFolder ? "Mapa" : `${modifiedText}${sizeCol && sizeCol !== "—" ? ` · ${sizeCol}` : ""}`;
       div.innerHTML = `
         <div class="lv-name">
           ${previewHtml}
           <div class="lv-title">
             <div class="lv-title-line">
               <strong>${escapeHtml(formatDisplayName(item.name))}</strong>
+              ${syncStatusHtml}
               ${badges}
             </div>
             <small class="lv-meta">${escapeHtml(metaLine)}</small>
@@ -1430,26 +2596,64 @@ async function createItemElement(item, cont) {
         </div>
         <div class="lv-modified">${escapeHtml(modifiedText)}</div>
         <div class="lv-size">${escapeHtml(sizeCol)}</div>
-        <div class="lv-actions">${favBtnHtml}</div>
+        <div class="lv-actions">${favBtnHtml}${actionsMenuHtml}</div>
       `;
     } else {
-      div.innerHTML = favBtnHtml + badges + previewHtml + infoHtml;
+      div.innerHTML = `${favBtnHtml}${badges}${actionsMenuHtml}${previewHtml}${infoHtml}`;
     }
-    if (isPdf) div.setAttribute('title', 'Odpri predogled');
-    else if (isDownloadType) {
-      div.setAttribute('title', 'Prenesi datoteko (Direct Download)');
-      div.classList.add('file-download-type');
-    }
-    const fileUrl = !isFolder ? buildR2UrlFromFileRecord(item) : "";
+
+    const hasOfflineAccess = !isStandaloneApp || isFolder || isCachedOffline || navigator.onLine;
+    if (!hasOfflineAccess) div.classList.add("offline-unavailable");
+
     if (fileUrl) div.dataset.fileUrl = fileUrl;
-    div.onclick = () => {
-      if (isFolder) navigateTo(full);
-      else if (isLinkFile) handleUrlFile(full);
-      else {
-        if (isDownloadType) showDownloadNotification();
-        openPdfViewer(item.name, full, null, fileUrl);
+    div.onclick = async () => {
+      if (isFolder) {
+        navigateTo(full);
+        return;
       }
+      if (isLinkFile) {
+        handleUrlFile(full);
+        return;
+      }
+      if (!navigator.onLine && !isCachedOffline) {
+        showToast("Ni internetne povezave. Datoteka ni shranjena lokalno.");
+        return;
+      }
+      if (!navigator.onLine && isCachedOffline) {
+        const opened = await openCachedFile(item.name, storagePath, fileUrl);
+        if (!opened) showToast("Datoteke ni mogoče odpreti brez povezave.");
+        return;
+      }
+      openPdfViewer(item.name, full, null, fileUrl);
     };
+
+    if (showPwaItemActionMenu) {
+      const menuWrap = div.querySelector(".item-menu-wrap");
+      const menuBtn = div.querySelector(".item-menu-btn");
+      if (menuBtn && menuWrap) {
+        menuBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleItemActionMenu(menuWrap);
+        });
+      }
+      div.querySelectorAll(".item-menu-action").forEach((btn) => {
+        btn.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const action = btn.getAttribute("data-action");
+          await handleItemAction(action, {
+            isFolder,
+            fullPath: full,
+            storagePath,
+            fileName: item.name,
+            fileUrl,
+            updatedAt: getRowTimestamp(item)
+          });
+        });
+      });
+    }
+
     cont.appendChild(div);
 }
 
@@ -1734,6 +2938,13 @@ function filterLocalSearchResults(allItems, searchTerm, maxResults = 20000) {
 async function searchSupabaseCatalog(query) {
   const out = { groupedByPdf: {}, catalogTotalCount: 0 };
   if (!query || String(query).trim().length < 2) return out;
+  if (!navigator.onLine) {
+    const local = await searchLocalCatalogIndex(query);
+    if (statusEl && local.catalogTotalCount > 0) {
+      statusEl.textContent = `Offline iskanje šifer: ${local.catalogTotalCount} zadetkov`;
+    }
+    return local;
+  }
   try {
     const trimmed = String(query).trim();
     const pageSize = 1000;
@@ -1747,7 +2958,10 @@ async function searchSupabaseCatalog(query) {
         .select("pdf_filename, page_number, page_title")
         .ilike("code", "%" + trimmed + "%")
         .range(from, to);
-      if (error) return out;
+      if (error) {
+        const local = await searchLocalCatalogIndex(query);
+        return local.catalogTotalCount > 0 ? local : out;
+      }
       const batch = Array.isArray(data) ? data : [];
       if (batch.length === 0) break;
       indexRows = indexRows.concat(batch);
@@ -1756,22 +2970,11 @@ async function searchSupabaseCatalog(query) {
     }
 
     if (indexRows.length === 0) return out;
-    const groupedByPdf = {};
-    for (const row of indexRows) {
-      const fn = row.pdf_filename;
-      const page = row.page_number != null ? Number(row.page_number) : 1;
-      const title = (row.page_title != null && String(row.page_title).trim()) ? String(row.page_title).trim() : "";
-      if (!fn) continue;
-      if (!groupedByPdf[fn]) groupedByPdf[fn] = [];
-      const exists = groupedByPdf[fn].some((e) => e.page === page && e.title === title);
-      if (!exists) groupedByPdf[fn].push({ page, title });
-    }
-    for (const fn of Object.keys(groupedByPdf)) groupedByPdf[fn].sort((a, b) => a.page - b.page);
-    const catalogTotalCount = Object.values(groupedByPdf).reduce((sum, items) => sum + items.length, 0);
-    return { groupedByPdf, catalogTotalCount };
+    return groupCatalogIndexRows(indexRows);
   } catch (e) {
     console.warn("searchSupabaseCatalog error:", e);
-    return out;
+    const local = await searchLocalCatalogIndex(query);
+    return local.catalogTotalCount > 0 ? local : out;
   }
 }
 
@@ -2190,6 +3393,13 @@ window.openPdfViewer = async function(fn, path, page, directUrl) {
   const ext = (fn.split('.').pop() || '').toLowerCase();
   const p = path || (currentPath ? `${currentPath}/${fn}` : fn);
   const fileUrl = directUrl || buildR2UrlFromStoragePath(p);
+  if (!navigator.onLine) {
+    const opened = await openCachedFile(fn, p, fileUrl);
+    if (!opened) {
+      showToast("Ni internetne povezave. Datoteka ni shranjena lokalno.");
+    }
+    return;
+  }
   const forceDownload = ['xlsx', 'xls', 'dwg', 'dxf'].includes(ext);
   if (forceDownload) {
     if (fileUrl) {
@@ -2235,7 +3445,11 @@ window.openPdfViewer = async function(fn, path, page, directUrl) {
 }
 window.closePdfViewer = function() { 
   pdfModal.style.display = 'none'; 
-  pdfFrame.src = ""; 
+  pdfFrame.src = "";
+  if (currentViewerBlobUrl) {
+    URL.revokeObjectURL(currentViewerBlobUrl);
+    currentViewerBlobUrl = null;
+  }
   const p = currentPath; 
   window.history.replaceState({ path: p }, "", "#" + pathToHash(p)); 
   const hasActiveSearch = !!(isSearchActive && searchInput && searchInput.value.trim());
@@ -2345,6 +3559,105 @@ function setupRequestMailBtn() {
   if (btn) btn.addEventListener("click", doRequestAccess);
 }
 
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    await navigator.serviceWorker.register("./sw.js");
+  } catch (e) {
+    console.warn("Service worker registracija ni uspela:", e);
+  }
+}
+
+function setupInstallPrompt() {
+  if (!installAppBtn) return;
+
+  installAppBtn.addEventListener("click", async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice.catch(() => null);
+      deferredInstallPrompt = null;
+      installAppBtn.style.display = "none";
+      return;
+    }
+    showToast("Namestitev: odpri meni brskalnika in izberi 'Install app' ali 'Add to Home Screen'.");
+  });
+
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    installAppBtn.style.display = "inline-flex";
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    installAppBtn.style.display = "none";
+  });
+
+  if (!isStandaloneApp) {
+    installAppBtn.style.display = "inline-flex";
+  } else {
+    installAppBtn.style.display = "none";
+  }
+}
+
+function setupOfflineOnboarding() {
+  if (!offlineOnboardingModal || !offlineOnboardingClose) return;
+  const close = () => {
+    offlineOnboardingModal.style.display = "none";
+    offlineOnboardingModal.setAttribute("aria-hidden", "true");
+    try {
+      localStorage.setItem(OFFLINE_ONBOARDING_KEY, "1");
+    } catch (e) {}
+  };
+  offlineOnboardingClose.addEventListener("click", close);
+  offlineOnboardingModal.addEventListener("click", (e) => {
+    if (e.target === offlineOnboardingModal) close();
+  });
+}
+
+function maybeShowOfflineOnboarding() {
+  if (!offlineOnboardingModal) return;
+  let seen = false;
+  try {
+    seen = localStorage.getItem(OFFLINE_ONBOARDING_KEY) === "1";
+  } catch (e) {}
+  if (seen) return;
+  offlineOnboardingModal.style.display = "flex";
+  offlineOnboardingModal.setAttribute("aria-hidden", "false");
+}
+
+function setupConnectivityHandlers() {
+  window.addEventListener("online", () => {
+    updateConnectionStateChip();
+    showToast("Povezava je vzpostavljena. Sinhroniziram podatke...");
+    syncOfflineMetadataAndCache();
+  });
+  window.addEventListener("offline", () => {
+    updateConnectionStateChip();
+    showToast("Trenutno ste brez povezave.");
+    updateOfflineEmptyHintVisibility();
+    if (!isSearchActive && currentItems.length > 0) renderItems(currentItems, currentRenderId);
+  });
+}
+
+function setupPeriodicOfflineSync() {
+  const intervalMs = 5 * 60 * 1000;
+  setInterval(() => {
+    if (!navigator.onLine) return;
+    syncOfflineMetadataAndCache();
+  }, intervalMs);
+}
+
+async function initConnectionState() {
+  try {
+    const row = await idbGet(OFFLINE_META_STORE, "last_sync_run_at");
+    lastSyncAtIso = row?.value || null;
+  } catch (e) {
+    lastSyncAtIso = null;
+  }
+  updateConnectionStateChip();
+}
+
 // Registriraj form submit handler (Magic Link iz #loginSection ali Enter v #requestSection → mailto)
 function setupFormHandler() {
   const form = document.getElementById("authForm");
@@ -2447,6 +3760,13 @@ function setupFormHandler() {
 
 // Pokliči takoj, ker je script type="module" naložen na koncu body
 setupFormHandler();
+setupInstallPrompt();
+setupOfflineOnboarding();
+setupConnectivityHandlers();
+setupPeriodicOfflineSync();
+initConnectionState();
+registerServiceWorker();
+refreshAnnouncements();
 renderLoginNews();
 
 if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid')); 
