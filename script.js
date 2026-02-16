@@ -6,16 +6,11 @@ const SUPABASE_URL = "https://ugwchsznxsuxbxdvigsu.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnd2Noc3pueHN1eGJ4ZHZpZ3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkxMTY0NzEsImV4cCI6MjA4NDY5MjQ3MX0.iFzB--KryoBedjIJnybL55-xfQFIBxWnKq9RqwxuyK4";
 const R2_BASE_URL = "https://pub-28724a107246493c93629c81b8105cff.r2.dev";
 const ADMIN_EMAIL = "miha@aluk.si";
-const ADMIN_EMAILS = new Set([
-  "miha@aluk.si",
-  "miha.pahor97@gmail.com"
-]);
 // Tabela v Supabase: ustvari z stolpci email, name, company, created_at (RLS dovoli INSERT za anon)
 const ACCESS_REQUESTS_TABLE = "access_requests"; 
 
 // --- KONFIGURACIJA ---
 const ANNOUNCEMENTS_ROUTE = "__obvestila__";
-const ADMIN_ROUTE = "__admin__";
 // Mape, ki so namenjene samo internemu indeksiranju (ne prikazuj v portalu).
 const HIDDEN_INDEX_FOLDER_KEYS = new Set([
   "novialukpokoncni"
@@ -140,7 +135,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // --- OBVESTILA (en vir za login novico in "Obvestila" tab) ---
-const FALLBACK_ANNOUNCEMENTS = [
+const ANNOUNCEMENTS = [
   {
     id: "portal-launch",
     title: "Novi AluK Portal za partnerje",
@@ -160,8 +155,6 @@ const FALLBACK_ANNOUNCEMENTS = [
     note: ""
   }
 ];
-let announcementsCache = [...FALLBACK_ANNOUNCEMENTS];
-const LOGIN_ANNOUNCEMENT_ID = "portal-launch";
 
 // DOM ELEMENTI (z varnostnimi preverjanji)
 const authForm = getElement("authForm");
@@ -174,7 +167,6 @@ const mainContent = getElement("mainContent");
 const searchResultsWrapper = getElement("searchResultsWrapper");
 const catalogResultsSection = getElement("catalogResultsSection");
 const announcementsSection = getElement("announcementsSection");
-const adminSection = getElement("adminSection");
 const searchSpinner = getElement("searchSpinner");
 const skeletonLoader = getElement("skeletonLoader");
 const statusEl = getElement("status");
@@ -199,7 +191,6 @@ const sidebarFavList = getElement("sidebarFavList");
 const sidebarEl = getElement("sidebar");
 const sidebarOverlay = getElement("sidebarOverlay");
 const menuBtn = getElement("menuBtn");
-const adminLink = getElement("adminLink");
 
 const toolbarEl = document.querySelector(".toolbar");
 const searchSectionEl = document.querySelector(".search-section");
@@ -253,11 +244,6 @@ function updateSidebarNavActive(path) {
 function updateContentSectionTitle(path) {
   const contentTitleEl = getElement("contentTitle");
   if (!contentTitleEl) return;
-
-  if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) {
-    contentTitleEl.innerHTML = `<span class="ui-icon" aria-hidden="true">${iconSvg("wrench")}</span>Admin`;
-    return;
-  }
 
   if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
     contentTitleEl.innerHTML = `<span class="ui-icon" aria-hidden="true">${iconSvg("bell")}</span>Obvestila`;
@@ -780,51 +766,6 @@ async function checkUser() {
   else showLogin(); 
 }
 
-function isAdminEmail(email) {
-  const e = String(email || "").trim().toLowerCase();
-  return ADMIN_EMAILS.has(e);
-}
-
-async function getCurrentUserEmail() {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session && session.user ? session.user.email : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-async function refreshAnnouncements() {
-  // Try to load from Supabase (table: announcements). If missing/blocked, fallback to hard-coded.
-  try {
-    const { data, error } = await supabase
-      .from("announcements")
-      .select("id,title,published_at,lead,bullets,note,created_at")
-      .order("published_at", { ascending: false });
-    if (error) throw error;
-    const rows = Array.isArray(data) ? data : [];
-    if (!rows.length) {
-      announcementsCache = [...FALLBACK_ANNOUNCEMENTS];
-    } else {
-      announcementsCache = rows.map((r) => ({
-        id: r.id,
-        title: r.title || "",
-        published_at: r.published_at || null,
-        lead: r.lead || "",
-        bullets: Array.isArray(r.bullets) ? r.bullets : (r.bullets && typeof r.bullets === "object" ? r.bullets : []),
-        note: r.note || ""
-      }));
-    }
-  } catch (e) {
-    announcementsCache = [...FALLBACK_ANNOUNCEMENTS];
-  }
-
-  // Keep UI in sync.
-  renderLoginNews();
-  if (normalizePath(currentPath) === normalizePath(ANNOUNCEMENTS_ROUTE)) renderAnnouncements();
-  if (normalizePath(currentPath) === normalizePath(ADMIN_ROUTE)) renderAdminPage();
-}
-
 function showLogin() { 
   document.body.classList.add("login-view");
   document.body.classList.remove("app-view");
@@ -852,7 +793,6 @@ function showAnnouncementsPage() {
   // Hide "docs" UI and show announcements content.
   setDocsUiVisible(false);
   if (announcementsSection) announcementsSection.style.display = "block";
-  if (adminSection) adminSection.style.display = "none";
   if (statusEl) statusEl.textContent = "";
   if (contentTitleDescEl) {
     contentTitleDescEl.style.display = "";
@@ -866,10 +806,6 @@ function hideAnnouncementsPage() {
     announcementsSection.style.display = "none";
     announcementsSection.innerHTML = "";
   }
-  if (adminSection) {
-    adminSection.style.display = "none";
-    adminSection.innerHTML = "";
-  }
   if (contentTitleDescEl) {
     contentTitleDescEl.style.display = "";
     if (DEFAULT_CONTENT_DESC_HTML) contentTitleDescEl.innerHTML = DEFAULT_CONTENT_DESC_HTML;
@@ -877,25 +813,9 @@ function hideAnnouncementsPage() {
   setDocsUiVisible(true);
 }
 
-function showAdminPage() {
-  setDocsUiVisible(false);
-  if (announcementsSection) announcementsSection.style.display = "none";
-  if (adminSection) adminSection.style.display = "block";
-  if (statusEl) statusEl.textContent = "";
-  if (contentTitleDescEl) {
-    contentTitleDescEl.style.display = "";
-    contentTitleDescEl.innerHTML = "Urejanje obvestil in administracija portala.";
-  }
-  renderAdminPage();
-}
-
 function renderLoginNews() {
   if (!loginNewsMount) return;
-  const a =
-    (announcementsCache || []).find((x) => x && x.id === LOGIN_ANNOUNCEMENT_ID) ||
-    (FALLBACK_ANNOUNCEMENTS || []).find((x) => x && x.id === LOGIN_ANNOUNCEMENT_ID) ||
-    (FALLBACK_ANNOUNCEMENTS || [])[0] ||
-    null;
+  const a = ANNOUNCEMENTS[0];
   if (!a) return;
   const bullets = (a.bullets || [])
     .slice(0, 6)
@@ -923,7 +843,7 @@ function renderLoginNews() {
 
 function renderAnnouncements() {
   if (!announcementsSection) return;
-  const items = [...(announcementsCache || [])].sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
+  const items = [...ANNOUNCEMENTS].sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
   announcementsSection.innerHTML = `
     <div class="announcements-list">
       ${items
@@ -966,202 +886,6 @@ function renderAnnouncements() {
         .join("")}
     </div>
   `;
-}
-
-function parseBulletsFromEditor(text) {
-  const raw = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const bullets = [];
-  for (const line of raw) {
-    const idx = line.indexOf(":");
-    if (idx === -1) {
-      bullets.push({ title: line, text: "" });
-      continue;
-    }
-    const t = line.slice(0, idx).trim();
-    const tx = line.slice(idx + 1).trim();
-    bullets.push({ title: t, text: tx });
-  }
-  return bullets;
-}
-
-function bulletsToEditorText(bullets) {
-  const arr = Array.isArray(bullets) ? bullets : [];
-  return arr
-    .map((b) => {
-      const t = (b && b.title) ? String(b.title).trim() : "";
-      const tx = (b && b.text) ? String(b.text).trim() : "";
-      return tx ? `${t}: ${tx}` : t;
-    })
-    .filter(Boolean)
-    .join("\n");
-}
-
-async function upsertAnnouncementAdmin(payload) {
-  const email = await getCurrentUserEmail();
-  if (!isAdminEmail(email)) throw new Error("Nimate pravic za urejanje obvestil.");
-  const { data, error } = await supabase.from("announcements").upsert(payload).select("*");
-  if (error) throw error;
-  return data;
-}
-
-async function deleteAnnouncementAdmin(id) {
-  const email = await getCurrentUserEmail();
-  if (!isAdminEmail(email)) throw new Error("Nimate pravic za brisanje obvestil.");
-  const { error } = await supabase.from("announcements").delete().eq("id", id);
-  if (error) throw error;
-}
-
-function renderAdminPage() {
-  if (!adminSection) return;
-  adminSection.innerHTML = "";
-
-  (async () => {
-    const email = await getCurrentUserEmail();
-    const isAdmin = isAdminEmail(email);
-    if (!isAdmin) {
-      adminSection.innerHTML = `<div class="card"><strong>Dostop zavrnjen.</strong><div style="margin-top:8px; color:var(--text-secondary); font-size:13px;">Ta stran je vidna samo administratorju.</div></div>`;
-      return;
-    }
-
-    const items = [...(announcementsCache || [])].sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
-
-    const wrap = document.createElement("div");
-    wrap.className = "admin-grid";
-
-    const actionsRow = document.createElement("div");
-    actionsRow.className = "admin-header";
-    actionsRow.innerHTML = `
-      <div style="font-size:12px; color:var(--text-secondary); padding-top:10px;">${escapeHtml(email || "")}</div>
-      <div class="admin-actions">
-        <button type="button" class="admin-btn" id="adminReloadAnnouncementsBtn">Osveži</button>
-        <button type="button" class="admin-btn primary" id="adminNewAnnouncementBtn">+ Novo obvestilo</button>
-      </div>
-    `;
-    adminSection.appendChild(actionsRow);
-    adminSection.appendChild(wrap);
-
-    const renderEditorCard = (initial) => {
-      const a = initial || { id: "", title: "", published_at: new Date().toISOString().slice(0, 10), lead: "", bullets: [], note: "" };
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = `
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-          <div style="font-weight:800; color:var(--text-primary);">Urejanje obvestila</div>
-          <div style="font-size:12px; color:var(--text-secondary);">${escapeHtml(email || "")}</div>
-        </div>
-        <div style="height:12px;"></div>
-        <form class="admin-form" id="adminAnnouncementForm">
-          <div class="full">
-            <label>Naslov</label>
-            <input id="adminA_title" type="text" value="${escapeHtml(a.title || "")}" placeholder="Naslov obvestila" required />
-          </div>
-          <div>
-            <label>Datum objave</label>
-            <input id="adminA_published" type="date" value="${escapeHtml(String(a.published_at || '').slice(0,10))}" />
-          </div>
-          <div></div>
-          <div class="full">
-            <label>Besedilo (lead)</label>
-            <textarea id="adminA_lead" placeholder="Kratek opis...">${escapeHtml(a.lead || "")}</textarea>
-          </div>
-          <div class="full">
-            <label>Točke (bullets)</label>
-            <textarea id="adminA_bullets" placeholder="Naslov: besedilo (vsaka vrstica posebej)">${escapeHtml(bulletsToEditorText(a.bullets))}</textarea>
-            <div class="hint">Format: <code>Naslov: besedilo</code> (vsaka vrstica je ena točka).</div>
-          </div>
-          <div class="full">
-            <label>Zaključek (note)</label>
-            <textarea id="adminA_note" placeholder="Zaključni stavek...">${escapeHtml(a.note || "")}</textarea>
-          </div>
-          <div class="admin-row-actions full">
-            ${a.id ? `<button type="button" class="admin-btn admin-danger" id="adminDeleteAnnouncementBtn">Izbriši</button>` : ""}
-            <button type="button" class="admin-btn" id="adminCancelAnnouncementBtn">Prekliči</button>
-            <button type="submit" class="admin-btn primary" id="adminSaveAnnouncementBtn">Shrani</button>
-          </div>
-        </form>
-      `;
-
-      const form = card.querySelector("#adminAnnouncementForm");
-      const cancelBtn = card.querySelector("#adminCancelAnnouncementBtn");
-      const delBtn = card.querySelector("#adminDeleteAnnouncementBtn");
-      const reloadBtn = document.getElementById("adminReloadAnnouncementsBtn");
-
-      if (reloadBtn) reloadBtn.onclick = async () => { await refreshAnnouncements(); };
-      if (cancelBtn) cancelBtn.onclick = () => { card.remove(); };
-      if (delBtn) delBtn.onclick = async () => {
-        if (!a.id) return;
-        const ok = confirm("Želite izbrisati to obvestilo?");
-        if (!ok) return;
-        try {
-          await deleteAnnouncementAdmin(a.id);
-          await refreshAnnouncements();
-          card.remove();
-        } catch (e) {
-          alert("Brisanje ni uspelo: " + (e.message || e));
-        }
-      };
-
-      if (form) {
-        form.onsubmit = async (ev) => {
-          ev.preventDefault();
-          const title = card.querySelector("#adminA_title").value.trim();
-          const published = card.querySelector("#adminA_published").value || null;
-          const lead = card.querySelector("#adminA_lead").value.trim();
-          const bullets = parseBulletsFromEditor(card.querySelector("#adminA_bullets").value);
-          const note = card.querySelector("#adminA_note").value.trim();
-          if (!title) return;
-          const payload = {
-            ...(a.id ? { id: a.id } : {}),
-            title,
-            published_at: published,
-            lead,
-            bullets,
-            note
-          };
-          try {
-            await upsertAnnouncementAdmin(payload);
-            await refreshAnnouncements();
-            card.remove();
-          } catch (e) {
-            alert("Shranjevanje ni uspelo: " + (e.message || e));
-          }
-        };
-      }
-
-      return card;
-    };
-
-    // List cards (read-only preview)
-    for (const a of items) {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.style.padding = "18px";
-      const date = a.published_at ? formatDate(a.published_at) : "—";
-      card.innerHTML = `
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
-          <div style="font-weight:800; color:var(--text-primary);">${escapeHtml(a.title || "")}</div>
-          <div style="font-size:12px; color:var(--text-secondary); white-space:nowrap;">${escapeHtml(date)}</div>
-        </div>
-        <div style="margin-top:10px; color:var(--text-secondary); font-size:13px; line-height:1.6;">${escapeHtml(a.lead || "")}</div>
-        <div style="margin-top:12px; display:flex; justify-content:flex-end; gap:10px;">
-          <button type="button" class="admin-btn" data-edit-id="${escapeHtml(a.id || "")}">Uredi</button>
-        </div>
-      `;
-      const editBtn = card.querySelector("button[data-edit-id]");
-      if (editBtn) editBtn.onclick = () => {
-        wrap.prepend(renderEditorCard(a));
-      };
-      wrap.appendChild(card);
-    }
-
-    const newBtn = document.getElementById("adminNewAnnouncementBtn");
-    if (newBtn) newBtn.onclick = () => {
-      wrap.prepend(renderEditorCard(null));
-    };
-
-    const reloadBtn2 = document.getElementById("adminReloadAnnouncementsBtn");
-    if (reloadBtn2) reloadBtn2.onclick = async () => { await refreshAnnouncements(); };
-  })();
 }
 
 async function showApp(email) {
@@ -1208,13 +932,11 @@ async function showApp(email) {
 
   // Pri že prikazanem portalu ne resetiraj poti in ne kličem loadContent (prepreči skok na Domov ob preklapljanju zaviho)
   if (alreadyVisible) return;
-  if (adminLink) adminLink.style.display = isAdminEmail(email) ? "inline" : "none";
   const path = getPathFromUrl();
   currentPath = path;
   updateSidebarNavActive(path);
   updateContentSectionTitle(path);
-  if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) showAdminPage();
-  else if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) showAnnouncementsPage();
+  if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) showAnnouncementsPage();
   else {
     hideAnnouncementsPage();
     loadContent(path);
@@ -1247,14 +969,6 @@ window.navigateTo = function(path) {
     catalogResultsSection.innerHTML = "";
   }
   updateBreadcrumbs(path);
-  if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) {
-    if (mainContent) mainContent.innerHTML = "";
-    if (skeletonLoader) skeletonLoader.style.display = "none";
-    if (statusEl) statusEl.textContent = "";
-    window.history.pushState({ path }, "", "#" + pathToHash(path));
-    showAdminPage();
-    return;
-  }
   if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
     if (mainContent) mainContent.innerHTML = "";
     if (skeletonLoader) skeletonLoader.style.display = "none";
@@ -1306,10 +1020,6 @@ window.addEventListener('popstate', () => {
   updateContentSectionTitle(p);
   const hasActiveSearch = !!(isSearchActive && searchInput && searchInput.value.trim());
   if (hasActiveSearch) return;
-  if (normalizePath(p) === normalizePath(ADMIN_ROUTE)) {
-    showAdminPage();
-    return;
-  }
   if (normalizePath(p) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
     showAnnouncementsPage();
     return;
@@ -1561,12 +1271,6 @@ async function processDataAndRender(data, rId) {
 }
 
 function updateBreadcrumbs(path) {
-  if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) {
-    const h = `<span class="breadcrumb-item" onclick="navigateTo('')">Domov</span> <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${escapeJsSingleQuotedString(ADMIN_ROUTE)}')">Admin</span>`;
-    breadcrumbsEl.innerHTML = h;
-    if (backBtn) backBtn.style.display = "inline-flex";
-    return;
-  }
   if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
     const h = `<span class="breadcrumb-item" onclick="navigateTo('')">Domov</span> <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${escapeJsSingleQuotedString(ANNOUNCEMENTS_ROUTE)}')">Obvestila</span>`;
     breadcrumbsEl.innerHTML = h;
@@ -2743,7 +2447,6 @@ function setupFormHandler() {
 
 // Pokliči takoj, ker je script type="module" naložen na koncu body
 setupFormHandler();
-refreshAnnouncements();
 renderLoginNews();
 
 if (btnGrid) btnGrid.addEventListener('click', () => setViewMode('grid')); 
