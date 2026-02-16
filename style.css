@@ -1,4 +1,5 @@
 :root { 
+  --font-ui: "Segoe UI", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   /* --- ALUK BRAND BARVE --- */
   --aluk-red: #E2001A;
   --aluk-red-hover: #B80015;
@@ -54,7 +55,7 @@
 }
 
 body { 
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-ui);
   margin: 0; 
   padding: 0; 
   color: var(--text-primary); 
@@ -64,6 +65,13 @@ body {
     radial-gradient(900px 500px at 95% 5%, rgba(15, 23, 42, 0.08), transparent 55%),
     var(--bg-secondary);
   min-height: 100vh; 
+}
+
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
 }
 
 .fixed-header { 
@@ -101,6 +109,11 @@ body {
   flex-wrap: wrap;
   gap: 10px;
   box-sizing: border-box;
+}
+
+/* Na login pogledu poravnaj header vsebino z login karticami */
+body.login-view .header-content {
+  max-width: 1280px;
 }
 
 @media (max-width: 768px) {
@@ -1566,12 +1579,14 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 #authMsg { margin-top: 15px; text-align: center; font-size: 14px; font-weight: 500; }
 .error-msg { color: var(--error); }
 .success-msg { color: var(--success); }
-.info-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 24px; color: #166534; font-size: 14px; }
+.info-box { background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; padding: 16px; margin-bottom: 24px; color: #374151; font-size: 14px; }
+.info-box strong { color: #1f2937; font-weight: 700; }
 .contact-section { margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center; }
 .contact-text { font-size: 14px; color: var(--gray); margin-bottom: 12px; }
 
 .legal-consent {
-  margin-top: 18px;
+  margin-top: auto;
+  padding-top: 18px;
   font-size: 12px;
   line-height: 1.6;
   color: var(--text-secondary);
@@ -1587,7 +1602,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 }
 
 .footer.footer-login {
-  max-width: 900px;
+  max-width: 1200px;
   margin-left: auto;
   margin-right: auto;
   width: calc(100% - 80px);
@@ -1652,29 +1667,110 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   .footer.footer-login { width: calc(100% - 30px); border-radius: 12px; }
 }
 
-/* --- LOGIN CARD (centrirana kartica) --- */
-.login-card-center {
-  max-width: 500px;
+/* --- LOGIN LAYOUT --- */
+.login-shell {
+  max-width: 1200px;
   width: calc(100% - 80px);
-  margin: 120px auto 40px auto;
-  padding: 40px;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-  border: 1px solid var(--border);
+  margin: 120px auto 24px auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 440px;
+  align-items: stretch;
+  gap: 24px;
 }
 
-/* --- LOGIN NEWS CARD (novica pod login kartico) --- */
-.login-news-card {
-  max-width: 720px;
-  width: calc(100% - 80px);
-  margin: 0 auto 80px auto;
+.login-card-center {
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  padding: 36px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.10);
+  min-height: 700px;
+}
+
+.login-landing-card {
+  margin: 0;
+  width: 100%;
   padding: 0;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-  border: 1px solid var(--border);
+  border-radius: 20px;
   overflow: hidden;
+  min-height: 700px;
+  background:
+    radial-gradient(900px 340px at -10% -20%, rgba(226, 0, 26, 0.18), transparent 60%),
+    radial-gradient(900px 340px at 110% 5%, rgba(50, 51, 56, 0.12), transparent 58%),
+    linear-gradient(150deg, #ffffff 0%, #f8fafc 60%, #eef2f7 100%);
+}
+
+.login-landing-hero {
+  padding: 34px 34px 22px;
+}
+
+.login-landing-title {
+  margin: 0;
+  color: var(--heading-color);
+  font-size: 32px;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+}
+
+.login-landing-lead {
+  margin: 14px 0 0 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.65;
+  max-width: 62ch;
+}
+
+.login-landing-body {
+  padding: 0 34px 30px;
+}
+
+.login-landing-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.login-landing-grid li {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.login-landing-grid strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.login-landing-grid span {
+  display: block;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.login-card-center .login-inner {
+  max-width: 380px;
+  width: 100%;
+  margin: 0 auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- ANNOUNCEMENTS PAGE (Obvestila tab) --- */
+.announcements-section {
+  margin-top: 18px;
 }
 .login-news-card .news-hero {
   padding: 26px 34px 18px;
@@ -1693,7 +1789,7 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   text-transform: uppercase;
   color: rgba(15, 23, 42, 0.65);
   margin-bottom: 10px;
-  min-height: 14px; /* keep spacing even when kicker is empty */
+  min-height: 14px;
 }
 .login-news-card .news-title-row {
   display: flex;
@@ -1769,11 +1865,6 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   font-size: 13px;
   line-height: 1.6;
   color: var(--text-secondary, #475569);
-}
-
-/* --- ANNOUNCEMENTS PAGE (Obvestila tab) --- */
-.announcements-section {
-  margin-top: 18px;
 }
 .login-news-card.news-card {
   max-width: none;
@@ -2000,51 +2091,62 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 }
 
 @media (max-width: 768px) {
+  .login-shell {
+    width: calc(100% - 40px);
+    margin-top: 98px;
+    margin-bottom: 16px;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
   .login-card-center {
-    margin-top: 100px;
-    width: calc(100% - 40px);
     padding: 30px;
+    border-radius: 16px;
+    order: 1;
+    min-height: 680px;
   }
-  .login-news-card {
-    width: calc(100% - 40px);
-    margin-bottom: 60px;
+  .login-landing-card {
+    order: 2;
+    border-radius: 16px;
+    min-height: 680px;
   }
-  .login-news-card .news-hero,
-  .login-news-card .news-body {
+  .login-landing-hero,
+  .login-landing-body {
     padding-left: 26px;
     padding-right: 26px;
   }
-  .login-news-card .news-list {
+  .login-landing-title {
+    font-size: 26px;
+  }
+  .login-landing-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 480px) {
+  .login-shell {
+    width: calc(100% - 30px);
+    margin-top: 84px;
+    margin-bottom: 14px;
+    gap: 14px;
+  }
   .login-card-center {
-    margin-top: 85px;
-    width: calc(100% - 30px);
-    padding: 25px;
+    padding: 24px;
     border-radius: 12px;
+    min-height: 560px;
   }
-  .login-news-card {
-    width: calc(100% - 30px);
+  .login-landing-card {
     border-radius: 12px;
-    margin-bottom: 50px;
+    min-height: 560px;
   }
-  .login-news-card .news-hero,
-  .login-news-card .news-body {
-    padding-left: 18px;
-    padding-right: 18px;
+  .login-landing-hero {
+    padding: 20px 18px 14px;
   }
-  .login-news-card .news-title {
-    font-size: 18px;
+  .login-landing-body {
+    padding: 0 18px 20px;
   }
-}
-
-/* notranji layout login kartice, da vsebina ni preširoka */
-.login-card-center .login-inner {
-  max-width: 420px;
-  margin: 0 auto;
+  .login-landing-title {
+    font-size: 22px;
+  }
 }
 
 /* Zavihki prijave (Obstoječi / Nov uporabnik) */
@@ -2052,22 +2154,22 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   display: flex;
   gap: 0;
   margin: 20px 0 24px 0;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
-  background: var(--bg-secondary, #f1f5f9);
+  background: #eef2f7;
   padding: 4px;
 }
 .auth-tab {
   flex: 1;
   padding: 12px 16px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   background: transparent;
   color: var(--text-secondary, #64748b);
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 .auth-tab:hover {
   background: rgba(0,0,0,0.05);

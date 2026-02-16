@@ -151,12 +151,13 @@ const FALLBACK_ANNOUNCEMENTS = [
       { title: "Tehnična dokumentacija in katalogi", text: "Urejeno po sistemih in mapah, da hitro najdete pravo vsebino." },
       { title: "Hitro iskanje po mapah in datotekah", text: "Poiščete katalog, dokument ali datoteko po imenu, brez ročnega brskanja." },
       { title: "Iskanje po šifri artikla v katalogih", text: "Vpišete šifro in portal vrne zadetke iz vsebine katalogov (strani in naslovi), kar bistveno skrajša čas iskanja." },
+      { title: "Prihajajoča Offline aplikacija", text: "Izbrane mape in datoteke boste lahko shranili na napravo, dostopali brez interneta in ob povezavi samodejno prejeli posodobitve." },
       { title: "Priljubljene", text: "Pogosto uporabljene mape si označite med priljubljene za še hitrejši dostop." },
       { title: "Zadnje posodobitve in oznaka \"NOVO\"", text: "Takoj vidite, kaj je bilo dodano ali kateri katalog je bil posodobljen." },
       { title: "Ostala dokumentacija", text: "Ločen razdelek za obrazce, priporočila za montažo in druga podporna gradiva." },
       { title: "Prilagojeno tudi za mobilne naprave", text: "Portal ostaja pregleden in uporaben tudi na telefonu." }
     ],
-    note: "Če imate predlog za dodatne vsebine ali izboljšave, nam sporočite in bomo portal nadgrajevali naprej."
+    note: ""
   }
 ];
 let announcementsCache = [...FALLBACK_ANNOUNCEMENTS];
@@ -166,6 +167,7 @@ const LOGIN_ANNOUNCEMENT_ID = "portal-launch";
 const authForm = getElement("authForm");
 const loginNewsCard = getElement("loginNewsCard");
 const loginNewsMount = getElement("loginNewsMount");
+const loginShell = getElement("loginShell");
 const loginFooter = getElement("loginFooter");
 const appCard = getElement("appCard");
 const mainContent = getElement("mainContent");
@@ -824,8 +826,11 @@ async function refreshAnnouncements() {
 }
 
 function showLogin() { 
-  if (authForm) authForm.style.display = "block";
-  if (loginNewsCard) loginNewsCard.style.display = "block";
+  document.body.classList.add("login-view");
+  document.body.classList.remove("app-view");
+  if (loginShell) loginShell.style.display = "grid";
+  if (authForm) authForm.style.display = "";
+  if (loginNewsCard) loginNewsCard.style.display = "";
   if (loginFooter) loginFooter.style.display = "block";
   appCard.style.display = "none"; 
   document.getElementById("logout").style.display = "none"; 
@@ -892,35 +897,26 @@ function renderLoginNews() {
     (FALLBACK_ANNOUNCEMENTS || [])[0] ||
     null;
   if (!a) return;
-  const published = a.published_at ? formatDate(a.published_at) : "";
   const bullets = (a.bullets || [])
+    .slice(0, 6)
     .map((b) => {
       const t = escapeHtml(b.title || "");
       const tx = escapeHtml(b.text || "");
       return `
         <li>
-          <span class="news-bullet ui-icon" aria-hidden="true">${iconSvg("info")}</span>
-          <span><strong>${t}:</strong> ${tx}</span>
+          <strong>${t}</strong>
+          <span>${tx}</span>
         </li>
       `;
     })
     .join("");
   loginNewsMount.innerHTML = `
-    <div class="news-hero">
-      <div class="news-kicker"></div>
-      <div class="news-title-row">
-        <h2 class="news-title">${escapeHtml(a.title || "")}</h2>
-        <div class="news-title-right">
-          ${published ? `<span class="news-date">${escapeHtml(published)}</span>` : ""}
-          <span class="new-badge inline-badge" aria-label="Novo">NOVO</span>
-        </div>
-      </div>
-      <p class="news-lead">${escapeHtml(a.lead || "")}</p>
+    <div class="login-landing-hero">
+      <h2 class="login-landing-title">${escapeHtml(a.title || "")}</h2>
+      <p class="login-landing-lead">${escapeHtml(a.lead || "")}</p>
     </div>
-    <div class="news-body">
-      <h3 class="news-subtitle">Kaj dobite v portalu</h3>
-      <ul class="news-list">${bullets}</ul>
-      <p class="news-note">${escapeHtml(a.note || "")}</p>
+    <div class="login-landing-body">
+      <ul class="login-landing-grid">${bullets}</ul>
     </div>
   `;
 }
@@ -1171,6 +1167,9 @@ function renderAdminPage() {
 async function showApp(email) {
   const alreadyVisible = appCard && appCard.style.display === "flex";
   window.scrollTo(0, 0);
+  document.body.classList.remove("login-view");
+  document.body.classList.add("app-view");
+  if (loginShell) loginShell.style.display = "none";
   if (authForm) authForm.style.display = "none";
   if (loginNewsCard) loginNewsCard.style.display = "none";
   if (loginFooter) loginFooter.style.display = "none";
