@@ -1119,6 +1119,11 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
   z-index: 10;
 }
 
+/* Ko meni s tremi pikami ni prikazan (web), vrni značko v zgornji desni kot kartice. */
+.file-container.grid-view .item.no-actions-menu .new-badge {
+  right: 10px !important;
+}
+
 /* Značka v besedilu – samo poravnava s tekstom */
 .new-badge.inline-badge {
   vertical-align: middle !important;
@@ -1647,16 +1652,20 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 }
 
 .search-item-card .item-preview {
-  width: 50px;
-  height: 50px;
+  width: 44px;
+  height: 44px;
   border-radius: 6px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
+}
+.search-item-card .item-preview svg {
+  width: 24px;
+  height: 24px;
 }
 
 .search-item-card .item-info {
@@ -1751,9 +1760,13 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
     gap: 12px;
   }
   .search-item-card .item-preview {
-    width: 45px;
-    height: 45px;
-    font-size: 20px;
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+  .search-item-card .item-preview svg {
+    width: 20px;
+    height: 20px;
   }
 }
 
@@ -1952,6 +1965,77 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 /* --- ANNOUNCEMENTS PAGE (Obvestila tab) --- */
 .announcements-section {
   margin-top: 18px;
+}
+.app-guide-card {
+  margin-top: 14px;
+  padding: 34px 26px 24px;
+}
+.app-guide-head h3 {
+  margin: 0;
+  font-size: 22px;
+  color: var(--text-primary);
+}
+.app-guide-head p {
+  margin: 8px 0 0 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.app-guide-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+.app-guide-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.8);
+}
+.app-guide-item strong {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.app-guide-item span {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.app-guide-steps {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+.app-guide-steps h4 {
+  margin: 0 0 10px 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+.app-guide-steps ol {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+}
+.app-guide-steps li {
+  margin-bottom: 8px;
+  line-height: 1.45;
+}
+.app-guide-note {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+@media (max-width: 768px) {
+  .app-guide-card {
+    padding: 26px 16px 18px;
+  }
+  .app-guide-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .login-news-card .news-hero {
   padding: 26px 34px 18px;

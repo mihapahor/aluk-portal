@@ -15,6 +15,8 @@ const ACCESS_REQUESTS_TABLE = "access_requests";
 
 // --- KONFIGURACIJA ---
 const ANNOUNCEMENTS_ROUTE = "__obvestila__";
+const APP_INFO_ROUTE = "__aplikacija__";
+const SHOW_ANNOUNCEMENTS_TAB = false;
 const ADMIN_ROUTE = "__admin__";
 // Mape, ki so namenjene samo internemu indeksiranju (ne prikazuj v portalu).
 const HIDDEN_INDEX_FOLDER_KEYS = new Set([
@@ -245,6 +247,7 @@ const OFFLINE_CACHED_META_STORE = "cached_files_meta";
 const OFFLINE_META_STORE = "meta";
 const OFFLINE_CATALOG_INDEX_STORE = "catalog_index";
 const OFFLINE_ONBOARDING_KEY = "aluk_offline_onboarding_seen_v1";
+const PWA_INSTALLED_HINT_KEY = "aluk_pwa_installed_hint";
 // Spremeni vrednost, ko želiš globalno (za vse uporabnike) resetirati "posodobitve" od današnjega dne naprej.
 const UPDATES_RESET_VERSION = "2026-02-14";
 const NEW_FILES_CACHE_TTL_MS = 60 * 1000;
@@ -272,9 +275,9 @@ function isPwaRuntimeContext() {
     window.navigator.standalone === true
   );
 }
-const isStandaloneApp = isPwaRuntimeContext();
-const OFFLINE_CACHE_NAME = isStandaloneApp ? OFFLINE_CACHE_NAME_APP : OFFLINE_CACHE_NAME_BROWSER;
-const showPwaItemActionMenu = isStandaloneApp;
+let isStandaloneApp = isPwaRuntimeContext();
+let OFFLINE_CACHE_NAME = isStandaloneApp ? OFFLINE_CACHE_NAME_APP : OFFLINE_CACHE_NAME_BROWSER;
+let showPwaItemActionMenu = isStandaloneApp;
 const itemSyncState = new Map();
 const itemSyncProgress = new Map();
 let syncStatusRenderTimer = null;
@@ -282,8 +285,99 @@ const CATALOG_INDEX_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
 let isMetadataSyncRunning = false;
 let lastSyncAtIso = null;
 
+function getStoredInstalledAppHint() {
+  try {
+    return localStorage.getItem(PWA_INSTALLED_HINT_KEY) === "1";
+  } catch (e) {
+    return false;
+  }
+}
+
+function setStoredInstalledAppHint(value) {
+  try {
+    localStorage.setItem(PWA_INSTALLED_HINT_KEY, value ? "1" : "0");
+  } catch (e) {}
+}
+
+async function detectInstalledAppHint() {
+  if (isStandaloneApp) return true;
+  if (getStoredInstalledAppHint()) return true;
+  try {
+    if (navigator.getInstalledRelatedApps) {
+      const apps = await navigator.getInstalledRelatedApps();
+      if (Array.isArray(apps) && apps.length > 0) {
+        setStoredInstalledAppHint(true);
+        return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
+function refreshRuntimeMode({ rerenderItems = false } = {}) {
+  const nextStandalone = isPwaRuntimeContext();
+  const changed = nextStandalone !== isStandaloneApp;
+  isStandaloneApp = nextStandalone;
+  OFFLINE_CACHE_NAME = isStandaloneApp ? OFFLINE_CACHE_NAME_APP : OFFLINE_CACHE_NAME_BROWSER;
+  showPwaItemActionMenu = isStandaloneApp;
+
+  if (installAppBtn) {
+    installAppBtn.style.display = isStandaloneApp ? "none" : "inline-flex";
+    installAppBtn.textContent = getStoredInstalledAppHint() ? "Odpri aplikacijo" : "Namesti aplikacijo";
+  }
+
+  updateConnectionStateChip();
+  updateOfflineEmptyHintVisibility();
+
+  if ((changed || rerenderItems) && !isSearchActive && currentItems.length > 0) {
+    renderItems(currentItems, currentRenderId);
+  }
+}
+
+function setupRuntimeModeObservers() {
+  const mediaQueries = [
+    "(display-mode: standalone)",
+    "(display-mode: fullscreen)",
+    "(display-mode: minimal-ui)",
+    "(display-mode: window-controls-overlay)"
+  ];
+  mediaQueries.forEach((q) => {
+    const mql = window.matchMedia ? window.matchMedia(q) : null;
+    if (!mql) return;
+    const onChange = () => refreshRuntimeMode({ rerenderItems: true });
+    if (typeof mql.addEventListener === "function") mql.addEventListener("change", onChange);
+    else if (typeof mql.addListener === "function") mql.addListener(onChange);
+  });
+  window.addEventListener("pageshow", () => refreshRuntimeMode({ rerenderItems: true }));
+  window.addEventListener("focus", () => refreshRuntimeMode({ rerenderItems: true }));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshRuntimeMode({ rerenderItems: true });
+  });
+}
+
 // --- NAV SECTIONS ---
 const OTHER_DOCS_ROOT = "Ostala dokumentacija";
+
+function isAnnouncementsPath(path) {
+  return normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE);
+}
+
+function getVisibleAppPath(path) {
+  if (!SHOW_ANNOUNCEMENTS_TAB && isAnnouncementsPath(path)) return "";
+  return normalizePath(path);
+}
+
+function syncAnnouncementsTabVisibility() {
+  const announcementsLink = document.querySelector(`.sidebar-link[data-path="${ANNOUNCEMENTS_ROUTE}"]`);
+  if (!announcementsLink) return;
+  if (SHOW_ANNOUNCEMENTS_TAB) {
+    announcementsLink.style.display = "";
+    announcementsLink.removeAttribute("aria-hidden");
+    return;
+  }
+  announcementsLink.style.display = "none";
+  announcementsLink.setAttribute("aria-hidden", "true");
+}
 
 function getRootSegment(p) {
   const n = normalizePath(p || "");
@@ -304,6 +398,11 @@ function updateSidebarNavActive(path) {
 function updateContentSectionTitle(path) {
   const contentTitleEl = getElement("contentTitle");
   if (!contentTitleEl) return;
+
+  if (normalizePath(path) === normalizePath(APP_INFO_ROUTE)) {
+    contentTitleEl.innerHTML = `<span class="ui-icon" aria-hidden="true">${iconSvg("download")}</span>Aplikacija`;
+    return;
+  }
 
   if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) {
     contentTitleEl.innerHTML = `<span class="ui-icon" aria-hidden="true">${iconSvg("wrench")}</span>Admin`;
@@ -1615,6 +1714,51 @@ async function getCurrentUserEmail() {
   }
 }
 
+function normalizeAnnouncementItem(rawItem) {
+  const item = rawItem && typeof rawItem === "object" ? { ...rawItem } : {};
+  const bullets = Array.isArray(item.bullets) ? item.bullets.map((b) => ({ ...(b || {}) })) : [];
+  const desktopAppFeatureText =
+    "Portal ponuja možnost prenosa AluK Portal aplikacije, ki omogoča uporabo portala direktno iz namizja, shranjevanje datotek brez povezave ter sinhronizacijo novih datotek.";
+
+  const isFutureOfflineText = (text) =>
+    /(offline|aplikacij)/i.test(String(text || "")) && /(kmalu|prihaj|bo na voljo|v pripravi)/i.test(String(text || ""));
+
+  item.bullets = bullets.map((b) => {
+    const title = String(b.title || "");
+    const text = String(b.text || "");
+    if (isFutureOfflineText(`${title} ${text}`)) {
+      return {
+        ...b,
+        text: desktopAppFeatureText
+      };
+    }
+    return b;
+  });
+
+  const hasDesktopAppBullet = item.bullets.some((b) => {
+    const merged = `${String(b?.title || "")} ${String(b?.text || "")}`.toLowerCase();
+    return /(namizn|desktop|aplikacij|offline)/i.test(merged);
+  });
+  if (!hasDesktopAppBullet) {
+    item.bullets.push({
+      title: "Namizna aplikacija",
+      text: desktopAppFeatureText
+    });
+  }
+
+  const note = String(item.note || "");
+  if (isFutureOfflineText(note)) {
+    item.note = desktopAppFeatureText;
+  }
+
+  const lead = String(item.lead || "");
+  if (isFutureOfflineText(lead)) {
+    item.lead = desktopAppFeatureText;
+  }
+
+  return item;
+}
+
 async function refreshAnnouncements() {
   // Try to load from Supabase (table: announcements). If missing/blocked, fallback to hard-coded.
   try {
@@ -1625,9 +1769,9 @@ async function refreshAnnouncements() {
     if (error) throw error;
     const rows = Array.isArray(data) ? data : [];
     if (!rows.length) {
-      announcementsCache = [...FALLBACK_ANNOUNCEMENTS];
+      announcementsCache = [...FALLBACK_ANNOUNCEMENTS].map((x) => normalizeAnnouncementItem(x));
     } else {
-      announcementsCache = rows.map((r) => ({
+      announcementsCache = rows.map((r) => normalizeAnnouncementItem({
         id: r.id,
         title: r.title || "",
         published_at: r.published_at || null,
@@ -1637,7 +1781,7 @@ async function refreshAnnouncements() {
       }));
     }
   } catch (e) {
-    announcementsCache = [...FALLBACK_ANNOUNCEMENTS];
+    announcementsCache = [...FALLBACK_ANNOUNCEMENTS].map((x) => normalizeAnnouncementItem(x));
   }
 
   // Keep UI in sync.
@@ -1682,6 +1826,47 @@ function showAnnouncementsPage() {
   renderAnnouncements();
 }
 
+function renderAppInfoPage() {
+  if (!announcementsSection) return;
+  announcementsSection.innerHTML = `
+    <section class="card app-guide-card">
+      <div class="app-guide-head">
+        <h3>Zakaj namestiti aplikacijo</h3>
+        <p>Nameščena aplikacija omogoča hitrejši dostop in dodatne funkcije za delo na terenu.</p>
+      </div>
+      <div class="app-guide-grid">
+        <article class="app-guide-item"><strong>Offline dostop</strong><span>Mape in datoteke označite kot <em>Na voljo brez povezave</em>.</span></article>
+        <article class="app-guide-item"><strong>Hitrejše odpiranje</strong><span>Aplikacija je vedno pri roki in se odpre brez iskanja zavihka v brskalniku.</span></article>
+        <article class="app-guide-item"><strong>Dodatni meni ⋮</strong><span>V app so na voljo offline akcije: shrani lokalno, sprosti prostor, prenos.</span></article>
+        <article class="app-guide-item"><strong>Bolj stabilna uporaba</strong><span>Manj težav z zapiranjem/zamenjavo zavihkov med delom.</span></article>
+      </div>
+      <div class="app-guide-steps">
+        <h4>Kako namestite aplikacijo</h4>
+        <ol>
+          <li>Odprite portal v Chrome ali Edge.</li>
+          <li>Kliknite gumb <strong>Namesti aplikacijo</strong> zgoraj desno.</li>
+          <li>Potrdite namestitev in odprite aplikacijo iz Start menija.</li>
+        </ol>
+      </div>
+      <div class="app-guide-note">
+        Če je aplikacija že nameščena, bo gumb prikazan kot <strong>Odpri aplikacijo</strong>.
+      </div>
+    </section>
+  `;
+}
+
+function showAppInfoPage() {
+  setDocsUiVisible(false);
+  if (announcementsSection) announcementsSection.style.display = "block";
+  if (adminSection) adminSection.style.display = "none";
+  if (statusEl) statusEl.textContent = "";
+  if (contentTitleDescEl) {
+    contentTitleDescEl.style.display = "";
+    contentTitleDescEl.innerHTML = "Vse o namestitvi aplikacije in uporabi offline funkcij.";
+  }
+  renderAppInfoPage();
+}
+
 function hideAnnouncementsPage() {
   if (announcementsSection) {
     announcementsSection.style.display = "none";
@@ -1719,7 +1904,7 @@ function renderLoginNews() {
     null;
   if (!a) return;
   const bullets = (a.bullets || [])
-    .slice(0, 6)
+    .slice(0, 8)
     .map((b) => {
       const t = escapeHtml(b.title || "");
       const tx = escapeHtml(b.text || "");
@@ -2032,11 +2217,17 @@ async function showApp(email) {
   // Pri že prikazanem portalu ne resetiraj poti in ne kličem loadContent (prepreči skok na Domov ob preklapljanju zaviho)
   if (alreadyVisible) return;
   if (adminLink) adminLink.style.display = isAdminEmail(email) ? "inline" : "none";
-  const path = getPathFromUrl();
+  syncAnnouncementsTabVisibility();
+  const requestedPath = getPathFromUrl();
+  const path = getVisibleAppPath(requestedPath);
+  if (path !== requestedPath) {
+    window.history.replaceState({ path }, "", "#" + pathToHash(path));
+  }
   currentPath = path;
   updateSidebarNavActive(path);
   updateContentSectionTitle(path);
-  if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) showAdminPage();
+  if (normalizePath(path) === normalizePath(APP_INFO_ROUTE)) showAppInfoPage();
+  else if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) showAdminPage();
   else if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) showAnnouncementsPage();
   else {
     hideAnnouncementsPage();
@@ -2057,9 +2248,10 @@ window.navigateTo = function(path) {
   }
   clearSharedSearchMoreButton();
   currentRenderId++; // invalidiraj pending search renderje
-  currentPath = path; 
-  updateSidebarNavActive(path);
-  updateContentSectionTitle(path);
+  const targetPath = getVisibleAppPath(path);
+  currentPath = targetPath; 
+  updateSidebarNavActive(targetPath);
+  updateContentSectionTitle(targetPath);
   searchInput.value = ""; 
   isSearchActive = false; // Deaktiviraj iskanje ob navigaciji
   sessionStorage.removeItem('aluk_search_query');
@@ -2069,24 +2261,32 @@ window.navigateTo = function(path) {
     catalogResultsSection.style.display = "none";
     catalogResultsSection.innerHTML = "";
   }
-  updateBreadcrumbs(path);
-  if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) {
+  updateBreadcrumbs(targetPath);
+  if (normalizePath(targetPath) === normalizePath(APP_INFO_ROUTE)) {
     if (mainContent) mainContent.innerHTML = "";
     if (skeletonLoader) skeletonLoader.style.display = "none";
     if (statusEl) statusEl.textContent = "";
-    window.history.pushState({ path }, "", "#" + pathToHash(path));
+    window.history.pushState({ path: targetPath }, "", "#" + pathToHash(targetPath));
+    showAppInfoPage();
+    return;
+  }
+  if (normalizePath(targetPath) === normalizePath(ADMIN_ROUTE)) {
+    if (mainContent) mainContent.innerHTML = "";
+    if (skeletonLoader) skeletonLoader.style.display = "none";
+    if (statusEl) statusEl.textContent = "";
+    window.history.pushState({ path: targetPath }, "", "#" + pathToHash(targetPath));
     showAdminPage();
     return;
   }
-  if (normalizePath(path) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
+  if (normalizePath(targetPath) === normalizePath(ANNOUNCEMENTS_ROUTE)) {
     if (mainContent) mainContent.innerHTML = "";
     if (skeletonLoader) skeletonLoader.style.display = "none";
     if (statusEl) statusEl.textContent = "";
-    window.history.pushState({ path }, "", "#" + pathToHash(path));
+    window.history.pushState({ path: targetPath }, "", "#" + pathToHash(targetPath));
     showAnnouncementsPage();
     return;
   }
-  const hasCachedTarget = !!folderCache[path];
+  const hasCachedTarget = !!folderCache[targetPath];
   if (!hasCachedTarget) {
     if (mainContent) mainContent.innerHTML = "";
     if (skeletonLoader) skeletonLoader.style.display = "grid";
@@ -2096,9 +2296,9 @@ window.navigateTo = function(path) {
       statusEl.style.fontWeight = "500";
     }
   }
-  window.history.pushState({ path }, "", "#" + pathToHash(path)); 
+  window.history.pushState({ path: targetPath }, "", "#" + pathToHash(targetPath)); 
   hideAnnouncementsPage();
-  loadContent(path); 
+  loadContent(targetPath); 
 }
 /** Kodira pot za lep URL: presledki → +, ostalo po segmentih (ohrani /). */
 function pathToHash(path) {
@@ -2123,12 +2323,20 @@ function getPathFromUrl() {
 window.addEventListener('popstate', () => {
   pdfModal.style.display = 'none';
   pdfFrame.src = "";
-  const p = getPathFromUrl();
+  const requestedPath = getPathFromUrl();
+  const p = getVisibleAppPath(requestedPath);
+  if (p !== requestedPath) {
+    window.history.replaceState({ path: p }, "", "#" + pathToHash(p));
+  }
   currentPath = p;
   updateSidebarNavActive(p);
   updateContentSectionTitle(p);
   const hasActiveSearch = !!(isSearchActive && searchInput && searchInput.value.trim());
   if (hasActiveSearch) return;
+  if (normalizePath(p) === normalizePath(APP_INFO_ROUTE)) {
+    showAppInfoPage();
+    return;
+  }
   if (normalizePath(p) === normalizePath(ADMIN_ROUTE)) {
     showAdminPage();
     return;
@@ -2390,6 +2598,12 @@ async function processDataAndRender(data, rId) {
 }
 
 function updateBreadcrumbs(path) {
+  if (normalizePath(path) === normalizePath(APP_INFO_ROUTE)) {
+    const h = `<span class="breadcrumb-item" onclick="navigateTo('')">Domov</span> <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${escapeJsSingleQuotedString(APP_INFO_ROUTE)}')">Aplikacija</span>`;
+    breadcrumbsEl.innerHTML = h;
+    if (backBtn) backBtn.style.display = "inline-flex";
+    return;
+  }
   if (normalizePath(path) === normalizePath(ADMIN_ROUTE)) {
     const h = `<span class="breadcrumb-item" onclick="navigateTo('')">Domov</span> <span style="color:var(--text-tertiary)">/</span> <span class="breadcrumb-item" onclick="navigateTo('${escapeJsSingleQuotedString(ADMIN_ROUTE)}')">Admin</span>`;
     breadcrumbsEl.innerHTML = h;
@@ -2578,6 +2792,9 @@ async function createItemElement(item, cont) {
           offlineOnlyHint: !isStandaloneApp
         })
       : "";
+    if (!showPwaItemActionMenu) {
+      div.classList.add("no-actions-menu");
+    }
 
     if (viewMode === "list") {
       const sizeCol = isFolder ? "—" : fileSize;
@@ -2811,6 +3028,8 @@ function updateSidebarFavorites() {
 function cleanName(name) {
   const s = (name == null ? "" : String(name))
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/_compressed/gi, "")
     .replace(/\.pdf$/i, "")
     .replace(/[^a-z0-9]/g, "");
@@ -3562,7 +3781,15 @@ function setupRequestMailBtn() {
 async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   try {
-    await navigator.serviceWorker.register("./sw.js");
+    const registration = await navigator.serviceWorker.register("./sw.js");
+    // Check for a newer SW aggressively so installed app updates without manual hard refresh.
+    registration.update().catch(() => {});
+    let hasRefreshedForNewWorker = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (hasRefreshedForNewWorker) return;
+      hasRefreshedForNewWorker = true;
+      window.location.reload();
+    });
   } catch (e) {
     console.warn("Service worker registracija ni uspela:", e);
   }
@@ -3570,34 +3797,52 @@ async function registerServiceWorker() {
 
 function setupInstallPrompt() {
   if (!installAppBtn) return;
+  const ua = String((navigator && navigator.userAgent) || "");
+  const isChromiumLike = /Chrome|Chromium|Edg|OPR/i.test(ua);
 
   installAppBtn.addEventListener("click", async () => {
     if (deferredInstallPrompt) {
       deferredInstallPrompt.prompt();
-      await deferredInstallPrompt.userChoice.catch(() => null);
+      const choice = await deferredInstallPrompt.userChoice.catch(() => null);
+      if (choice && choice.outcome === "accepted") {
+        setStoredInstalledAppHint(true);
+      }
       deferredInstallPrompt = null;
-      installAppBtn.style.display = "none";
+      refreshRuntimeMode({ rerenderItems: true });
       return;
     }
+
+    const hasInstalledHint = await detectInstalledAppHint();
+    if (hasInstalledHint) {
+      showToast("Aplikacija je že nameščena. Odprite jo iz seznama aplikacij (Start).");
+      return;
+    }
+
+    // Chromium usually exposes beforeinstallprompt for installable sites.
+    // If it doesn't, app is often already installed or install is blocked by browser state.
+    if (isChromiumLike) {
+      setStoredInstalledAppHint(true);
+      refreshRuntimeMode();
+      showToast("Aplikacija je verjetno že nameščena. Odprite jo iz seznama aplikacij (Start).");
+      return;
+    }
+
     showToast("Namestitev: odpri meni brskalnika in izberi 'Install app' ali 'Add to Home Screen'.");
   });
 
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     deferredInstallPrompt = event;
-    installAppBtn.style.display = "inline-flex";
+    refreshRuntimeMode();
   });
 
   window.addEventListener("appinstalled", () => {
+    setStoredInstalledAppHint(true);
     deferredInstallPrompt = null;
-    installAppBtn.style.display = "none";
+    refreshRuntimeMode({ rerenderItems: true });
   });
 
-  if (!isStandaloneApp) {
-    installAppBtn.style.display = "inline-flex";
-  } else {
-    installAppBtn.style.display = "none";
-  }
+  detectInstalledAppHint().finally(() => refreshRuntimeMode());
 }
 
 function setupOfflineOnboarding() {
@@ -3760,12 +4005,14 @@ function setupFormHandler() {
 
 // Pokliči takoj, ker je script type="module" naložen na koncu body
 setupFormHandler();
+setupRuntimeModeObservers();
 setupInstallPrompt();
 setupOfflineOnboarding();
 setupConnectivityHandlers();
 setupPeriodicOfflineSync();
 initConnectionState();
 registerServiceWorker();
+syncAnnouncementsTabVisibility();
 refreshAnnouncements();
 renderLoginNews();
 

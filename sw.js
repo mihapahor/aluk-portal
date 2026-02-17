@@ -1,14 +1,12 @@
-const SHELL_CACHE = "aluk-shell-v2";
-const RUNTIME_CACHE = "aluk-runtime-v2";
+const SHELL_CACHE = "aluk-shell-v3";
+const RUNTIME_CACHE = "aluk-runtime-v3";
 const OFFLINE_URL = "./index.html";
 
 const SHELL_ASSETS = [
   "./",
   "./index.html",
-  "./style.css",
-  "./style.css?v=1616",
-  "./script.js",
-  "./script.js?v=1648",
+  "./style.css?v=1618",
+  "./script.js?v=1651",
   "./manifest.json",
   "./favicon.png",
   "./AlukAlumitBEL.png"
