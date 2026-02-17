@@ -1,12 +1,12 @@
-const SHELL_CACHE = "aluk-shell-v3";
-const RUNTIME_CACHE = "aluk-runtime-v3";
+const SHELL_CACHE = "aluk-shell-v4";
+const RUNTIME_CACHE = "aluk-runtime-v4";
 const OFFLINE_URL = "./index.html";
 
 const SHELL_ASSETS = [
   "./",
   "./index.html",
   "./style.css?v=1618",
-  "./script.js?v=1651",
+  "./script.js?v=1652",
   "./manifest.json",
   "./favicon.png",
   "./AlukAlumitBEL.png"
@@ -41,10 +41,20 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
+  const hasAuthCallbackParams =
+    url.searchParams.has("code") ||
+    url.searchParams.has("access_token") ||
+    url.searchParams.has("refresh_token") ||
+    url.searchParams.has("token_type") ||
+    url.searchParams.has("expires_in");
 
   if (request.method !== "GET") return;
 
   if (request.mode === "navigate") {
+    if (hasAuthCallbackParams) {
+      event.respondWith(fetch(request));
+      return;
+    }
     event.respondWith(
       fetch(request)
         .then((response) => {
@@ -61,6 +71,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.origin !== self.location.origin) return;
+  if (hasAuthCallbackParams) return;
 
   event.respondWith(
     caches.match(request).then((cached) => {

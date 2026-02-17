@@ -475,6 +475,49 @@ function openExternalUrl(url) {
   if (w) w.opener = null;
 }
 
+function cleanupAuthParamsFromUrl() {
+  try {
+    const current = new URL(window.location.href);
+    let changed = false;
+    const paramsToDrop = [
+      "code",
+      "access_token",
+      "refresh_token",
+      "expires_at",
+      "expires_in",
+      "token_type",
+      "type"
+    ];
+
+    paramsToDrop.forEach((key) => {
+      if (current.searchParams.has(key)) {
+        current.searchParams.delete(key);
+        changed = true;
+      }
+    });
+
+    const hash = current.hash || "";
+    if (hash.startsWith("#") && hash.includes("=")) {
+      const hashParams = new URLSearchParams(hash.slice(1));
+      let hashChanged = false;
+      paramsToDrop.forEach((key) => {
+        if (hashParams.has(key)) {
+          hashParams.delete(key);
+          hashChanged = true;
+        }
+      });
+      if (hashChanged) {
+        const nextHash = hashParams.toString();
+        current.hash = nextHash ? `#${nextHash}` : "";
+        changed = true;
+      }
+    }
+
+    if (!changed) return;
+    window.history.replaceState({}, document.title, current.pathname + current.search + current.hash);
+  } catch (e) {}
+}
+
 function folderHasUpdatesByCurrentPathCache(folderPath) {
   const updatesInCurrentPath = getUpdatesCacheForPath(currentPath);
   if (!updatesInCurrentPath || !updatesInCurrentPath.length) return false;
@@ -2785,7 +2828,7 @@ async function createItemElement(item, cont) {
     const dateInfo = !isFolder && item.created_at ? `<span class="item-date">Datum posodobitve: ${formatDate(item.created_at)}</span>` : "";
     const modifiedText = item.created_at ? formatDate(item.created_at) : "—";
     const previewHtml = `<div class="item-preview ${isFolder ? "folder-bg" : "file-bg"}">${icon}</div>`;
-    const infoHtml = `<div class="item-info"><strong>${formatDisplayName(item.name)} ${syncStatusHtml}</strong><small>${fileSize}</small>${dateInfo}</div>`;
+    const infoHtml = `<div class="item-info"><strong>${escapeHtml(formatDisplayName(item.name))} ${syncStatusHtml}</strong><small>${escapeHtml(fileSize)}</small>${dateInfo}</div>`;
     const actionsMenuHtml = showPwaItemActionMenu
       ? buildItemActionMenuHtml({
           disableOfflineActions: !supportsOfflineStorage || !isStandaloneApp,
@@ -3391,7 +3434,7 @@ if (searchInput) {
             header.className = "catalog-card-header";
             header.innerHTML = `
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-              <span>${formatDisplayName(displayFilename)}</span>
+              <span>${escapeHtml(formatDisplayName(displayFilename))}</span>
             `;
             card.appendChild(header);
             const list = document.createElement("div");
@@ -3421,10 +3464,14 @@ if (searchInput) {
                 }
               });
               const titleText = title ? translateCatalogPageTitle(title) : `Stran ${page}`;
-              link.innerHTML = `
-                <span class="page-badge">Str. ${page}</span>
-                <span class="match-title">${titleText}</span>
-              `;
+              const pageBadge = document.createElement("span");
+              pageBadge.className = "page-badge";
+              pageBadge.textContent = `Str. ${Number(page) || 0}`;
+              const matchTitle = document.createElement("span");
+              matchTitle.className = "match-title";
+              matchTitle.textContent = titleText;
+              link.appendChild(pageBadge);
+              link.appendChild(matchTitle);
               list.appendChild(link);
             });
             card.appendChild(list);
@@ -4127,11 +4174,13 @@ window.addEventListener('pageshow', (e) => {
   supabase.auth.onAuthStateChange((event, session) => {
     if (event === "INITIAL_SESSION" && session) {
       replaceStatePreserveHash();
+      cleanupAuthParamsFromUrl();
       if (!isAppVisible()) showApp(session.user.email);
       return;
     }
     if (event === "SIGNED_IN" && session) {
       replaceStatePreserveHash();
+      cleanupAuthParamsFromUrl();
       if (!isAppVisible()) showApp(session.user.email);
       return;
     }
@@ -4175,6 +4224,7 @@ window.addEventListener('pageshow', (e) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       replaceStatePreserveHash();
+      cleanupAuthParamsFromUrl();
       if (!isAppVisible()) showApp(session.user.email);
       return true;
     }
