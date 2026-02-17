@@ -10,8 +10,6 @@ const ADMIN_EMAILS = new Set([
   "miha@aluk.si",
   "miha.pahor97@gmail.com"
 ]);
-// Tabela v Supabase: ustvari z stolpci email, name, company, created_at (RLS dovoli INSERT za anon)
-const ACCESS_REQUESTS_TABLE = "access_requests"; 
 
 // --- KONFIGURACIJA ---
 const ANNOUNCEMENTS_ROUTE = "__obvestila__";
@@ -3785,7 +3783,7 @@ function setupAuthPersistence() {
   });
 }
 
-// --- ZAHTEVEK ZA DOSTOP: shrani ime v localStorage (prikaz v portalu), v Supabase, odpri mailto ---
+// --- ZAHTEVEK ZA DOSTOP: shrani ime v localStorage (prikaz v portalu), odpri mailto ---
 function doRequestAccess() {
   const name = (document.getElementById("reqName") && document.getElementById("reqName").value.trim()) || "";
   const company = (document.getElementById("reqCompany") && document.getElementById("reqCompany").value.trim()) || "";
@@ -3794,16 +3792,6 @@ function doRequestAccess() {
     try {
       localStorage.setItem("aluk_user_info", JSON.stringify({ name, company: company || undefined }));
     } catch (e) {}
-  }
-  try {
-    supabase.from(ACCESS_REQUESTS_TABLE).insert({
-      email: email || null,
-      name: name || null,
-      company: company || null,
-      created_at: new Date().toISOString()
-    }).then(({ error }) => { if (error) console.warn("Supabase access_requests insert:", error.message); });
-  } catch (e) {
-    console.warn("Supabase access_requests ni na voljo:", e);
   }
   const subject = "Prošnja za dostop do AluK Portala";
   const body = `Pozdravljeni,
