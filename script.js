@@ -3259,18 +3259,63 @@ async function ensureGlobalFileListLoaded() {
 function filterLocalSearchResults(allItems, searchTerm, maxResults = 20000) {
   if (!Array.isArray(allItems) || !allItems.length || !searchTerm) return [];
   const lowerSearchTerm = String(searchTerm).toLowerCase();
+  const normalizedSearchTerm = normalizeSortName(searchTerm);
   const out = [];
+  const seenFolderPaths = new Set();
 
   for (const item of allItems) {
     if (out.length >= maxResults) break;
     const isFolder = !item.metadata;
-    const itemName = (item.name || "").toLowerCase();
-    if (!itemName.includes(lowerSearchTerm)) continue;
-    if (!isFolder) {
-      const ext = (item.name || "").split(".").pop().toLowerCase();
-      if (!["pdf", "dwg", "xlsx"].includes(ext)) continue;
+    const rawName = String(item.name || "");
+    const realPath = String(item.fullPath || item.displayPath || "");
+    const virtualPath = virtualizeStoragePath(realPath) || "";
+    const searchableRaw = `${rawName} ${virtualPath} ${realPath}`.toLowerCase();
+    const searchableNormalized = normalizeSortName(`${rawName} ${virtualPath} ${realPath}`);
+    const matchesRaw = searchableRaw.includes(lowerSearchTerm);
+    const matchesNormalized = normalizedSearchTerm && searchableNormalized.includes(normalizedSearchTerm);
+    const matchesItem = matchesRaw || matchesNormalized;
+
+    if (matchesItem) {
+      if (!isFolder) {
+        const ext = rawName.split(".").pop().toLowerCase();
+        if (["pdf", "dwg", "xlsx"].includes(ext)) {
+          out.push(item);
+        }
+      } else {
+        out.push(item);
+      }
+      if (out.length >= maxResults) break;
     }
-    out.push(item);
+
+    // Build folder hits from the path so searching folder names returns folders too.
+    if (!isFolder && virtualPath) {
+      const segments = virtualPath.split("/").filter(Boolean);
+      if (segments.length > 1) {
+        let acc = [];
+        for (let i = 0; i < segments.length - 1; i++) {
+          const seg = segments[i];
+          acc.push(seg);
+          const folderFullPath = acc.join("/");
+          if (!folderFullPath || seenFolderPaths.has(folderFullPath)) continue;
+
+          const folderSearchableRaw = `${seg} ${folderFullPath}`.toLowerCase();
+          const folderSearchableNormalized = normalizeSortName(`${seg} ${folderFullPath}`);
+          const folderMatchesRaw = folderSearchableRaw.includes(lowerSearchTerm);
+          const folderMatchesNormalized = normalizedSearchTerm && folderSearchableNormalized.includes(normalizedSearchTerm);
+          if (!folderMatchesRaw && !folderMatchesNormalized) continue;
+
+          seenFolderPaths.add(folderFullPath);
+          out.push({
+            name: seg,
+            metadata: null,
+            created_at: item.created_at || null,
+            fullPath: folderFullPath,
+            displayPath: folderFullPath
+          });
+          if (out.length >= maxResults) break;
+        }
+      }
+    }
   }
 
   return out;
