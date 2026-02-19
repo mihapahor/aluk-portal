@@ -3260,65 +3260,54 @@ function filterLocalSearchResults(allItems, searchTerm, maxResults = 20000) {
   if (!Array.isArray(allItems) || !allItems.length || !searchTerm) return [];
   const lowerSearchTerm = String(searchTerm).toLowerCase();
   const normalizedSearchTerm = normalizeSortName(searchTerm);
-  const out = [];
+  const folderMatches = [];
+  const fileMatches = [];
   const seenFolderPaths = new Set();
 
   for (const item of allItems) {
-    if (out.length >= maxResults) break;
-    const isFolder = !item.metadata;
+    if ((folderMatches.length + fileMatches.length) >= maxResults) break;
+
     const rawName = String(item.name || "");
+    const itemName = rawName.toLowerCase();
     const realPath = String(item.fullPath || item.displayPath || "");
-    const virtualPath = virtualizeStoragePath(realPath) || "";
-    const searchableRaw = `${rawName} ${virtualPath} ${realPath}`.toLowerCase();
-    const searchableNormalized = normalizeSortName(`${rawName} ${virtualPath} ${realPath}`);
-    const matchesRaw = searchableRaw.includes(lowerSearchTerm);
-    const matchesNormalized = normalizedSearchTerm && searchableNormalized.includes(normalizedSearchTerm);
-    const matchesItem = matchesRaw || matchesNormalized;
+    const virtualPath = virtualizeStoragePath(realPath) || realPath;
 
-    if (matchesItem) {
-      if (!isFolder) {
-        const ext = rawName.split(".").pop().toLowerCase();
-        if (["pdf", "dwg", "xlsx"].includes(ext)) {
-          out.push(item);
-        }
-      } else {
-        out.push(item);
-      }
-      if (out.length >= maxResults) break;
-    }
-
-    // Build folder hits from the path so searching folder names returns folders too.
-    if (!isFolder && virtualPath) {
+    if (virtualPath) {
       const segments = virtualPath.split("/").filter(Boolean);
       if (segments.length > 1) {
         let acc = [];
         for (let i = 0; i < segments.length - 1; i++) {
           const seg = segments[i];
           acc.push(seg);
-          const folderFullPath = acc.join("/");
-          if (!folderFullPath || seenFolderPaths.has(folderFullPath)) continue;
-
-          const folderSearchableRaw = `${seg} ${folderFullPath}`.toLowerCase();
-          const folderSearchableNormalized = normalizeSortName(`${seg} ${folderFullPath}`);
-          const folderMatchesRaw = folderSearchableRaw.includes(lowerSearchTerm);
-          const folderMatchesNormalized = normalizedSearchTerm && folderSearchableNormalized.includes(normalizedSearchTerm);
-          if (!folderMatchesRaw && !folderMatchesNormalized) continue;
-
-          seenFolderPaths.add(folderFullPath);
-          out.push({
+          const folderPath = acc.join("/");
+          if (!folderPath || seenFolderPaths.has(folderPath)) continue;
+          const folderRaw = `${seg} ${folderPath}`.toLowerCase();
+          const folderNormalized = normalizeSortName(`${seg} ${folderPath}`);
+          const folderMatchesSearch = folderRaw.includes(lowerSearchTerm) || folderNormalized.includes(normalizedSearchTerm);
+          if (!folderMatchesSearch) continue;
+          seenFolderPaths.add(folderPath);
+          folderMatches.push({
             name: seg,
             metadata: null,
             created_at: item.created_at || null,
-            fullPath: folderFullPath,
-            displayPath: folderFullPath
+            fullPath: folderPath,
+            displayPath: folderPath
           });
-          if (out.length >= maxResults) break;
+          if ((folderMatches.length + fileMatches.length) >= maxResults) break;
         }
       }
     }
+
+    const fileMatchesSearch = itemName.includes(lowerSearchTerm) || normalizeSortName(rawName).includes(normalizedSearchTerm);
+    if (!fileMatchesSearch) continue;
+    const ext = rawName.split(".").pop().toLowerCase();
+    if (!["pdf", "dwg", "xlsx"].includes(ext)) {
+      continue;
+    }
+    fileMatches.push(item);
   }
 
-  return out;
+  return [...folderMatches, ...fileMatches].slice(0, maxResults);
 }
 
 /**
@@ -3666,7 +3655,7 @@ if (searchInput) {
             <div class="item-preview ${isFolder ? "folder-bg" : "file-bg"}">${displayIcon}</div>
             <div class="item-info">
               <strong style="color:var(--result-doc-text);">${escapeHtml(formatDisplayName(fileName))}</strong>
-              <small>${escapeHtml(folderPath || "Koren")}</small>
+              <small>${escapeHtml(folderPath || "Glavna mapa")}</small>
             </div>
             <div class="item-arrow" style="color:var(--text-secondary); font-size:18px; flex-shrink:0; margin-left:10px;">→</div>
           `;
