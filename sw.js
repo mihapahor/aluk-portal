@@ -1,5 +1,5 @@
-const SHELL_CACHE = "aluk-shell-v4";
-const RUNTIME_CACHE = "aluk-runtime-v4";
+const SHELL_CACHE = "aluk-shell-v5";
+const RUNTIME_CACHE = "aluk-runtime-v5";
 const OFFLINE_URL = "./index.html";
 
 const SHELL_ASSETS = [
@@ -61,6 +61,31 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.origin !== self.location.origin) return;
+
+  // Critical app shell files should prefer network so normal refresh gets latest code.
+  const pathname = url.pathname || "";
+  const isCriticalShellAsset =
+    pathname.endsWith("/index.html") ||
+    pathname.endsWith("/script.js") ||
+    pathname.endsWith("/style.css");
+
+  if (isCriticalShellAsset) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(request);
+          return cached || caches.match(OFFLINE_URL);
+        })
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {
