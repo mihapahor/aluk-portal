@@ -2306,6 +2306,86 @@ function getPathFromUrl() {
   if (!h || h.length <= 1 || h.startsWith("#view=")) return "";
   return hashToPath(h.slice(1));
 }
+
+function isCatalogContentPath(path) {
+  const p = normalizePath(path || "");
+  if (!p) return false;
+  if (p === normalizePath(APP_INFO_ROUTE)) return false;
+  if (p === normalizePath(ADMIN_ROUTE)) return false;
+  if (p === normalizePath(ANNOUNCEMENTS_ROUTE)) return false;
+  return true;
+}
+
+let contentHeadingScrollTimer = null;
+/** Returns the scrollable container for the main content (viewport or first overflow-y: auto/scroll ancestor). */
+function getScrollableContainerForContent(el) {
+  if (!el) return null;
+  let p = el.parentElement;
+  while (p) {
+    const style = getComputedStyle(p);
+    const oy = style.overflowY;
+    if (oy === "auto" || oy === "scroll" || oy === "overlay") return p;
+    p = p.parentElement;
+  }
+  return document.scrollingElement || document.documentElement;
+}
+
+function scrollTitleRowToTop() {
+  const contentTitleRow = document.querySelector("div.content-title-row");
+  const stickyBar = document.querySelector(".sticky-nav-bar");
+  if (!contentTitleRow) return;
+  const scrollRoot = getScrollableContainerForContent(contentTitleRow);
+  if (!scrollRoot) return;
+  const isViewport = scrollRoot === document.scrollingElement || scrollRoot === document.documentElement;
+  let offsetFromTop = 0;
+  const EXTRA_SPACE_ABOVE_TITLE_PX = 10;
+  if (stickyBar) {
+    const stickyTop = parseFloat(getComputedStyle(stickyBar).top) || 90;
+    const stickyHeight = stickyBar.getBoundingClientRect().height || 68;
+    offsetFromTop = stickyTop + stickyHeight + EXTRA_SPACE_ABOVE_TITLE_PX;
+  }
+  if (isViewport) {
+    const titleTop = contentTitleRow.getBoundingClientRect().top + window.scrollY;
+    const targetY = titleTop - offsetFromTop;
+    window.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
+  } else {
+    const rowRect = contentTitleRow.getBoundingClientRect();
+    const rootRect = scrollRoot.getBoundingClientRect();
+    const scrollTop = scrollRoot.scrollTop + (rowRect.top - rootRect.top) - offsetFromTop;
+    scrollRoot.scrollTo({ top: Math.max(0, scrollTop), behavior: "smooth" });
+  }
+}
+
+let scrollToTopTimer = null;
+function scheduleScrollToTop() {
+  if (scrollToTopTimer) clearTimeout(scrollToTopTimer);
+  const run = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTopTimer = null;
+  };
+  requestAnimationFrame(() => {
+    requestAnimationFrame(run);
+  });
+  scrollToTopTimer = setTimeout(run, 150);
+}
+
+function scheduleContentHeadingScroll(path) {
+  if (normalizePath(path || "") === "") {
+    scheduleScrollToTop();
+    return;
+  }
+  if (!isCatalogContentPath(path)) return;
+  if (contentHeadingScrollTimer) clearTimeout(contentHeadingScrollTimer);
+  const run = () => {
+    scrollTitleRowToTop();
+    contentHeadingScrollTimer = null;
+  };
+  requestAnimationFrame(() => {
+    requestAnimationFrame(run);
+  });
+  contentHeadingScrollTimer = setTimeout(run, 150);
+}
+
 window.addEventListener('popstate', () => {
   pdfModal.style.display = 'none';
   pdfFrame.src = "";
@@ -2485,6 +2565,7 @@ async function loadContent(path) {
   if (cachedFolderData) {
     await processDataAndRender(cachedFolderData, thisId);
     skeletonLoader.style.display = "none";
+    if (thisId === currentRenderId) scheduleContentHeadingScroll(path);
   } else {
     const hasVisibleContent = !!(mainContent && mainContent.childElementCount > 0);
     if (!hasVisibleContent) {
@@ -2505,7 +2586,11 @@ async function loadContent(path) {
     error = e;
   }
   skeletonLoader.style.display = "none";
-  if (error) { statusEl.textContent = "Napaka pri branju."; return; }
+  if (error) {
+    statusEl.textContent = "Napaka pri branju.";
+    if (thisId === currentRenderId) scheduleContentHeadingScroll(path);
+    return;
+  }
   if (thisId !== currentRenderId) return;
 
   const cachedSig = cachedFolderData ? buildFolderSignature(cachedFolderData) : null;
@@ -2515,6 +2600,7 @@ async function loadContent(path) {
   if (!cachedFolderData || cachedSig !== freshSig) {
     await processDataAndRender(data, thisId);
   }
+  if (thisId === currentRenderId) scheduleContentHeadingScroll(path);
 }
 
 async function updateBannerAsync(path) {
