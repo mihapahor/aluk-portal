@@ -149,6 +149,14 @@ function showToast(message) {
   }, 2000);
 }
 
+let lastInstallAppToastAt = 0;
+function showInstallAppRequiredToast() {
+  const now = Date.now();
+  if (now - lastInstallAppToastAt < 1200) return;
+  lastInstallAppToastAt = now;
+  showToast("Za uporabo te funkcionalnosti morate prenesti aplikacijo.");
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'aluk-portal-auth' }
 });
@@ -235,8 +243,7 @@ let imageUrlCache = {}; // Cache za signed URLs slik
 let isSearchActive = false; // Flag za preverjanje, če je aktivno iskanje 
 let preloadFilesPromise = null;
 const UPDATES_CACHE_KEY = "aluk_updates_cache";
-const UPDATES_SINCE_KEY = "aluk_updates_since";
-const UPDATES_RESET_VERSION_KEY = "aluk_updates_reset_version";
+const UPDATES_WINDOW_DAYS = 60;
 const OFFLINE_CACHE_NAME_APP = "aluk-offline-files-app-v1";
 const OFFLINE_CACHE_NAME_BROWSER = "aluk-offline-files-browser-v1";
 const OFFLINE_PINS_KEY = "aluk_offline_pins";
@@ -248,8 +255,6 @@ const OFFLINE_META_STORE = "meta";
 const OFFLINE_CATALOG_INDEX_STORE = "catalog_index";
 const OFFLINE_ONBOARDING_KEY = "aluk_offline_onboarding_seen_v1";
 const PWA_INSTALLED_HINT_KEY = "aluk_pwa_installed_hint";
-// Spremeni vrednost, ko želiš globalno (za vse uporabnike) resetirati "posodobitve" od današnjega dne naprej.
-const UPDATES_RESET_VERSION = "2026-02-14";
 const NEW_FILES_CACHE_TTL_MS = 60 * 1000;
 const PATH_EXISTS_CACHE_TTL_MS = 30 * 1000;
 let updatesRequestId = 0;
@@ -277,7 +282,7 @@ function isPwaRuntimeContext() {
 }
 let isStandaloneApp = isPwaRuntimeContext();
 let OFFLINE_CACHE_NAME = isStandaloneApp ? OFFLINE_CACHE_NAME_APP : OFFLINE_CACHE_NAME_BROWSER;
-let showPwaItemActionMenu = isStandaloneApp;
+let showPwaItemActionMenu = true;
 const itemSyncState = new Map();
 const itemSyncProgress = new Map();
 let syncStatusRenderTimer = null;
@@ -319,7 +324,6 @@ function refreshRuntimeMode({ rerenderItems = false } = {}) {
   const changed = nextStandalone !== isStandaloneApp;
   isStandaloneApp = nextStandalone;
   OFFLINE_CACHE_NAME = isStandaloneApp ? OFFLINE_CACHE_NAME_APP : OFFLINE_CACHE_NAME_BROWSER;
-  showPwaItemActionMenu = isStandaloneApp;
 
   if (installAppBtn) {
     installAppBtn.style.display = isStandaloneApp ? "none" : "inline-flex";
@@ -422,40 +426,11 @@ function updateContentSectionTitle(path) {
   contentTitleEl.innerHTML = `<span class="ui-icon" aria-hidden="true">${iconSvg(iconKey)}</span>${escapeHtml(title)}`;
 }
 
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function ensureUpdatesCounterResetFromToday() {
-  try {
-    const appliedVersion = localStorage.getItem(UPDATES_RESET_VERSION_KEY);
-    if (appliedVersion === UPDATES_RESET_VERSION) return;
-    localStorage.setItem(UPDATES_SINCE_KEY, startOfToday().toISOString());
-    localStorage.setItem(UPDATES_RESET_VERSION_KEY, UPDATES_RESET_VERSION);
-    sessionStorage.removeItem(UPDATES_CACHE_KEY);
-    newFilesCache.clear();
-    newFilesInFlight.clear();
-  } catch (e) {}
-}
-
 function getUpdatesSinceDate() {
-  try {
-    const raw = localStorage.getItem(UPDATES_SINCE_KEY);
-    if (raw) {
-      const parsed = new Date(raw);
-      if (!Number.isNaN(parsed.getTime())) return parsed;
-    }
-  } catch (e) {}
-  const today = startOfToday();
-  try {
-    localStorage.setItem(UPDATES_SINCE_KEY, today.toISOString());
-  } catch (e) {}
-  return today;
+  const now = Date.now();
+  const windowMs = UPDATES_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  return new Date(now - windowMs);
 }
-
-ensureUpdatesCounterResetFromToday();
 
 function isAfterUpdatesSince(iso) {
   if (!iso) return false;
@@ -1143,12 +1118,17 @@ async function handleItemAction(action, itemCtx) {
   const { isFolder, fullPath, storagePath, fileName, fileUrl } = itemCtx;
   const stateKey = isFolder ? fullPath : storagePath;
   try {
-    if (!supportsOfflineStorage && (action === "cache" || action === "free")) {
-      showToast("Ta brskalnik ne podpira offline shranjevanja.");
+    if (action === "share") {
+      await shareCatalogLink(itemCtx);
       return;
     }
-    if (!isStandaloneApp && (action === "cache" || action === "free")) {
-      showToast("Za to funkcionalnost odprite nameščeno aplikacijo.");
+    const appOnlyAction = action === "cache" || action === "free" || action === "download";
+    if (!isStandaloneApp && appOnlyAction) {
+      showInstallAppRequiredToast();
+      return;
+    }
+    if (!supportsOfflineStorage && (action === "cache" || action === "free")) {
+      showToast("Ta brskalnik ne podpira offline shranjevanja.");
       return;
     }
     if (action === "cache") {
@@ -2709,17 +2689,59 @@ function buildSyncStatusHtml({ isFolder, isCached, syncState }) {
   return `<span class="sync-status-icon cloud" title="Datoteka ni shranjena lokalno">${iconSvg("cloud")}</span>`;
 }
 
-function buildItemActionMenuHtml({ disableOfflineActions = false, offlineOnlyHint = false }) {
-  const hintAttr = offlineOnlyHint ? `title="Na voljo v nameščeni aplikaciji"` : "";
+async function shareCatalogLink({ isFolder, fullPath, fileName, fileUrl }) {
+  const shareUrl = (!isFolder && fileUrl)
+    ? fileUrl
+    : `${window.location.origin}${window.location.pathname}#${pathToHash(fullPath || currentPath || "")}`;
+  if (!shareUrl) {
+    showToast("Povezava ni na voljo.");
+    return;
+  }
+  const targetName = isFolder
+    ? (String(fullPath || "").split("/").pop() || "Katalog")
+    : (fileName || "Katalog");
+  const shareTitle = formatDisplayName(targetName);
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: shareTitle, url: shareUrl });
+      return;
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+    }
+  }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast("Povezava je kopirana v odlozisce.");
+      return;
+    }
+  } catch (err) {}
+  showToast("Kopiranje povezave ni uspelo.");
+}
+
+function buildItemActionMenuHtml({ isStandalone = false, supportsOffline = false }) {
+  const appOnlyTitle = "Za uporabo te funkcionalnosti morate prenesti aplikacijo.";
+  const offlineUnsupportedTitle = "Ta brskalnik ne podpira offline shranjevanja.";
+  function actionAttrs(action) {
+    if (!isStandalone && action !== "share") {
+      return `data-requires-app="1" aria-disabled="true" title="${appOnlyTitle}"`;
+    }
+    if (isStandalone && !supportsOffline && (action === "cache" || action === "free")) {
+      return `data-disabled-reason="offline-storage" aria-disabled="true" title="${offlineUnsupportedTitle}"`;
+    }
+    return "";
+  }
   return `
     <div class="item-menu-wrap">
       <button type="button" class="item-menu-btn" title="Več možnosti" aria-label="Več možnosti">
         <span class="ui-icon" aria-hidden="true">${iconSvg("dotsVertical")}</span>
       </button>
       <div class="item-menu-dropdown" role="menu">
-        <button type="button" class="item-menu-action" data-action="cache" role="menuitem" ${disableOfflineActions ? "disabled" : ""} ${hintAttr}>Na voljo brez povezave</button>
-        <button type="button" class="item-menu-action" data-action="free" role="menuitem" ${disableOfflineActions ? "disabled" : ""} ${hintAttr}>Sprosti prostor</button>
-        <button type="button" class="item-menu-action" data-action="download" role="menuitem">Prenesi na računalnik</button>
+        <button type="button" class="item-menu-action" data-action="share" role="menuitem">Deli povezavo</button>
+        <div class="item-menu-divider" role="separator" aria-hidden="true"></div>
+        <button type="button" class="item-menu-action" data-action="cache" role="menuitem" ${actionAttrs("cache")}>Na voljo brez povezave</button>
+        <button type="button" class="item-menu-action" data-action="free" role="menuitem" ${actionAttrs("free")}>Sprosti prostor</button>
+        <button type="button" class="item-menu-action" data-action="download" role="menuitem" ${actionAttrs("download")}>Prenesi na računalnik</button>
       </div>
     </div>
   `;
@@ -2788,8 +2810,8 @@ async function createItemElement(item, cont) {
     const infoHtml = `<div class="item-info"><strong>${formatDisplayName(item.name)} ${syncStatusHtml}</strong><small>${fileSize}</small>${dateInfo}</div>`;
     const actionsMenuHtml = showPwaItemActionMenu
       ? buildItemActionMenuHtml({
-          disableOfflineActions: !supportsOfflineStorage || !isStandaloneApp,
-          offlineOnlyHint: !isStandaloneApp
+          isStandalone: isStandaloneApp,
+          supportsOffline: supportsOfflineStorage
         })
       : "";
     if (!showPwaItemActionMenu) {
@@ -2855,9 +2877,22 @@ async function createItemElement(item, cont) {
         });
       }
       div.querySelectorAll(".item-menu-action").forEach((btn) => {
+        btn.addEventListener("mouseenter", () => {
+          if (btn.getAttribute("data-requires-app") === "1" && !isStandaloneApp) {
+            showInstallAppRequiredToast();
+          }
+        });
         btn.addEventListener("click", async (event) => {
           event.preventDefault();
           event.stopPropagation();
+          if (btn.getAttribute("data-requires-app") === "1" && !isStandaloneApp) {
+            showInstallAppRequiredToast();
+            return;
+          }
+          if (btn.getAttribute("aria-disabled") === "true" && btn.getAttribute("data-disabled-reason") === "offline-storage") {
+            showToast("Ta brskalnik ne podpira offline shranjevanja.");
+            return;
+          }
           const action = btn.getAttribute("data-action");
           await handleItemAction(action, {
             isFolder,

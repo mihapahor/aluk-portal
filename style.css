@@ -1249,10 +1249,17 @@ button.ghost:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
 .item-menu-action:hover {
   background: rgba(2, 132, 199, 0.08);
 }
-.item-menu-action:disabled {
+.item-menu-action:disabled,
+.item-menu-action[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
   background: transparent;
+  color: var(--text-secondary);
+}
+.item-menu-divider {
+  height: 1px;
+  margin: 6px 8px;
+  background: rgba(15, 23, 42, 0.12);
 }
 
 .file-container.grid-view .item.item-card {
