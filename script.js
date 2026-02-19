@@ -244,6 +244,7 @@ let isSearchActive = false; // Flag za preverjanje, če je aktivno iskanje
 let preloadFilesPromise = null;
 const UPDATES_CACHE_KEY = "aluk_updates_cache";
 const UPDATES_WINDOW_DAYS = 60;
+const UPDATES_FIXED_SINCE_ISO = "2026-02-18T00:00:00.000Z";
 const OFFLINE_CACHE_NAME_APP = "aluk-offline-files-app-v1";
 const OFFLINE_CACHE_NAME_BROWSER = "aluk-offline-files-browser-v1";
 const OFFLINE_PINS_KEY = "aluk_offline_pins";
@@ -427,9 +428,14 @@ function updateContentSectionTitle(path) {
 }
 
 function getUpdatesSinceDate() {
-  const now = Date.now();
-  const windowMs = UPDATES_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  return new Date(now - windowMs);
+  if (UPDATES_FIXED_SINCE_ISO) {
+    const fixed = new Date(UPDATES_FIXED_SINCE_ISO);
+    if (!Number.isNaN(fixed.getTime())) return fixed;
+  }
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - UPDATES_WINDOW_DAYS);
+  return d;
 }
 
 function isAfterUpdatesSince(iso) {
