@@ -162,6 +162,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // --- OBVESTILA (en vir za login novico in "Obvestila" tab) ---
+// Besedila na LOGIN strani: urejaj tukaj (fallback) IN v Supabase tabeli "announcements" (polje bullets).
+// Če se po osvežitvi spet pokaže staro besedilo, ga zamenjaj v Admin → Obvestila ali v Supabase.
 const FALLBACK_ANNOUNCEMENTS = [
   {
     id: "portal-launch",
@@ -172,17 +174,18 @@ const FALLBACK_ANNOUNCEMENTS = [
     bullets: [
       { title: "Tehnična dokumentacija in katalogi", text: "Urejeno po sistemih in mapah, da hitro najdete pravo vsebino." },
       { title: "Hitro iskanje po mapah in datotekah", text: "Poiščete katalog, dokument ali datoteko po imenu, brez ročnega brskanja." },
-      { title: "Iskanje po šifri artikla v katalogih", text: "Vpišete šifro in portal vrne zadetke iz vsebine katalogov (strani in naslovi), kar bistveno skrajša čas iskanja." },
+      { title: "Iskanje po šifri artikla v katalogih", text: "Vpišete šifro in portal vrne zadetke iz vsebine katalogov." },
       { title: "Priljubljene", text: "Pogosto uporabljene mape si označite med priljubljene za še hitrejši dostop." },
       { title: "Zadnje posodobitve in oznaka \"NOVO\"", text: "Takoj vidite, kaj je bilo dodano ali kateri katalog je bil posodobljen." },
       { title: "Ostala dokumentacija", text: "Ločen razdelek za obrazce, priporočila za montažo in druga podporna gradiva." },
-      { title: "Prilagojeno tudi za mobilne naprave", text: "Portal ostaja pregleden in uporaben tudi na telefonu." }
     ],
     note: "Če imate predlog za dodatne vsebine ali izboljšave, nam sporočite in bomo portal nadgrajevali naprej."
   }
 ];
 let announcementsCache = [...FALLBACK_ANNOUNCEMENTS];
 const LOGIN_ANNOUNCEMENT_ID = "portal-launch";
+/** Naslovi točk obvestil, ki jih ne prikazujemo (npr. "Prilagojeno tudi za mobilne naprave"). */
+const HIDE_ANNOUNCEMENT_BULLET_TITLES = ["Prilagojeno tudi za mobilne naprave"];
 
 // DOM ELEMENTI (z varnostnimi preverjanji)
 const authForm = getElement("authForm");
@@ -1704,7 +1707,7 @@ function normalizeAnnouncementItem(rawItem) {
   const item = rawItem && typeof rawItem === "object" ? { ...rawItem } : {};
   const bullets = Array.isArray(item.bullets) ? item.bullets.map((b) => ({ ...(b || {}) })) : [];
   const desktopAppFeatureText =
-    "Portal ponuja možnost prenosa AluK Portal aplikacije, ki omogoča uporabo portala direktno iz namizja, shranjevanje datotek brez povezave ter sinhronizacijo novih datotek.";
+    "AluK Portal aplikacija omogoča uporabo portala direktno iz namizja in lokalno shranjevanje datotek, tudi brez povezave.";
 
   const isFutureOfflineText = (text) =>
     /(offline|aplikacij)/i.test(String(text || "")) && /(kmalu|prihaj|bo na voljo|v pripravi)/i.test(String(text || ""));
@@ -1890,6 +1893,7 @@ function renderLoginNews() {
     null;
   if (!a) return;
   const bullets = (a.bullets || [])
+    .filter((b) => !HIDE_ANNOUNCEMENT_BULLET_TITLES.includes((b.title || "").trim()))
     .slice(0, 8)
     .map((b) => {
       const t = escapeHtml(b.title || "");
@@ -1922,6 +1926,7 @@ function renderAnnouncements() {
         .map((a, idx) => {
           const published = a.published_at ? formatDate(a.published_at) : "";
           const bullets = (a.bullets || [])
+            .filter((b) => !HIDE_ANNOUNCEMENT_BULLET_TITLES.includes((b.title || "").trim()))
             .map((b) => {
               const t = escapeHtml(b.title || "");
               const tx = escapeHtml(b.text || "");
