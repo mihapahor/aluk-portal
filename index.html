@@ -23,7 +23,7 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.json">
 
-  <link rel="stylesheet" href="style.css?v=1618">
+  <link rel="stylesheet" href="style.css?v=1619">
 </head>
 <body>
 
@@ -285,17 +285,18 @@
 
   <div id="offlineOnboardingModal" class="offline-onboarding-modal" aria-hidden="true" style="display:none;">
     <div class="offline-onboarding-card">
-      <h2>Novi Offline način</h2>
-      <p>Datoteke lahko zdaj označite kot <strong>Na voljo brez povezave</strong> prek menija s tremi pikami.</p>
-      <ul>
-        <li><strong>Cloud</strong>: datoteka še ni lokalno shranjena.</li>
-        <li><strong>Cloud + kljukica</strong>: datoteka je na voljo brez povezave.</li>
-        <li><strong>Sprosti prostor</strong>: odstrani lokalno kopijo, metapodatki ostanejo.</li>
-      </ul>
-      <button id="offlineOnboardingClose" class="primary" type="button">Razumem</button>
+      <h2>Uporabljajte AluK Portal kot namizno aplikacijo</h2>
+      <p>AluK Portal lahko namestite na računalnik kot namizno aplikacijo.</p>
+      <p>Tako lahko izbrane datoteke uporabljate tudi brez povezave.</p>
+      <p>Če nadaljujete brez namestitve, AluK Portal deluje v brskalniku (brez offline dostopa).</p>
+      <div class="offline-onboarding-actions">
+        <button id="offlineOnboardingInstallBtn" class="primary" type="button">Namesti aplikacijo</button>
+        <button id="offlineOnboardingContinueBtn" class="secondary" type="button">Nadaljuj v brskalniku</button>
+      </div>
+      <p class="offline-onboarding-note">Namestitev lahko izvedete tudi kasneje.</p>
     </div>
   </div>
 
-  <script type="module" src="script.js?v=1652"></script>
+  <script type="module" src="script.js?v=1653"></script>
 </body>
 </html>

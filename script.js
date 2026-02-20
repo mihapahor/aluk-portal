@@ -227,7 +227,8 @@ const menuBtn = getElement("menuBtn");
 const adminLink = getElement("adminLink");
 const installAppBtn = getElement("installAppBtn");
 const offlineOnboardingModal = getElement("offlineOnboardingModal");
-const offlineOnboardingClose = getElement("offlineOnboardingClose");
+const offlineOnboardingInstallBtn = getElement("offlineOnboardingInstallBtn");
+const offlineOnboardingContinueBtn = getElement("offlineOnboardingContinueBtn");
 const offlineEmptyHint = getElement("offlineEmptyHint");
 
 const toolbarEl = document.querySelector(".toolbar");
@@ -257,8 +258,15 @@ const OFFLINE_FILES_STORE = "files_meta";
 const OFFLINE_CACHED_META_STORE = "cached_files_meta";
 const OFFLINE_META_STORE = "meta";
 const OFFLINE_CATALOG_INDEX_STORE = "catalog_index";
-const OFFLINE_ONBOARDING_KEY = "aluk_offline_onboarding_seen_v1";
 const PWA_INSTALLED_HINT_KEY = "aluk_pwa_installed_hint";
+const INSTALL_NUDGE_SHOW_COUNT_KEY = "aluk_install_nudge_v1_show_count";
+const INSTALL_NUDGE_LAST_SHOWN_AT_KEY = "aluk_install_nudge_v1_last_shown_at";
+const INSTALL_NUDGE_COMPLETED_KEY = "aluk_install_nudge_v1_completed";
+const INSTALL_NUDGE_PERMA_DISMISSED_KEY = "aluk_install_nudge_v1_permanently_dismissed";
+const INSTALL_NUDGE_SEEN_SESSION_KEY = "aluk_install_nudge_v1_seen_this_session";
+const INSTALL_NUDGE_INITIAL_DELAY_MS = 15 * 1000;
+const INSTALL_NUDGE_REPEAT_DELAY_MS = 7 * 24 * 60 * 60 * 1000;
+const INSTALL_NUDGE_MAX_SHOWS = 3;
 const NEW_FILES_CACHE_TTL_MS = 60 * 1000;
 const PATH_EXISTS_CACHE_TTL_MS = 30 * 1000;
 let updatesRequestId = 0;
@@ -272,6 +280,10 @@ let activeItemMenuWrap = null;
 let currentViewerBlobUrl = null;
 let deferredInstallPrompt = null;
 let offlineDbPromise = null;
+let installNudgeTriggerArmed = false;
+let installNudgeDelayReached = false;
+let installNudgeInteractionHappened = false;
+let installNudgeInteractionCleanup = null;
 const supportsOfflineStorage = typeof window !== "undefined" && "caches" in window && "indexedDB" in window;
 function isPwaRuntimeContext() {
   if (typeof window === "undefined") return false;
@@ -306,6 +318,76 @@ function setStoredInstalledAppHint(value) {
   try {
     localStorage.setItem(PWA_INSTALLED_HINT_KEY, value ? "1" : "0");
   } catch (e) {}
+}
+
+function readInstallNudgeState() {
+  let showCount = 0;
+  let lastShownAt = "";
+  let completed = false;
+  let permanentlyDismissed = false;
+  try {
+    const raw = localStorage.getItem(INSTALL_NUDGE_SHOW_COUNT_KEY);
+    const n = Number.parseInt(raw || "0", 10);
+    showCount = Number.isFinite(n) ? Math.max(0, n) : 0;
+    lastShownAt = localStorage.getItem(INSTALL_NUDGE_LAST_SHOWN_AT_KEY) || "";
+    completed = localStorage.getItem(INSTALL_NUDGE_COMPLETED_KEY) === "1";
+    permanentlyDismissed = localStorage.getItem(INSTALL_NUDGE_PERMA_DISMISSED_KEY) === "1";
+  } catch (e) {}
+  return { showCount, lastShownAt, completed, permanentlyDismissed };
+}
+
+function writeInstallNudgeState(patch = {}) {
+  try {
+    if (patch.showCount != null) localStorage.setItem(INSTALL_NUDGE_SHOW_COUNT_KEY, String(Math.max(0, Number(patch.showCount) || 0)));
+    if (patch.lastShownAt != null) localStorage.setItem(INSTALL_NUDGE_LAST_SHOWN_AT_KEY, String(patch.lastShownAt || ""));
+    if (patch.completed != null) localStorage.setItem(INSTALL_NUDGE_COMPLETED_KEY, patch.completed ? "1" : "0");
+    if (patch.permanentlyDismissed != null) localStorage.setItem(INSTALL_NUDGE_PERMA_DISMISSED_KEY, patch.permanentlyDismissed ? "1" : "0");
+  } catch (e) {}
+}
+
+function hasSeenInstallNudgeInSession() {
+  try {
+    return sessionStorage.getItem(INSTALL_NUDGE_SEEN_SESSION_KEY) === "1";
+  } catch (e) {
+    return false;
+  }
+}
+
+function markInstallNudgeSeenInSession() {
+  try {
+    sessionStorage.setItem(INSTALL_NUDGE_SEEN_SESSION_KEY, "1");
+  } catch (e) {}
+}
+
+function markInstallNudgeCompleted() {
+  writeInstallNudgeState({ completed: true, permanentlyDismissed: true });
+}
+
+function markInstallNudgeShown() {
+  const state = readInstallNudgeState();
+  const nextCount = state.showCount + 1;
+  writeInstallNudgeState({
+    showCount: nextCount,
+    lastShownAt: new Date().toISOString(),
+    permanentlyDismissed: nextCount >= INSTALL_NUDGE_MAX_SHOWS || state.permanentlyDismissed
+  });
+  markInstallNudgeSeenInSession();
+}
+
+function canShowInstallNudgeNow() {
+  if (!offlineOnboardingModal) return false;
+  if (isStandaloneApp) return false;
+  if (getStoredInstalledAppHint()) return false;
+  if (hasSeenInstallNudgeInSession()) return false;
+  const state = readInstallNudgeState();
+  if (state.completed) return false;
+  if (state.permanentlyDismissed) return false;
+  if (state.showCount >= INSTALL_NUDGE_MAX_SHOWS) return false;
+  if (state.showCount <= 0) return true;
+  if (!state.lastShownAt) return true;
+  const lastTs = new Date(state.lastShownAt).getTime();
+  if (!Number.isFinite(lastTs) || lastTs <= 0) return true;
+  return (Date.now() - lastTs) >= INSTALL_NUDGE_REPEAT_DELAY_MS;
 }
 
 async function detectInstalledAppHint() {
@@ -2202,7 +2284,7 @@ async function showApp(email) {
     renderGlobalFavorites();
     updateSidebarFavorites();
   });
-  maybeShowOfflineOnboarding();
+  setupInstallNudgeTrigger();
   syncOfflineMetadataAndCache();
 
   // Pri že prikazanem portalu ne resetiraj poti in ne kličem loadContent (prepreči skok na Domov ob preklapljanju zaviho)
@@ -3966,7 +4048,7 @@ function setupInstallPrompt() {
   const ua = String((navigator && navigator.userAgent) || "");
   const isChromiumLike = /Chrome|Chromium|Edg|OPR/i.test(ua);
 
-  installAppBtn.addEventListener("click", async () => {
+  const runInstallFlow = async () => {
     if (deferredInstallPrompt) {
       deferredInstallPrompt.prompt();
       const choice = await deferredInstallPrompt.userChoice.catch(() => null);
@@ -3994,7 +4076,15 @@ function setupInstallPrompt() {
     }
 
     showToast("Namestitev: odpri meni brskalnika in izberi 'Install app' ali 'Add to Home Screen'.");
-  });
+  };
+
+  installAppBtn.addEventListener("click", runInstallFlow);
+  if (offlineOnboardingInstallBtn) {
+    offlineOnboardingInstallBtn.addEventListener("click", async () => {
+      closeOfflineOnboarding();
+      await runInstallFlow();
+    });
+  }
 
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
@@ -4004,6 +4094,8 @@ function setupInstallPrompt() {
 
   window.addEventListener("appinstalled", () => {
     setStoredInstalledAppHint(true);
+    markInstallNudgeCompleted();
+    closeOfflineOnboarding();
     deferredInstallPrompt = null;
     refreshRuntimeMode({ rerenderItems: true });
   });
@@ -4011,30 +4103,71 @@ function setupInstallPrompt() {
   detectInstalledAppHint().finally(() => refreshRuntimeMode());
 }
 
+function closeOfflineOnboarding() {
+  if (!offlineOnboardingModal) return;
+  offlineOnboardingModal.style.display = "none";
+  offlineOnboardingModal.setAttribute("aria-hidden", "true");
+}
+
 function setupOfflineOnboarding() {
-  if (!offlineOnboardingModal || !offlineOnboardingClose) return;
-  const close = () => {
-    offlineOnboardingModal.style.display = "none";
-    offlineOnboardingModal.setAttribute("aria-hidden", "true");
-    try {
-      localStorage.setItem(OFFLINE_ONBOARDING_KEY, "1");
-    } catch (e) {}
-  };
-  offlineOnboardingClose.addEventListener("click", close);
+  if (!offlineOnboardingModal) return;
+  if (offlineOnboardingContinueBtn) {
+    offlineOnboardingContinueBtn.addEventListener("click", closeOfflineOnboarding);
+  }
   offlineOnboardingModal.addEventListener("click", (e) => {
-    if (e.target === offlineOnboardingModal) close();
+    if (e.target === offlineOnboardingModal) closeOfflineOnboarding();
   });
 }
 
-function maybeShowOfflineOnboarding() {
+function showInstallNudgeModal() {
   if (!offlineOnboardingModal) return;
-  let seen = false;
-  try {
-    seen = localStorage.getItem(OFFLINE_ONBOARDING_KEY) === "1";
-  } catch (e) {}
-  if (seen) return;
+  if (!canShowInstallNudgeNow()) return;
+  markInstallNudgeShown();
   offlineOnboardingModal.style.display = "flex";
   offlineOnboardingModal.setAttribute("aria-hidden", "false");
+}
+
+function maybeShowInstallNudgeAfterTriggers() {
+  if (!installNudgeDelayReached || !installNudgeInteractionHappened) return;
+  showInstallNudgeModal();
+}
+
+function markInstallNudgeInteraction() {
+  installNudgeInteractionHappened = true;
+  if (typeof installNudgeInteractionCleanup === "function") {
+    installNudgeInteractionCleanup();
+    installNudgeInteractionCleanup = null;
+  }
+  maybeShowInstallNudgeAfterTriggers();
+}
+
+function setupInstallNudgeTrigger() {
+  if (installNudgeTriggerArmed) return;
+  if (hasSeenInstallNudgeInSession()) return;
+  if (!canShowInstallNudgeNow()) return;
+
+  installNudgeTriggerArmed = true;
+  installNudgeDelayReached = false;
+  installNudgeInteractionHappened = false;
+
+  setTimeout(() => {
+    installNudgeDelayReached = true;
+    maybeShowInstallNudgeAfterTriggers();
+  }, INSTALL_NUDGE_INITIAL_DELAY_MS);
+
+  const onMainClick = () => markInstallNudgeInteraction();
+  const onCatalogClick = () => markInstallNudgeInteraction();
+  const onSearchInput = () => markInstallNudgeInteraction();
+
+  if (mainContent) mainContent.addEventListener("click", onMainClick, { once: true });
+  if (catalogResultsSection) catalogResultsSection.addEventListener("click", onCatalogClick, { once: true });
+  if (searchInput) searchInput.addEventListener("input", onSearchInput, { once: true });
+
+  installNudgeInteractionCleanup = () => {
+    if (mainContent) mainContent.removeEventListener("click", onMainClick);
+    if (catalogResultsSection) catalogResultsSection.removeEventListener("click", onCatalogClick);
+    if (searchInput) searchInput.removeEventListener("input", onSearchInput);
+  };
 }
 
 function setupConnectivityHandlers() {
