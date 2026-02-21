@@ -1,15 +1,16 @@
-const SHELL_CACHE = "aluk-shell-v5";
-const RUNTIME_CACHE = "aluk-runtime-v5";
+const SHELL_CACHE = "aluk-shell-v9";
+const RUNTIME_CACHE = "aluk-runtime-v9";
 const OFFLINE_URL = "./index.html";
 
 const SHELL_ASSETS = [
   "./",
   "./index.html",
-  "./style.css?v=1618",
-  "./script.js?v=1652",
+  "./style.css?v=1623",
+  "./script.js?v=1658",
   "./manifest.json",
   "./favicon.png",
-  "./AlukAlumitBEL.png"
+  "./AlukAlumitBEL.png",
+  "./not_downloaded.png"
 ];
 
 self.addEventListener("install", (event) => {

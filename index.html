@@ -23,7 +23,7 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.json">
 
-  <link rel="stylesheet" href="style.css?v=1619">
+  <link rel="stylesheet" href="style.css?v=1623">
 </head>
 <body>
 
@@ -255,6 +255,13 @@
         </div>
         <div class="content-status-wrap">
           <span id="connectionStateChip" class="connection-state-chip">Online</span>
+          <div id="globalOfflineMenuWrap" class="item-menu-wrap" style="display:none;">
+            <button id="globalOfflineMenuBtn" type="button" class="item-menu-btn" aria-haspopup="true" aria-expanded="false" title="Offline možnosti">⋮</button>
+            <div id="globalOfflineMenuDropdown" class="item-menu-dropdown" role="menu">
+              <button id="btnGlobalCacheAll" type="button" class="item-menu-action" role="menuitem">Prenesi vse za offline</button>
+              <button id="btnGlobalClearOffline" type="button" class="item-menu-action" role="menuitem">Odstrani vse lokalne datoteke</button>
+            </div>
+          </div>
           <span id="status" class="content-status"></span>
         </div>
       </div>
@@ -297,6 +304,6 @@
     </div>
   </div>
 
-  <script type="module" src="script.js?v=1654"></script>
+  <script type="module" src="script.js?v=1658"></script>
 </body>
 </html>

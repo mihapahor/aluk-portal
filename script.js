@@ -81,9 +81,9 @@ const ICON_SVGS = {
   tool:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 7l3 3"/><path d="M12.3 9.7 6 16v3h3l6.3-6.3"/><path d="M16 3a4 4 0 0 0-3 6.7l1.3 1.3A4 4 0 1 0 16 3z"/></svg>',
   cloud:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 17.5a3.5 3.5 0 0 0-1-6.86A6 6 0 0 0 7.3 8.2 4.5 4.5 0 0 0 7.5 17.5z"/></svg>',
+    '<svg data-filled="1" viewBox="0 0 512 512" aria-hidden="true"><path fill="#000000" d="M394 218c-7-67-63-118-130-118-64 0-119 47-129 111-57 4-102 50-102 107 0 60 49 109 109 109h248c63 0 114-51 114-114 0-56-40-102-94-112z"/></svg>',
   cloudCheck:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 17.5a3.5 3.5 0 0 0-1-6.86A6 6 0 0 0 7.3 8.2 4.5 4.5 0 0 0 7.5 17.5z"/><path d="m10 14 2 2 4-4"/></svg>',
+    '<svg data-filled="1" viewBox="0 0 512 512" aria-hidden="true"><circle cx="142" cy="330" r="112" fill="#8BC400"/><circle cx="256" cy="224" r="140" fill="#8BC400"/><circle cx="370" cy="330" r="112" fill="#8BC400"/><rect x="90" y="320" width="332" height="122" rx="60" fill="#8BC400"/><circle cx="256" cy="300" r="74" fill="#f1f1f1"/><path d="M226 301l26 26 52-52" fill="none" stroke="#8BC400" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   dotsVertical:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/></svg>',
   download:
@@ -102,6 +102,7 @@ const ICON_SVGS = {
 
 function iconSvg(name) {
   const svg = ICON_SVGS[name] || ICON_SVGS.file;
+  if (svg.includes('data-filled="1"')) return svg;
   // Hard-code common style: stroke icons, currentColor.
   return svg.replace(
     "<svg ",
@@ -203,6 +204,10 @@ const searchSpinner = getElement("searchSpinner");
 const skeletonLoader = getElement("skeletonLoader");
 const statusEl = getElement("status");
 const connectionStateChip = getElement("connectionStateChip");
+const globalOfflineMenuWrap = getElement("globalOfflineMenuWrap");
+const globalOfflineMenuBtn = getElement("globalOfflineMenuBtn");
+const btnGlobalCacheAll = getElement("btnGlobalCacheAll");
+const btnGlobalClearOffline = getElement("btnGlobalClearOffline");
 const searchInput = getElement("search");
 const breadcrumbsEl = getElement("breadcrumbs");
 const backBtn = getElement("backBtn");
@@ -257,6 +262,8 @@ const OFFLINE_FILES_STORE = "files_meta";
 const OFFLINE_CACHED_META_STORE = "cached_files_meta";
 const OFFLINE_META_STORE = "meta";
 const OFFLINE_CATALOG_INDEX_STORE = "catalog_index";
+const OFFLINE_TRUSTED_EMAIL_KEY = "aluk_offline_trusted_email";
+const OFFLINE_TRUSTED_AT_KEY = "aluk_offline_trusted_at";
 const PWA_INSTALLED_HINT_KEY = "aluk_pwa_installed_hint";
 const INSTALL_NUDGE_SHOW_COUNT_KEY = "aluk_install_nudge_v1_show_count";
 const INSTALL_NUDGE_LAST_SHOWN_AT_KEY = "aluk_install_nudge_v1_last_shown_at";
@@ -300,10 +307,14 @@ let OFFLINE_CACHE_NAME = isStandaloneApp ? OFFLINE_CACHE_NAME_APP : OFFLINE_CACH
 let showPwaItemActionMenu = true;
 const itemSyncState = new Map();
 const itemSyncProgress = new Map();
+const folderOfflineStatusMemo = new Map();
 let syncStatusRenderTimer = null;
 const CATALOG_INDEX_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const OFFLINE_DOWNLOAD_WARNING_BYTES = 2 * 1024 * 1024 * 1024;
 let isMetadataSyncRunning = false;
 let lastSyncAtIso = null;
+let isBulkOfflineSyncRunning = false;
+let bulkOfflineSyncProgress = 0;
 
 function getStoredInstalledAppHint() {
   try {
@@ -391,7 +402,8 @@ function canShowInstallNudgeNow() {
 
 async function detectInstalledAppHint() {
   if (isStandaloneApp) return true;
-  if (getStoredInstalledAppHint()) return true;
+  // Ne zaupaj slepo localStorage "hintu": lahko ostane po uninstallu.
+  // Najprej preverimo dejansko stanje prek platform API-ja (če je na voljo).
   try {
     if (navigator.getInstalledRelatedApps) {
       const apps = await navigator.getInstalledRelatedApps();
@@ -401,6 +413,8 @@ async function detectInstalledAppHint() {
       }
     }
   } catch (e) {}
+  // Če ni dokazov o nameščeni app, počistimo zastarel hint.
+  setStoredInstalledAppHint(false);
   return false;
 }
 
@@ -752,6 +766,15 @@ function idbDelete(storeName, key) {
   }));
 }
 
+function idbClear(storeName) {
+  return openOfflineDb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+    tx.objectStore(storeName).clear();
+  }));
+}
+
 async function saveRowsToIndexedDb(rows) {
   if (!Array.isArray(rows)) return;
   const db = await openOfflineDb();
@@ -961,8 +984,55 @@ function formatTimeShort(iso) {
   return d.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" });
 }
 
+function formatBytes(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = n;
+  let unitIdx = 0;
+  while (size >= 1024 && unitIdx < units.length - 1) {
+    size /= 1024;
+    unitIdx += 1;
+  }
+  const fixed = size >= 100 || unitIdx === 0 ? 0 : 1;
+  return `${size.toFixed(fixed)} ${units[unitIdx]}`;
+}
+
+function formatSyncErrorReason(err) {
+  const name = String(err?.name || "").toLowerCase();
+  const msg = String(err?.message || "").toLowerCase();
+  if (name.includes("quota") || msg.includes("quota") || msg.includes("storage") || msg.includes("space")) {
+    return "Ni dovolj prostora na napravi.";
+  }
+  if (msg.includes("timeout")) {
+    return "Povezava je prepočasna (timeout).";
+  }
+  if (
+    msg.includes("network") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("cors") ||
+    msg.includes("typeerror")
+  ) {
+    return "Napaka omrežja ali nedosegljiva datoteka.";
+  }
+  if (msg.startsWith("http ")) {
+    return `Strežnik je vrnil napako ${err.message.replace(/^http\s*/i, "")}.`;
+  }
+  return err?.message || "Neznana napaka pri sinhronizaciji.";
+}
+
+function updateOfflineBulkActionVisibility() {
+  const show = isStandaloneApp;
+  if (globalOfflineMenuWrap) globalOfflineMenuWrap.style.display = show ? "inline-flex" : "none";
+  if (!show && globalOfflineMenuWrap) {
+    globalOfflineMenuWrap.classList.remove("open");
+    if (globalOfflineMenuBtn) globalOfflineMenuBtn.setAttribute("aria-expanded", "false");
+  }
+}
+
 function updateConnectionStateChip() {
   if (!connectionStateChip) return;
+  updateOfflineBulkActionVisibility();
   if (!isStandaloneApp) {
     connectionStateChip.style.display = "none";
     return;
@@ -1138,6 +1208,158 @@ async function getFolderFilesForCaching(folderPath) {
     });
   }
   return files;
+}
+
+function setGlobalOfflineMenuDisabled(disabled) {
+  const isDisabled = !!disabled;
+  if (globalOfflineMenuBtn) globalOfflineMenuBtn.disabled = isDisabled;
+  if (btnGlobalCacheAll) btnGlobalCacheAll.disabled = isDisabled;
+  if (btnGlobalClearOffline) btnGlobalClearOffline.disabled = isDisabled;
+}
+
+function getTotalSizeEstimateBytes(rows) {
+  return (rows || []).reduce((sum, row) => sum + getRowSizeBytes(row), 0);
+}
+
+async function handleDownloadAllOffline() {
+  if (!isStandaloneApp) {
+    showInstallAppRequiredToast();
+    return;
+  }
+  if (!supportsOfflineStorage) {
+    showToast("Ta brskalnik ne podpira offline shranjevanja.");
+    return;
+  }
+  if (isBulkOfflineSyncRunning) return;
+  if (!navigator.onLine) {
+    showToast("Za prvi prenos vseh datotek potrebujete internetno povezavo.");
+    return;
+  }
+
+  try {
+    const rows = await fetchAllFilesFromTable();
+    const relevantRows = (rows || []).filter((row) => {
+      const fileName = String(row?.filename || "");
+      return fileName && isRelevantFile(fileName);
+    });
+    const totalEstimateBytes = getTotalSizeEstimateBytes(relevantRows);
+    const sizeLabel = totalEstimateBytes >= OFFLINE_DOWNLOAD_WARNING_BYTES
+      ? formatBytes(totalEstimateBytes)
+      : `${(totalEstimateBytes / (1024 * 1024)).toFixed(1)} MB`;
+    const confirmed = window.confirm(
+      `Prenos vseh datotek bo zasedel približno ${sizeLabel}. Želite nadaljevati?`
+    );
+    if (!confirmed) return;
+
+    const allFiles = relevantRows
+      .map((row) => {
+        const storagePath = buildStoragePathFromRow(row);
+        if (!storagePath) return null;
+        return {
+          storagePath,
+          fileUrl: buildR2UrlFromStoragePath(storagePath),
+          updatedAt: getRowTimestamp(row)
+        };
+      })
+      .filter(Boolean);
+
+    if (!allFiles.length) {
+      showToast("Ni datotek za offline prenos.");
+      return;
+    }
+
+    isBulkOfflineSyncRunning = true;
+    bulkOfflineSyncProgress = 0;
+    updateConnectionStateChip();
+    setGlobalOfflineMenuDisabled(true);
+    setTransferProgressStatus({ label: "Prenašanje vseh datotek", current: 0, total: allFiles.length, percent: 0 });
+
+    let ok = 0;
+    let fail = 0;
+    let firstError = null;
+
+    for (const file of allFiles) {
+      try {
+        await cacheSingleFile(file.storagePath, file.fileUrl, file.updatedAt, (pct) => {
+          const overall = ((ok + fail + (pct / 100)) / allFiles.length) * 100;
+          bulkOfflineSyncProgress = overall;
+          setTransferProgressStatus({
+            label: "Prenašanje vseh datotek",
+            current: ok + fail + 1,
+            total: allFiles.length,
+            percent: overall
+          });
+        });
+        ok += 1;
+      } catch (e) {
+        fail += 1;
+        if (!firstError) firstError = e;
+      }
+      const completed = ok + fail;
+      const overall = (completed / allFiles.length) * 100;
+      bulkOfflineSyncProgress = overall;
+      setTransferProgressStatus({
+        label: "Prenašanje vseh datotek",
+        current: completed,
+        total: allFiles.length,
+        percent: overall
+      });
+    }
+
+    lastSyncAtIso = new Date().toISOString();
+    await idbPut(OFFLINE_META_STORE, { key: "last_sync_run_at", value: lastSyncAtIso });
+    filesTableCache = rows;
+
+    if (fail > 0) {
+      showToast(`Sinhronizacija zaključena z napakami (${ok}/${allFiles.length}): ${formatSyncErrorReason(firstError)}`);
+    } else {
+      showToast(`Offline pripravljeno (${ok} datotek).`);
+    }
+  } catch (e) {
+    showToast(`Sinhronizacija ni uspela: ${formatSyncErrorReason(e)}`);
+  } finally {
+    isBulkOfflineSyncRunning = false;
+    bulkOfflineSyncProgress = 0;
+    setGlobalOfflineMenuDisabled(false);
+    clearTransferProgressStatus();
+    updateConnectionStateChip();
+    updateOfflineEmptyHintVisibility();
+    if (!isSearchActive && currentItems.length > 0) {
+      renderItems(currentItems, currentRenderId);
+    }
+  }
+}
+
+async function handleClearOfflineData() {
+  if (!isStandaloneApp) return;
+  if (!supportsOfflineStorage) {
+    showToast("Ta brskalnik ne podpira offline shranjevanja.");
+    return;
+  }
+  if (isBulkOfflineSyncRunning || isMetadataSyncRunning) {
+    showToast("Počakajte, da se sinhronizacija zaključi.");
+    return;
+  }
+
+  const confirmed = window.confirm("Ali ste prepričani, da želite odstraniti vse lokalno shranjene datoteke? To bo sprostilo prostor na vaši napravi.");
+  if (!confirmed) return;
+
+  try {
+    setGlobalOfflineMenuDisabled(true);
+    await caches.delete(OFFLINE_CACHE_NAME);
+    await idbClear(OFFLINE_CACHED_META_STORE);
+    offlinePins = new Set();
+    saveOfflinePins(offlinePins);
+    showToast("Offline podatki so odstranjeni.");
+  } catch (e) {
+    showToast(`Čiščenje ni uspelo: ${formatSyncErrorReason(e)}`);
+  } finally {
+    setGlobalOfflineMenuDisabled(false);
+    updateOfflineEmptyHintVisibility();
+    if (!isSearchActive && currentItems.length > 0) {
+      renderItems(currentItems, currentRenderId);
+    }
+  }
 }
 
 async function downloadToComputer(fileName, fileUrl, storagePath) {
@@ -1502,29 +1724,42 @@ async function refreshCachedFilesIfServerUpdated(rows) {
     byStoragePath.set(sp, row);
   }
 
-  let refreshedCount = 0;
+  let invalidatedUpdatedCount = 0;
+  let invalidatedDeletedCount = 0;
   const cachedMetaMap = await getCachedMetaMapFromDb();
   for (const [storagePath, meta] of cachedMetaMap.entries()) {
     const serverRow = byStoragePath.get(storagePath);
-    if (!serverRow) continue;
+    if (!serverRow) {
+      try {
+        await removeSingleCachedFile(storagePath, buildR2UrlFromStoragePath(storagePath));
+        invalidatedDeletedCount += 1;
+      } catch (e) {
+        console.warn("Odstranitev lokalno izbrisane datoteke ni uspela:", storagePath, e);
+      }
+      continue;
+    }
     const serverUpdatedAt = getRowTimestamp(serverRow);
     const metaUpdatedAt = meta?.updated_at || null;
     if (serverUpdatedAt && serverUpdatedAt !== metaUpdatedAt) {
       try {
-        await cacheSingleFile(storagePath, buildR2UrlFromStoragePath(storagePath), serverUpdatedAt);
-        refreshedCount += 1;
+        await removeSingleCachedFile(storagePath, buildR2UrlFromStoragePath(storagePath));
+        invalidatedUpdatedCount += 1;
       } catch (e) {
-        console.warn("Osvežitev lokalne datoteke ni uspela:", storagePath, e);
+        console.warn("Odstranitev zastarele lokalne datoteke ni uspela:", storagePath, e);
       }
     }
   }
 
-  if (refreshedCount > 0) {
-    showToast(`Posodobljene lokalne datoteke: ${refreshedCount}`);
+  if (invalidatedUpdatedCount > 0 || invalidatedDeletedCount > 0) {
+    const parts = [];
+    if (invalidatedUpdatedCount > 0) parts.push(`spremenjene: ${invalidatedUpdatedCount}`);
+    if (invalidatedDeletedCount > 0) parts.push(`izbrisane: ${invalidatedDeletedCount}`);
+    showToast(`Offline osvežitev: odstranjene lokalne kopije (${parts.join(", ")}).`);
   }
 }
 
 async function syncOfflineMetadataAndCache({ force = false } = {}) {
+  if (isBulkOfflineSyncRunning) return;
   if (!navigator.onLine && !force) return;
   isMetadataSyncRunning = true;
   updateConnectionStateChip();
@@ -1760,10 +1995,61 @@ function getFileIconKeyForExt(ext) {
 function isRelevantFile(fn) { if (fn.startsWith('.')) return false; return relevantExtensions.includes(fn.split('.').pop().toLowerCase()); }
 
 // --- LOGIN / LOGOUT ---
+function setTrustedOfflineUser(email) {
+  const e = String(email || "").trim();
+  if (!e) return;
+  try {
+    localStorage.setItem(OFFLINE_TRUSTED_EMAIL_KEY, e);
+    localStorage.setItem(OFFLINE_TRUSTED_AT_KEY, new Date().toISOString());
+  } catch (err) {}
+}
+
+function clearTrustedOfflineUser() {
+  try {
+    localStorage.removeItem(OFFLINE_TRUSTED_EMAIL_KEY);
+    localStorage.removeItem(OFFLINE_TRUSTED_AT_KEY);
+  } catch (err) {}
+}
+
+function getTrustedOfflineEmail() {
+  try {
+    const e = localStorage.getItem(OFFLINE_TRUSTED_EMAIL_KEY);
+    return e ? String(e).trim() : "";
+  } catch (err) {
+    return "";
+  }
+}
+
+async function canEnterTrustedOfflineMode() {
+  if (!isStandaloneApp) return false;
+  const trustedEmail = getTrustedOfflineEmail();
+  if (!trustedEmail) return false;
+  try {
+    const cachedRows = await idbGetAll(OFFLINE_CACHED_META_STORE);
+    return Array.isArray(cachedRows) && cachedRows.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function checkUser() { 
-  const { data: { session } } = await supabase.auth.getSession(); 
-  if (session) showApp(session.user.email); 
-  else showLogin(); 
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session && session.user && session.user.email) {
+      setTrustedOfflineUser(session.user.email);
+      showApp(session.user.email);
+      return;
+    }
+  } catch (e) {}
+
+  if (!navigator.onLine && await canEnterTrustedOfflineMode()) {
+    const trustedEmail = getTrustedOfflineEmail() || "Offline uporabnik";
+    showApp(trustedEmail);
+    showToast("Offline način: prijava je začasno preskočena za to napravo.");
+    return;
+  }
+
+  showLogin(); 
 }
 
 function isAdminEmail(email) {
@@ -2239,6 +2525,7 @@ function renderAdminPage() {
 }
 
 async function showApp(email) {
+  setTrustedOfflineUser(email);
   const alreadyVisible = appCard && appCard.style.display === "flex";
   window.scrollTo(0, 0);
   document.body.classList.remove("login-view");
@@ -2280,10 +2567,10 @@ async function showApp(email) {
     updateSidebarFavorites();
   });
   setupInstallNudgeTrigger();
-  syncOfflineMetadataAndCache();
 
   // Pri že prikazanem portalu ne resetiraj poti in ne kličem loadContent (prepreči skok na Domov ob preklapljanju zaviho)
   if (alreadyVisible) return;
+  syncOfflineMetadataAndCache();
   if (adminLink) adminLink.style.display = isAdminEmail(email) ? "inline" : "none";
   syncAnnouncementsTabVisibility();
   const requestedPath = getPathFromUrl();
@@ -2800,6 +3087,7 @@ async function renderItems(items, rId) {
     return; 
   }
   statusEl.textContent = `${items.length} ${elementWord(items.length)}`;
+  folderOfflineStatusMemo.clear();
   const cont = document.createElement("div");
   cont.className = viewMode === "list" ? "file-container list-view list-compact" : "file-container grid-view";
 
@@ -2808,8 +3096,9 @@ async function renderItems(items, rId) {
     header.className = "list-header";
     header.innerHTML = `
       <div class="lvh-name">Ime</div>
+      <div class="lvh-status">Status</div>
       <div class="lvh-modified">Posodobljeno</div>
-      <div class="lvh-size">Velikost</div>
+      <div class="lvh-fav">Priljubljeno</div>
       <div class="lvh-actions"></div>
     `;
     cont.appendChild(header);
@@ -2854,13 +3143,68 @@ function buildSyncStatusHtml({ isFolder, isCached, syncState }) {
   if (syncState === "error") {
     return `<span class="sync-status-icon error" title="Sinhronizacija ni uspela">!</span>`;
   }
+  const notDownloadedIcon = '<img src="not_downloaded.png" alt="" aria-hidden="true" class="sync-status-image" />';
   if (isFolder) {
-    return `<span class="sync-status-icon cloud" title="Mapa je na voljo ob povezavi">${iconSvg("cloud")}</span>`;
+    if (isCached) {
+      return `<span class="sync-status-icon ready" title="Mapa je na voljo brez povezave">${iconSvg("cloudCheck")}</span>`;
+    }
+    return `<button type="button" class="sync-status-btn" data-sync-action="cache" title="Klikni za prenos mape za offline">${notDownloadedIcon}</button>`;
   }
   if (isCached) {
     return `<span class="sync-status-icon ready" title="Datoteka je na voljo brez povezave">${iconSvg("cloudCheck")}</span>`;
   }
-  return `<span class="sync-status-icon cloud" title="Datoteka ni shranjena lokalno">${iconSvg("cloud")}</span>`;
+  return `<button type="button" class="sync-status-btn" data-sync-action="cache" title="Klikni za prenos datoteke za offline">${notDownloadedIcon}</button>`;
+}
+
+async function getFolderTotalSizeBytesByVirtualPath(folderPath) {
+  const rows = await fetchAllFilesFromTable();
+  const normalizedFolder = stripPathSlashes(normalizePath(folderPath));
+  const prefix = normalizedFolder ? `${normalizedFolder}/` : "";
+  let totalBytes = 0;
+
+  for (const row of rows || []) {
+    const storagePath = buildStoragePathFromRow(row);
+    const virtualPath = virtualizeStoragePath(storagePath);
+    if (!storagePath || !virtualPath) continue;
+    if (prefix && !virtualPath.startsWith(prefix)) continue;
+    const fileName = String(row?.filename || storagePath.split("/").pop() || "");
+    if (!fileName || !isRelevantFile(fileName)) continue;
+    totalBytes += getRowSizeBytes(row);
+  }
+  return totalBytes;
+}
+
+async function isFolderFullyCachedOffline(folderPath) {
+  const key = normalizePath(folderPath || "");
+  if (!key) return false;
+  if (folderOfflineStatusMemo.has(key)) return folderOfflineStatusMemo.get(key);
+
+  try {
+    const rows = await fetchAllFilesFromTable();
+    const normalizedFolder = stripPathSlashes(key);
+    const prefix = normalizedFolder ? `${normalizedFolder}/` : "";
+    const folderFilePaths = [];
+
+    for (const row of rows || []) {
+      const storagePath = normalizePath(buildStoragePathFromRow(row));
+      const virtualPath = virtualizeStoragePath(storagePath);
+      if (!storagePath || !virtualPath) continue;
+      if (prefix && !virtualPath.startsWith(prefix)) continue;
+      const fileName = String(row?.filename || storagePath.split("/").pop() || "");
+      if (!fileName || !isRelevantFile(fileName)) continue;
+      folderFilePaths.push(storagePath);
+    }
+
+    const isFullyCached =
+      folderFilePaths.length > 0 &&
+      folderFilePaths.every((sp) => offlinePins.has(normalizePath(sp)));
+
+    folderOfflineStatusMemo.set(key, isFullyCached);
+    return isFullyCached;
+  } catch (e) {
+    folderOfflineStatusMemo.set(key, false);
+    return false;
+  }
 }
 
 async function shareCatalogLink({ isFolder, fullPath, fileName, fileUrl }) {
@@ -2893,7 +3237,7 @@ async function shareCatalogLink({ isFolder, fullPath, fileName, fileUrl }) {
   showToast("Kopiranje povezave ni uspelo.");
 }
 
-function buildItemActionMenuHtml({ isStandalone = false, supportsOffline = false }) {
+function buildItemActionMenuHtml({ isStandalone = false, supportsOffline = false, infoText = "" }) {
   const appOnlyTitle = "Za uporabo te funkcionalnosti morate prenesti aplikacijo.";
   const offlineUnsupportedTitle = "Ta brskalnik ne podpira offline shranjevanja.";
   function actionAttrs(action) {
@@ -2911,6 +3255,7 @@ function buildItemActionMenuHtml({ isStandalone = false, supportsOffline = false
         <span class="ui-icon" aria-hidden="true">${iconSvg("dotsVertical")}</span>
       </button>
       <div class="item-menu-dropdown" role="menu">
+        ${infoText ? `<div class="item-menu-info" aria-hidden="true">${escapeHtml(infoText)}</div><div class="item-menu-divider" role="separator" aria-hidden="true"></div>` : ""}
         <button type="button" class="item-menu-action" data-action="share" role="menuitem">Deli povezavo</button>
         <div class="item-menu-divider" role="separator" aria-hidden="true"></div>
         <button type="button" class="item-menu-action" data-action="cache" role="menuitem" ${actionAttrs("cache")}>Na voljo brez povezave</button>
@@ -2946,7 +3291,9 @@ async function createItemElement(item, cont) {
     const isLinkFile = !isFolder && isUrlLinkFile(item.name);
     const storagePath = !isFolder ? normalizePath(buildStoragePathFromRow(item)) : "";
     const fileUrl = !isFolder ? buildR2UrlFromStoragePath(storagePath) : "";
-    const isCachedOffline = !isFolder ? await isPathCachedOffline(storagePath, fileUrl) : false;
+    const isCachedOffline = isFolder
+      ? await isFolderFullyCachedOffline(full)
+      : await isPathCachedOffline(storagePath, fileUrl);
     const syncStateKey = isFolder ? full : storagePath;
     const syncState = getItemSyncState(syncStateKey);
     const syncStatusHtml = buildSyncStatusHtml({ isFolder, isCached: isCachedOffline, syncState });
@@ -2982,10 +3329,20 @@ async function createItemElement(item, cont) {
     const modifiedText = item.created_at ? formatDate(item.created_at) : "—";
     const previewHtml = `<div class="item-preview ${isFolder ? "folder-bg" : "file-bg"}">${icon}</div>`;
     const infoHtml = `<div class="item-info"><strong>${formatDisplayName(item.name)} ${syncStatusHtml}</strong><small>${fileSize}</small>${dateInfo}</div>`;
+    let listMenuInfo = "";
+    if (viewMode === "list") {
+      if (isFolder) {
+        const folderSizeBytes = await getFolderTotalSizeBytesByVirtualPath(full);
+        listMenuInfo = `Velikost mape: ${folderSizeBytes > 0 ? formatBytes(folderSizeBytes) : "—"}`;
+      } else {
+        listMenuInfo = `Velikost datoteke: ${fileSizeBytes > 0 ? formatBytes(fileSizeBytes) : "—"}`;
+      }
+    }
     const actionsMenuHtml = showPwaItemActionMenu
       ? buildItemActionMenuHtml({
           isStandalone: isStandaloneApp,
-          supportsOffline: supportsOfflineStorage
+          supportsOffline: supportsOfflineStorage,
+          infoText: listMenuInfo
         })
       : "";
     if (!showPwaItemActionMenu) {
@@ -2993,23 +3350,22 @@ async function createItemElement(item, cont) {
     }
 
     if (viewMode === "list") {
-      const sizeCol = isFolder ? "—" : fileSize;
-      const metaLine = isFolder ? "Mapa" : `${modifiedText}${sizeCol && sizeCol !== "—" ? ` · ${sizeCol}` : ""}`;
+      const metaLine = isFolder ? "Mapa" : modifiedText;
       div.innerHTML = `
         <div class="lv-name">
           ${previewHtml}
           <div class="lv-title">
             <div class="lv-title-line">
               <strong>${escapeHtml(formatDisplayName(item.name))}</strong>
-              ${syncStatusHtml}
               ${badges}
             </div>
             <small class="lv-meta">${escapeHtml(metaLine)}</small>
           </div>
         </div>
+        <div class="lv-status">${syncStatusHtml || "—"}</div>
         <div class="lv-modified">${escapeHtml(modifiedText)}</div>
-        <div class="lv-size">${escapeHtml(sizeCol)}</div>
-        <div class="lv-actions">${favBtnHtml}${actionsMenuHtml}</div>
+        <div class="lv-fav">${favBtnHtml || "—"}</div>
+        <div class="lv-actions">${actionsMenuHtml}</div>
       `;
     } else {
       div.innerHTML = `${favBtnHtml}${badges}${actionsMenuHtml}${previewHtml}${infoHtml}`;
@@ -3041,6 +3397,21 @@ async function createItemElement(item, cont) {
     };
 
     if (showPwaItemActionMenu) {
+      const syncBtn = div.querySelector(".sync-status-btn");
+      if (syncBtn) {
+        syncBtn.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          await handleItemAction("cache", {
+            isFolder,
+            fullPath: full,
+            storagePath,
+            fileName: item.name,
+            fileUrl,
+            updatedAt: getRowTimestamp(item)
+          });
+        });
+      }
       const menuWrap = div.querySelector(".item-menu-wrap");
       const menuBtn = div.querySelector(".item-menu-btn");
       if (menuBtn && menuWrap) {
@@ -4168,8 +4539,7 @@ function setupInstallNudgeTrigger() {
 function setupConnectivityHandlers() {
   window.addEventListener("online", () => {
     updateConnectionStateChip();
-    showToast("Povezava je vzpostavljena. Sinhroniziram podatke...");
-    syncOfflineMetadataAndCache();
+    showToast("Povezava je vzpostavljena.");
   });
   window.addEventListener("offline", () => {
     updateConnectionStateChip();
@@ -4179,12 +4549,31 @@ function setupConnectivityHandlers() {
   });
 }
 
-function setupPeriodicOfflineSync() {
-  const intervalMs = 5 * 60 * 1000;
-  setInterval(() => {
-    if (!navigator.onLine) return;
-    syncOfflineMetadataAndCache();
-  }, intervalMs);
+function setupOfflineBulkActions() {
+  if (globalOfflineMenuWrap && globalOfflineMenuBtn) {
+    globalOfflineMenuBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleItemActionMenu(globalOfflineMenuWrap);
+      globalOfflineMenuBtn.setAttribute("aria-expanded", globalOfflineMenuWrap.classList.contains("open") ? "true" : "false");
+    });
+  }
+  if (btnGlobalCacheAll) {
+    btnGlobalCacheAll.addEventListener("click", async () => {
+      closeItemActionMenu();
+      if (globalOfflineMenuBtn) globalOfflineMenuBtn.setAttribute("aria-expanded", "false");
+      await handleDownloadAllOffline();
+    });
+  }
+  if (btnGlobalClearOffline) {
+    btnGlobalClearOffline.addEventListener("click", async () => {
+      closeItemActionMenu();
+      if (globalOfflineMenuBtn) globalOfflineMenuBtn.setAttribute("aria-expanded", "false");
+      await handleClearOfflineData();
+    });
+  }
+  updateOfflineBulkActionVisibility();
+  setGlobalOfflineMenuDisabled(false);
 }
 
 async function initConnectionState() {
@@ -4303,7 +4692,7 @@ setupRuntimeModeObservers();
 setupInstallPrompt();
 setupOfflineOnboarding();
 setupConnectivityHandlers();
-setupPeriodicOfflineSync();
+setupOfflineBulkActions();
 initConnectionState();
 registerServiceWorker();
 syncAnnouncementsTabVisibility();
@@ -4420,21 +4809,25 @@ window.addEventListener('pageshow', (e) => {
   // 1) Listener TAKOJ na začetku – preden karkoli awaitamo, da ne zamudimo INITIAL_SESSION / SIGNED_IN (pomembno za mobilne brskalnike)
   supabase.auth.onAuthStateChange((event, session) => {
     if (event === "INITIAL_SESSION" && session) {
+      if (session?.user?.email) setTrustedOfflineUser(session.user.email);
       replaceStatePreserveHash();
       if (!isAppVisible()) showApp(session.user.email);
       return;
     }
     if (event === "SIGNED_IN" && session) {
+      if (session?.user?.email) setTrustedOfflineUser(session.user.email);
       replaceStatePreserveHash();
       if (!isAppVisible()) showApp(session.user.email);
       return;
     }
     if (event === "SIGNED_OUT") {
+      clearTrustedOfflineUser();
       replaceStatePreserveHash();
       showLogin();
       return;
     }
     if (event === "TOKEN_REFRESHED" && session && session.user) {
+      if (session?.user?.email) setTrustedOfflineUser(session.user.email);
       if (!isAppVisible()) showApp(session.user.email);
     }
   });
@@ -4466,10 +4859,18 @@ window.addEventListener('pageshow', (e) => {
   }
 
   async function runSessionCheck() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session && session.user && session.user.email) {
+        setTrustedOfflineUser(session.user.email);
+        replaceStatePreserveHash();
+        if (!isAppVisible()) showApp(session.user.email);
+        return true;
+      }
+    } catch (e) {}
+    if (!navigator.onLine && await canEnterTrustedOfflineMode()) {
       replaceStatePreserveHash();
-      if (!isAppVisible()) showApp(session.user.email);
+      if (!isAppVisible()) showApp(getTrustedOfflineEmail() || "Offline uporabnik");
       return true;
     }
     return false;
